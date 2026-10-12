@@ -6,9 +6,19 @@ dist/
 build/
 *.tsbuildinfo
 
-# Real credentials live only in backend/.env.local (gitignored, loaded before
-# backend/.env). backend/.env itself is not committed; backend/.env.example is
-# the template that documents the shape of every key.
+# Credentials. Never committed, at ANY level.
+#
+# backend/.gitignore covered backend/.env.local, but the repo ROOT had no rule -
+# which is how a root .env.local carrying SUPABASE_SERVICE_ROLE_KEY,
+# DATABASE_URL and QR_SIGNING_SECRET reached the update_ui branch. The rule is
+# stated here, for the whole tree, so a new .env cannot slip in at another level.
+#
+# .env.example files are templates and stay tracked: they document the shape of
+# every key without carrying a value.
+.env
+.env.*
+!.env.example
+!*/.env.example
 
 # Local JSON backups written by backend/scripts/reset-demo-data.js
 backups/

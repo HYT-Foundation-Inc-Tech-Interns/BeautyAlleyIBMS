@@ -212,7 +212,16 @@ export default function Book() {
 
       <form onSubmit={onSubmit} className="container grid gap-10 py-14 lg:grid-cols-[1.5fr_1fr]">
         {/* ------------------------------------------------------- steps */}
-        <div className="space-y-12">
+        {/*
+          `min-w-0` is load-bearing. A grid item defaults to `min-width: auto`,
+          so this column refuses to shrink below the min-content width of the
+          fourteen-day strip (~1140px) — which widened the whole grid past the
+          container and pushed the "Your appointment" panel off the right edge,
+          and blew the page out to 1165px on a 390px phone. Zeroing the floor
+          lets the column take its `1.5fr` share and the day strip scroll on its
+          own, which is what `overflow-x-auto` on it was always meant to do.
+        */}
+        <div className="min-w-0 space-y-12">
           {/* 1 — service */}
           <section>
             <StepHeading n={1} title="Choose a treatment" hint="One treatment per appointment." />
@@ -451,7 +460,7 @@ export default function Book() {
         </div>
 
         {/* ----------------------------------------------------- summary */}
-        <aside className="lg:sticky lg:top-[92px] lg:h-fit">
+        <aside className="min-w-0 lg:sticky lg:top-[92px] lg:h-fit">
           <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-lift">
             <h2 className="font-display text-[19px] font-semibold tracking-tight">Your appointment</h2>
 
