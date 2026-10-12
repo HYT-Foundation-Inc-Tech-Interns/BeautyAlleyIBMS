@@ -23,6 +23,7 @@ import { cn, minutesToLabel, peso } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { SERVICE_CATEGORIES, type Service, type ServiceCategory } from "@/lib/api-types";
+import { serviceImage } from "@/lib/service-images";
 import { Button } from "@/components/ui/button";
 import { CategoryBadge, EmptyNote, ErrorNote, Loading, PersonAvatar } from "@/components/app/api-bits";
 import { PageHead, PublicShell } from "@/components/app/PublicShell";
@@ -51,34 +52,45 @@ function useDebounced<T>(value: T, ms = 280) {
 
 function ServiceCard({ service }: { service: Service }) {
   return (
-    <article className="group flex h-full flex-col rounded-xl border border-border/80 bg-card p-6 shadow-soft transition-[box-shadow,transform,border-color] duration-500 ease-out-quart hover:-translate-y-1 hover:border-primary/25 hover:shadow-lift">
-      <div className="flex items-center justify-between gap-3">
-        <CategoryBadge category={service.category} />
-        <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <Clock3 className="size-3.5" />
-          {minutesToLabel(service.durationMinutes)}
-        </span>
+    <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-soft transition-[box-shadow,transform,border-color] duration-500 ease-out-quart hover:-translate-y-1 hover:border-primary/25 hover:shadow-lift">
+      <div className="aspect-[4/3] overflow-hidden bg-sand-100">
+        <img
+          src={serviceImage(service)}
+          alt={service.name}
+          loading="lazy"
+          className="h-full w-full object-cover transition-transform duration-700 ease-out-quart group-hover:scale-[1.04]"
+        />
       </div>
 
-      <h3 className="mt-5 font-display text-[21px] font-semibold leading-tight tracking-tight">
-        {service.name}
-      </h3>
-      {service.description && (
-        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-          {service.description}
-        </p>
-      )}
+      <div className="flex flex-1 flex-col p-6">
+        <div className="flex items-center justify-between gap-3">
+          <CategoryBadge category={service.category} />
+          <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+            <Clock3 className="size-3.5" />
+            {minutesToLabel(service.durationMinutes)}
+          </span>
+        </div>
 
-      <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-        <span className="font-display text-[25px] font-semibold tracking-tight text-primary">
-          {peso(service.priceCents)}
-        </span>
-        <Button asChild size="sm" variant="outline" className="shrink-0">
-          <Link to={`/book?service=${service.id}`}>
-            Book
-            <ArrowRight className="size-3.5" />
-          </Link>
-        </Button>
+        <h3 className="mt-5 font-display text-[21px] font-semibold leading-tight tracking-tight">
+          {service.name}
+        </h3>
+        {service.description && (
+          <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+            {service.description}
+          </p>
+        )}
+
+        <div className="mt-auto flex items-end justify-between gap-4 pt-6">
+          <span className="font-display text-[25px] font-semibold tracking-tight text-primary">
+            {peso(service.priceCents)}
+          </span>
+          <Button asChild size="sm" variant="outline" className="shrink-0">
+            <Link to={`/book?service=${service.id}`}>
+              Book
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </Button>
+        </div>
       </div>
     </article>
   );
@@ -122,7 +134,7 @@ export default function Services() {
   return (
     <PublicShell>
       <PageHead
-        eyebrow="The menu"
+        eyebrow="The Menu"
         title={
           <>
             Spa, salon and wellness —

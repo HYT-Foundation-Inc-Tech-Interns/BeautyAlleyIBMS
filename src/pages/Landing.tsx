@@ -37,6 +37,7 @@ import {
 import { cn, minutesToLabel, peso } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
+import { serviceImage } from "@/lib/service-images";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlleyBadge, AlleySprig, AlleyMark } from "@/components/brand/Logo";
@@ -240,26 +241,36 @@ export default function Landing() {
                 <Reveal key={s.id} delay={(i % 3) * 60}>
                   <Link
                     to="/services"
-                    className="group flex h-full flex-col rounded-xl border border-border/80 bg-card p-6 shadow-soft transition-[box-shadow,transform,border-color] duration-500 ease-out-quart hover:-translate-y-1 hover:border-primary/25 hover:shadow-lift"
+                    className="group flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-soft transition-[box-shadow,transform,border-color] duration-500 ease-out-quart hover:-translate-y-1 hover:border-primary/25 hover:shadow-lift"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <CategoryBadge category={s.category} />
-                      <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                        <Clock3 className="size-3.5" />
-                        {minutesToLabel(s.durationMinutes)}
-                      </span>
+                    <div className="aspect-[4/3] overflow-hidden bg-sand-100">
+                      <img
+                        src={serviceImage(s)}
+                        alt={s.name}
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform duration-700 ease-out-quart group-hover:scale-[1.04]"
+                      />
                     </div>
-                    <h3 className="mt-5 font-display text-[21px] font-semibold leading-tight tracking-tight">
-                      {s.name}
-                    </h3>
-                    <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
-                      {s.description}
-                    </p>
-                    <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-                      <span className="font-display text-[26px] font-semibold tracking-tight text-primary">
-                        {peso(s.priceCents)}
-                      </span>
-                      <ArrowRight className="size-4 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5 group-hover:text-primary" />
+                    <div className="flex flex-1 flex-col p-6">
+                      <div className="flex items-center justify-between gap-3">
+                        <CategoryBadge category={s.category} />
+                        <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                          <Clock3 className="size-3.5" />
+                          {minutesToLabel(s.durationMinutes)}
+                        </span>
+                      </div>
+                      <h3 className="mt-5 font-display text-[21px] font-semibold leading-tight tracking-tight">
+                        {s.name}
+                      </h3>
+                      <p className="mt-2 line-clamp-2 text-[12.5px] leading-relaxed text-muted-foreground">
+                        {s.description}
+                      </p>
+                      <div className="mt-auto flex items-end justify-between gap-4 pt-6">
+                        <span className="font-display text-[26px] font-semibold tracking-tight text-primary">
+                          {peso(s.priceCents)}
+                        </span>
+                        <ArrowRight className="size-4 text-muted-foreground transition-transform duration-300 group-hover:translate-x-0.5 group-hover:text-primary" />
+                      </div>
                     </div>
                   </Link>
                 </Reveal>
@@ -436,7 +447,7 @@ export default function Landing() {
               </li>
             </ul>
           </div>
-
+	  {/*---
           <div>
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               For the team
@@ -460,9 +471,10 @@ export default function Landing() {
               </li>
             </ul>
           </div>
-        </div>
+          ---*/}
+	</div>
 
-        <div className="border-t border-border/70">
+	<div className="border-t border-border/70">
           <div className="container flex flex-wrap items-center justify-between gap-3 py-6 text-[12px] text-muted-foreground">
             <p>© 2026 The Beauty Alley. All rights reserved.</p>
             <p className="font-display text-[13px] italic">Crafted with care, downtown.</p>
