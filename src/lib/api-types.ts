@@ -1,0 +1,318 @@
+/**
+ * The wire shapes the backend actually sends.
+ *
+ * These mirror the DTOs in the backend's module services (`…service.ts`)
+ * field for field. They are hand-written rather than generated because the
+ * backend has no OpenAPI document and the `supabase gen types` route needs the
+ * CLI, which this environment cannot run.
+ *
+ * Two conventions worth knowing, because both are easy to get wrong:
+ *
+ *   - Every timestamp is a `Z`-suffixed UTC instant. The backend normalises
+ *     PostgREST's `+00:00` spelling to `Z` in its DTO layer, so a string
+ *     comparison is safe. Render them in the branch timezone, never raw.
+ *   - Money is in minor units (cents) everywhere, as `…Cents`. Never divide
+ *     until the moment of display.
+ */
+
+export type Role = "ADMIN" | "STAFF" | "CLIENT";
+
+export type ServiceCategory = "SPA" | "SALON" | "WELLNESS";
+
+export const SERVICE_CATEGORIES: ServiceCategory[] = ["SPA", "SALON", "WELLNESS"];
+
+export type BookingStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "CHECKED_IN"
+  | "IN_SERVICE"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
+
+export type PromoType = "PERCENT" | "FIXED";
+
+/* ------------------------------------------------------------------ *
+ * Envelopes
+ * ------------------------------------------------------------------ */
+
+export interface PageMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface Paginated<T> {
+  data: T[];
+  meta: PageMeta;
+}
+
+/** `{ error: { code, message, details? } }` — the shape of every failure. */
+export interface ApiErrorBody {
+  error: { code: string; message: string; details?: unknown };
+}
+
+export interface Health {
+  status: "ok" | "degraded";
+  env: string;
+  checks: { serviceRoleKey: boolean; timezone: string; database: string };
+}
+
+/* ------------------------------------------------------------------ *
+ * Auth
+ * ------------------------------------------------------------------ */
+
+export interface Session {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number | null;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  role: Role;
+  fullName?: string | null;
+}
+
+export interface LoginResult {
+  user: AuthUser & { fullName: string | null };
+  session: Session;
+}
+
+export interface RegisterResult {
+  user: AuthUser | null;
+  /** Null when email confirmation is switched on. */
+  session: Session | null;
+  requiresEmailConfirmation: boolean;
+}
+
+/** `GET /auth/me` — richer than the login payload; carries the row ids. */
+export interface Me {
+  id: string;
+  email: string | null;
+  role: Role;
+  fullName: string | null;
+  phone: string | null;
+  clientId: string | null;
+  employeeId: string | null;
+}
+
+/* ------------------------------------------------------------------ *
+ * Catalogue
+ * ------------------------------------------------------------------ */
+
+export interface Service {
+  id: string;
+  name: string;
+  category: ServiceCategory;
+  description: string | null;
+  priceCents: number;
+  durationMinutes: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkingHour {
+  id: string;
+  weekday: number;
+  /** `HH:MM`, branch local. A `time` column — no date, no zone. */
+  startTime: string;
+  endTime: string;
+}
+
+export interface Employee {
+  id: string;
+  profileId: string | null;
+  fullName: string;
+  title: string | null;
+  bio: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  serviceIds?: string[];
+  /** Present only on the admin view; omitted from the public "meet the team" shape. */
+  workingHours?: WorkingHour[];
+}
+
+export interface Slot {
+  start: string;
+  end: string;
+}
+
+export interface Availability {
+  serviceId: string;
+  date: string;
+  intervalMinutes: number;
+  totalSlots: number;
+  employees: { employeeId: string; slots: Slot[] }[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Bookings
+ * ------------------------------------------------------------------ */
+
+export interface BookingItem {
+  id: string;
+  serviceId: string;
+  name: string;
+  priceCents: number;
+  durationMinutes: number;
+}
+
+export interface QrPass {
+  pass: string;
+  url: string;
+  expiresAt: string;
+}
+
+export interface Booking {
+  id: string;
+  reference: string;
+  status: BookingStatus;
+  startTime: string;
+  endTime: string;
+  employee: { id: string; fullName: string };
+  client: { id: string; fullName: string } | null;
+  guest: { name: string; phone: string } | null;
+  subtotalCents: number;
+  discountCents: number;
+  totalCents: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  items: BookingItem[];
+  /** Only returned by create/reschedule — the pass is re-issuable via `/qr`. */
+  qr?: QrPass;
+}
+
+export interface CreateBookingInput {
+  serviceIds: string[];
+  employeeId?: string;
+  startTime: string;
+  clientId?: string;
+  guest?: { name: string; phone: string };
+  promoCode?: string;
+  notes?: string;
+}
+
+/** `GET /bookings/:id/qr` — either a live pass or "already used". */
+export interface QrState {
+  used: boolean;
+  pass: string | null;
+  url: string | null;
+  expiresAt?: string;
+  checkedInAt?: string | null;
+}
+
+export interface CheckInResult {
+  bookingId: string;
+  reference: string;
+  status: BookingStatus;
+  checkedInAt: string;
+  checkinId: string;
+}
+
+export interface BranchQr {
+  label: string;
+  url: string;
+  checkInWindowMinutes: number;
+  /** Always false — stated by the API so nobody mistakes it for a credential. */
+  authorises: boolean;
+}
+
+/* ------------------------------------------------------------------ *
+ * Promos
+ * ------------------------------------------------------------------ */
+
+export interface Promo {
+  id: string;
+  code: string;
+  type: PromoType;
+  /** PERCENT: 1–100. FIXED: minor units. */
+  value: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  maxRedemptions: number | null;
+  perClientLimit: number | null;
+  minSpendCents: number;
+  applicableServiceIds: string[] | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  liveRedemptions?: number;
+}
+
+export interface PromoValidation {
+  valid: boolean;
+  reason: string;
+  message: string;
+  discountCents: number;
+  promoCodeId: string | null;
+  code: string;
+  type: PromoType | null;
+  value: number | null;
+}
+
+/* ------------------------------------------------------------------ *
+ * Reporting
+ * ------------------------------------------------------------------ */
+
+export interface DashboardTotals {
+  bookings: number;
+  completed: number;
+  cancelled: number;
+  noShow: number;
+  checkedIn: number;
+  revenueCents: number;
+}
+
+export interface Dashboard {
+  from: string;
+  to: string;
+  totals: DashboardTotals;
+  byDay: { day: string; bookings: number; revenue_cents: number }[];
+  topServices: { name: string; bookings: number; revenue_cents: number }[];
+}
+
+export interface ClientRecord {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  isActive: boolean;
+  totalBookings: number;
+  completedBookings: number;
+  noShowBookings: number;
+  lifetimeValueCents: number;
+  firstVisitAt: string | null;
+  lastVisitAt: string | null;
+}
+
+export interface ClientDetail extends ClientRecord {
+  recentBookings: {
+    id: string;
+    reference: string;
+    status: BookingStatus;
+    startTime: string;
+    endTime: string;
+    employeeName: string;
+    totalCents: number;
+    discountCents: number;
+  }[];
+}
+
+export interface AuditLog {
+  id: string;
+  actorId: string | null;
+  actorRole: Role | null;
+  action: string;
+  entity: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}

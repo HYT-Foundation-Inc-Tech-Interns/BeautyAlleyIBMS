@@ -1,0 +1,207 @@
+import { requireServiceRole } from "../../db/supabase";
+import { toRange, type Pagination } from "../../lib/pagination";
+import type { BookingStatus } from "../../types/database";
+import type { ListBookingsQuery, MyBookingsQuery } from "./bookings.schemas";
+
+/**
+ * Booking data access.
+ *
+ * Writes never go through here. Creating, cancelling and rescheduling are
+ * PL/pgSQL functions called via `rpc()` in bookings.service.ts, because each
+ * touches several tables and must be atomic - something supabase-js cannot
+ * express as a transaction.
+ */
+
+export interface BookingDetailRow {
+  id: string;
+  reference: string;
+  status: string;
+  start_time: string;
+  end_time: string;
+  employee_id: string;
+  employee_name: string | null;
+  client_id: string | null;
+  client_name: string | null;
+  guest_name: string | null;
+  guest_phone: string | null;
+  subtotal_cents: number;
+  discount_cents: number;
+  total_cents: number;
+  promo_code_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BookingItemRow {
+  id: string;
+  service_id: string | null;
+  employee_id: string | null;
+  name_snapshot: string;
+  price_cents_snapshot: number;
+  duration_minutes_snapshot: number;
+}
+
+const DETAIL_SELECT =
+  "id, reference, status, start_time, end_time, employee_id, employee_name, client_id, client_name, guest_name, guest_phone, subtotal_cents, discount_cents, total_cents, promo_code_id, notes, created_at, updated_at" as const;
+
+export const bookingsRepository = {
+  async getById(id: string): Promise<BookingDetailRow | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db.from("v_booking_detail").select(DETAIL_SELECT).eq("id", id).maybeSingle();
+    if (error) throw error;
+    return (data as BookingDetailRow) ?? null;
+  },
+
+  async itemsFor(bookingId: string): Promise<BookingItemRow[]> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("booking_items")
+      .select("id, service_id, employee_id, name_snapshot, price_cents_snapshot, duration_minutes_snapshot")
+      .eq("booking_id", bookingId)
+      .order("name_snapshot");
+    if (error) throw error;
+    return (data ?? []) as BookingItemRow[];
+  },
+
+  async list(
+    query: ListBookingsQuery
+  ): Promise<{ rows: BookingDetailRow[]; total: number }> {
+    const db = requireServiceRole();
+    const { from, to } = toRange(query);
+
+    let q = db.from("v_booking_detail").select(DETAIL_SELECT, { count: "exact" });
+    if (query.status) q = q.eq("status", query.status);
+    if (query.employeeId) q = q.eq("employee_id", query.employeeId);
+    if (query.clientId) q = q.eq("client_id", query.clientId);
+    if (query.from) q = q.gte("start_time", `${query.from}T00:00:00Z`);
+    if (query.to) q = q.lte("start_time", `${query.to}T23:59:59Z`);
+    if (query.q) {
+      const safe = query.q.replace(/[%_\\]/g, (m) => `\\${m}`);
+      q = q.or(`reference.ilike.%${safe}%,client_name.ilike.%${safe}%,guest_name.ilike.%${safe}%`);
+    }
+
+    const { data, error, count } = await q
+      .order(query.sort, { ascending: query.order === "asc" })
+      .range(from, to);
+    if (error) throw error;
+    return { rows: (data ?? []) as BookingDetailRow[], total: count ?? 0 };
+  },
+
+  async listForClient(
+    clientId: string,
+    query: MyBookingsQuery
+  ): Promise<{ rows: BookingDetailRow[]; total: number }> {
+    const db = requireServiceRole();
+    const { from, to } = toRange(query);
+
+    let q = db
+      .from("v_booking_detail")
+      .select(DETAIL_SELECT, { count: "exact" })
+      .eq("client_id", clientId);
+
+    if (query.status) q = q.eq("status", query.status);
+    if (query.upcoming) {
+      q = q
+        .gte("end_time", new Date().toISOString())
+        .in("status", ["PENDING", "CONFIRMED", "CHECKED_IN", "IN_SERVICE"]);
+    }
+
+    const { data, error, count } = await q.order("start_time", { ascending: !query.upcoming }).range(from, to);
+    if (error) throw error;
+    return { rows: (data ?? []) as BookingDetailRow[], total: count ?? 0 };
+  },
+
+  /**
+   * Service ids for a booking, used to re-validate a promo when previewing a
+   * discount against an existing booking.
+   */
+  async serviceIdsFor(bookingId: string): Promise<string[]> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("booking_items")
+      .select("service_id")
+      .eq("booking_id", bookingId)
+      .not("service_id", "is", null);
+    if (error) throw error;
+    return (data ?? []).map((r: { service_id: string }) => r.service_id);
+  },
+
+  /** Active QR pass for a booking, if one has not been revoked. */
+  async activeQrToken(bookingId: string) {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("qr_tokens")
+      .select("id, jti, expires_at, used_at, revoked_at")
+      .eq("booking_id", bookingId)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data as { id: string; jti: string; expires_at: string; used_at: string | null; revoked_at: string | null } | null;
+  },
+
+  async qrTokenByJti(jti: string) {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("qr_tokens")
+      .select("id, booking_id, jti, expires_at, used_at, revoked_at")
+      .eq("jti", jti)
+      .maybeSingle();
+    if (error) throw error;
+    return data as {
+      id: string;
+      booking_id: string;
+      jti: string;
+      expires_at: string;
+      used_at: string | null;
+      revoked_at: string | null;
+    } | null;
+  },
+
+  async checkinFor(bookingId: string) {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("checkins")
+      .select("id, booking_id, staff_id, checked_in_at")
+      .eq("booking_id", bookingId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  /** Direct status write. The database trigger is what actually validates it. */
+  async setStatus(bookingId: string, status: BookingStatus) {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("bookings")
+      .update({ status })
+      .eq("id", bookingId)
+      .select("id, reference, status, updated_at")
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
+  async countAll(): Promise<number> {
+    const db = requireServiceRole();
+    const { count, error } = await db.from("bookings").select("id", { count: "exact", head: true });
+    if (error) throw error;
+    return count ?? 0;
+  },
+
+  /** Resolve or create a client row for a signed-in profile. */
+  async clientForProfile(profileId: string) {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("clients")
+      .select("id, full_name, phone, email")
+      .eq("profile_id", profileId)
+      .maybeSingle();
+    if (error) throw error;
+    return data as { id: string; full_name: string; phone: string | null; email: string | null } | null;
+  },
+};
+
+export type { Pagination };

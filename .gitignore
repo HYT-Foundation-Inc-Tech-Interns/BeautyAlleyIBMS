@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Real credentials live only in backend/.env.local (gitignored, loaded before
+# backend/.env). backend/.env itself is not committed; backend/.env.example is
+# the template that documents the shape of every key.
+
+# Local JSON backups written by backend/scripts/reset-demo-data.js
+backups/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Scratch / verification output
+.verify/
+.tools-venv/
+.impeccable.md
+
+# Editor and agent-internal state
+.workbuddy-ai/
+.vscode/
+.idea/
+*.swp
+
+# WorkBuddy desktop app artifacts
+*.genie
+.wbapp_*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
