@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   DoorOpen,
+  Info,
   KeyRound,
   Loader2,
   QrCode,
@@ -121,6 +122,18 @@ export default function Scan() {
         }
         lede="No clipboard, no queue at the desk. Scan the code at reception to book on the spot, or bring the pass you were given."
       />
+
+      <div className="container pt-10">
+        <div className="flex items-start gap-3 rounded-xl border border-border/80 bg-sand-50 px-5 py-4">
+          <Info className="mt-0.5 size-4 shrink-0 text-primary" />
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">Before you scan.</span> Point
+            your phone's camera at the code mounted at reception to book on the spot, or
+            paste the pass from your confirmation below to open it. Arrival passes are
+            redeemed by the desk only — hand yours over when you arrive.
+          </p>
+        </div>
+      </div>
 
       <div className="container grid gap-8 py-14 lg:grid-cols-2">
         {/* ------------------------------------------------------ walk in */}

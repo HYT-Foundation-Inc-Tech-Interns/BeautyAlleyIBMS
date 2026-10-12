@@ -6,25 +6,21 @@
  * everything else shares this so the header does not have to be rewritten four
  * times and drift.
  *
- * The header is deliberately session-aware: a signed-in visitor gets a way
- * back into the console, an anonymous one gets a way in. That is the only
- * difference between the two states on a public page.
+ * The header is session-aware in one direction only now: a signed-in visitor
+ * gets a way back into the console. An anonymous visitor gets no sign-in
+ * prompt, because Sign In was removed from the public navigation — the only
+ * remaining door into the console is the discreet staff link in the footer.
  */
 
 import * as React from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, LogIn, LogOut, QrCode, Search, Sparkles } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { LayoutDashboard, LogOut, QrCode, Search, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { AlleyMark, AlleySprig } from "@/components/brand/Logo";
+import { PublicMobileNav, PublicNavLinks } from "@/components/app/PublicNav";
 import { homeFor, ROLE_LABEL, useAuth } from "@/auth/AuthProvider";
-
-const NAV = [
-  { to: "/services", label: "Services" },
-  { to: "/book", label: "Book" },
-  { to: "/scan", label: "Scan & check-in" },
-];
 
 export function PublicShell({
   children,
@@ -53,24 +49,7 @@ export function PublicShell({
             </span>
           </Link>
 
-          <nav className="ml-2 hidden items-center gap-1 md:flex">
-            {NAV.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    "rounded-full px-3.5 py-2 text-[13px] transition-colors",
-                    isActive
-                      ? "bg-white/10 text-primary-foreground"
-                      : "text-primary-foreground/65 hover:bg-white/[0.06] hover:text-primary-foreground",
-                  )
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
+          <PublicNavLinks className="ml-2 hidden md:flex" />
 
           <div className="ml-auto flex items-center gap-2">
             {authed ? (
@@ -108,23 +87,12 @@ export function PublicShell({
                 </Button>
               </>
             ) : (
-              <>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="ghost"
-                  className="text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground"
-                >
-                  <Link to="/login">
-                    <LogIn className="size-4" />
-                    Sign in
-                  </Link>
-                </Button>
-                <Button asChild size="sm" variant="champagne" className="h-9 px-5">
-                  <Link to="/book">Book now</Link>
-                </Button>
-              </>
+              <Button asChild size="sm" variant="champagne" className="h-9 px-5">
+                <Link to="/book">Book now</Link>
+              </Button>
             )}
+
+            <PublicMobileNav triggerClassName="md:hidden" />
           </div>
         </div>
       </header>

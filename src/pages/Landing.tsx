@@ -6,7 +6,12 @@
  * Two things changed from the fixture version. The CTAs used to point into the
  * console (`/app/bookings`), which was wrong on two counts: a stranger landing
  * here has no account, and the console is now behind a login. They point at the
- * public flow instead — `/services`, `/book`, `/scan`, `/login`.
+ * public flow instead — `/services`, `/book`, `/scan`.
+ *
+ * The header menu is the shared public navigation (Home, Scan & Check In,
+ * Services). Sign In is no longer offered here: the public site should not
+ * advertise a door to the console, so the only entry point left is the discreet
+ * staff link in the footer.
  *
  * And the menu is read live. A marketing page that advertises prices the salon
  * no longer charges is worse than no menu at all, so the services grid is a real
@@ -20,16 +25,13 @@ import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowRight,
   CalendarCheck,
-  CalendarDays,
   Clock3,
-  LayoutGrid,
   MapPin,
   QrCode,
   Scissors,
   ShieldCheck,
   Sparkles,
   Star,
-  Users,
 } from "lucide-react";
 
 import { cn, minutesToLabel, peso } from "@/lib/utils";
@@ -39,43 +41,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlleyBadge, AlleySprig, AlleyMark } from "@/components/brand/Logo";
 import { CategoryBadge, ErrorNote, Loading } from "@/components/app/api-bits";
+import { PublicMobileNav, PublicNavLinks } from "@/components/app/PublicNav";
 import { Reveal } from "@/components/app/reveal";
 import { useAuth } from "@/auth/AuthProvider";
 
 /* ------------------------------------------------------------------ *
  * Copy local to the marketing page
  * ------------------------------------------------------------------ */
-
-const MODULES = [
-  {
-    n: "01",
-    icon: Users,
-    title: "Client records",
-    body: "Every visit, note and preference in one profile — the little things that make a client feel known, kept where the next stylist can find them.",
-    points: ["Visit history & lifetime value", "Contact details and notes", "Active and dormant clients"],
-  },
-  {
-    n: "02",
-    icon: CalendarDays,
-    title: "Booking & reservations",
-    body: "A chair-aware desk that never double-books. Clients reserve online, guests book without an account, and the floor sees one clean run sheet.",
-    points: ["Live availability per service", "Guest booking, no sign-up needed", "Status from pending to completed"],
-  },
-  {
-    n: "03",
-    icon: QrCode,
-    title: "QR check-in",
-    body: "A pass per booking, signed so it cannot be forged and stored so it cannot be reused. Scan at the door and the floor knows who has arrived.",
-    points: ["One signed pass per booking", "Redeemed once, by staff only", "Walk-in code at reception"],
-  },
-  {
-    n: "04",
-    icon: LayoutGrid,
-    title: "Monitoring & insight",
-    body: "A live board for the people running the salon — revenue, completion, no-shows and the day's chairs, arranged the way you think.",
-    points: ["Revenue and completion rate", "Top treatments and best clients", "Drag-and-arrange widget board"],
-  },
-];
 
 const STEPS = [
   {
@@ -131,7 +103,7 @@ export default function Landing() {
         <div className="container flex h-[74px] items-center gap-6">
           <Link to="/" className="flex items-center gap-3">
             <AlleyMark className="h-10 w-10 text-primary-foreground" />
-            <span className="flex flex-col leading-none">
+            <span className="hidden flex-col leading-none sm:flex">
               <span className="font-display text-[19px] font-semibold tracking-tight text-primary-foreground">
                 The Beauty Alley
               </span>
@@ -141,24 +113,10 @@ export default function Landing() {
             </span>
           </Link>
 
-          <nav className="ml-auto hidden items-center gap-7 lg:flex">
-            {[
-              { to: "/services", label: "Services" },
-              { to: "/scan", label: "Check-in" },
-              { to: "/book", label: "Book" },
-            ].map((l) => (
-              <Link
-                key={l.to}
-                to={l.to}
-                className="text-[13.5px] text-primary-foreground/70 transition-colors hover:text-primary-foreground"
-              >
-                {l.label}
-              </Link>
-            ))}
-          </nav>
+          <PublicNavLinks className="ml-auto hidden lg:flex" />
 
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
-            {signedIn ? (
+            {signedIn && (
               <Button
                 asChild
                 variant="ghost"
@@ -167,15 +125,6 @@ export default function Landing() {
               >
                 <Link to="/app">Open console</Link>
               </Button>
-            ) : (
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="hidden text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground sm:inline-flex"
-              >
-                <Link to="/login">Sign in</Link>
-              </Button>
             )}
             <Button asChild size="sm" variant="champagne" className="h-9 px-5">
               <Link to="/book">
@@ -183,6 +132,7 @@ export default function Landing() {
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
+            <PublicMobileNav triggerClassName="lg:hidden" />
           </div>
         </div>
       </header>
@@ -255,50 +205,6 @@ export default function Landing() {
               />
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ------------------------------------------------------- system */}
-      <section id="system" className="container scroll-mt-24 py-24">
-        <Reveal className="max-w-3xl">
-          <p className="eyebrow">The system</p>
-          <h2 className="mt-3 font-display text-[clamp(2rem,4.4vw,3.1rem)] font-medium leading-[1.05] tracking-tight text-balance">
-            Four parts, one calm experience.
-          </h2>
-          <p className="mt-5 text-[15px] leading-relaxed text-muted-foreground text-pretty">
-            Everything the salon needs — and nothing it doesn't. Each part talks to
-            the others, so a booking becomes a check-in, a check-in becomes a visit,
-            and a visit becomes insight.
-          </p>
-        </Reveal>
-
-        <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-border/80 bg-border/70 sm:grid-cols-2">
-          {MODULES.map((m, i) => (
-            <Reveal key={m.title} delay={i * 70}>
-              <article className="group relative flex h-full flex-col bg-card p-8 transition-colors duration-500 hover:bg-alley-50/60 sm:p-10">
-                <div className="flex items-center justify-between">
-                  <span className="flex size-11 items-center justify-center rounded-full bg-primary/[0.08] text-primary transition-colors duration-500 group-hover:bg-primary group-hover:text-primary-foreground">
-                    <m.icon className="size-5" />
-                  </span>
-                  <span className="font-display text-[26px] font-semibold text-border">{m.n}</span>
-                </div>
-                <h3 className="mt-6 font-display text-[24px] font-semibold leading-tight tracking-tight">
-                  {m.title}
-                </h3>
-                <p className="mt-3 text-[13.5px] leading-relaxed text-muted-foreground text-pretty">
-                  {m.body}
-                </p>
-                <ul className="mt-6 space-y-2.5 border-t border-border/70 pt-6">
-                  {m.points.map((p) => (
-                    <li key={p} className="flex items-start gap-2.5 text-[13px]">
-                      <span className="mt-[7px] size-1.5 shrink-0 rounded-full bg-champagne-500" />
-                      <span className="text-foreground/80">{p}</span>
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            </Reveal>
-          ))}
         </div>
       </section>
 
@@ -464,7 +370,7 @@ export default function Landing() {
               Your chair is waiting.
             </h2>
             <p className="mt-4 max-w-lg text-[14.5px] leading-relaxed text-primary-foreground/65">
-              Book in under a minute — or sign in to run the floor.
+              Book in under a minute — or browse the full menu first.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -480,8 +386,8 @@ export default function Landing() {
               variant="outline"
               className="h-12 border-white/20 text-primary-foreground hover:border-white/40 hover:bg-white/10"
             >
-              <Link to={signedIn ? "/app" : "/login"}>
-                {signedIn ? "Enter the console" : "Sign in"}
+              <Link to={signedIn ? "/app" : "/services"}>
+                {signedIn ? "Enter the console" : "Explore services"}
               </Link>
             </Button>
           </div>
@@ -541,7 +447,7 @@ export default function Landing() {
                   to="/login"
                   className="inline-flex items-center gap-1.5 text-foreground/75 transition-colors hover:text-primary"
                 >
-                  <Scissors className="size-3.5" /> Sign in
+                  <Scissors className="size-3.5" /> Staff sign in
                 </Link>
               </li>
               <li>
