@@ -58,9 +58,16 @@ import type {
  * same-origin (`/api/v1/...`). On Vercel the frontend and backend are two
  * services behind one domain, and the `vercel.json` rewrite sends `/api/*`
  * to the backend, so no absolute URL is needed there.
+ *
+ * A `VITE_API_URL` pointing at localhost is ignored outside development: a
+ * deployed bundle that calls the developer's machine is never what anyone
+ * meant, and the mistake is invisible until a browser on the internet fails.
  */
+const configuredApiUrl = import.meta.env.VITE_API_URL as string | undefined;
+const isLocalApiUrl = !!configuredApiUrl && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(configuredApiUrl);
+
 export const API_BASE = (
-  (import.meta.env.VITE_API_URL as string | undefined) ??
+  (isLocalApiUrl && !import.meta.env.DEV ? undefined : configuredApiUrl) ??
   (import.meta.env.DEV ? "http://127.0.0.1:4000" : "")
 ).replace(/\/+$/, "");
 
