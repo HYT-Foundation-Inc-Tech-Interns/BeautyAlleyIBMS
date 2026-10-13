@@ -4,17 +4,17 @@
  * The console landing page.
  *
  * It branches on role, and that branch is not cosmetic — it is the API's own
- * shape showing through. `/admin/dashboard` is `requireRole("ADMIN")`, so a
- * stylist cannot read it at all; what a stylist *can* read is `/bookings`,
- * which is `STAFF/ADMIN`. So:
+ * shape showing through. `/admin/dashboard` is `requireRole("ADMIN")`, so an
+ * employee or a concierge cannot read it at all; what they *can* read is
+ * `/bookings`, which is `OPERATIONS`. So:
  *
- *   ADMIN  gets the business summary — revenue, completion, no-show rate,
- *          the day-by-day curve and the top treatments by revenue.
- *   STAFF  gets the run sheet — today's chairs in time order, with the one
- *          action a stylist actually takes at the desk: moving a booking
- *          along its status machine.
+ *   ADMIN      gets the business summary — revenue, completion, no-show
+ *              rate, the day-by-day curve and the top treatments by revenue.
+ *   CONCIERGE  gets the run sheet — the desk's day in time order, with the
+ *   EMPLOYEE   actions they actually take: moving a booking along its status
+ *              machine, and (for the desk) reassigning a room.
  *
- * The alternative would be to hide the money tiles from staff and show an
+ * The alternative would be to hide the money tiles from the floor and show an
  * otherwise identical page, which is worse: it presents a filtered view as if
  * it were the whole picture. Different questions, different page.
  */
@@ -361,7 +361,7 @@ function RecentBookings({
 }
 
 /* ------------------------------------------------------------------ *
- * STAFF — the run sheet
+ * EMPLOYEE and CONCIERGE — the run sheet
  * ------------------------------------------------------------------ */
 
 function RunSheet({ name }: { name: string }) {

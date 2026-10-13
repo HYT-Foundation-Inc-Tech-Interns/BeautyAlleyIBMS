@@ -129,12 +129,18 @@ async function main() {
   if (noRls.rowCount === 0) ok("RLS enabled on every public table");
   else bad("RLS enabled on every public table", `missing: ${noRls.rows.map((r) => r.relname).join(", ")}`);
 
+  // Two, not one. Migration 17 added the room clash alongside the original
+  // employee clash, and counting constraints would have read as "still one"
+  // if either were ever dropped. Naming them states the actual invariant.
   const excl = await client.query(
-    `select conname, contype from pg_constraint
+    `select conname from pg_constraint
       where conrelid = 'public.bookings'::regclass and contype = 'x'`
   );
-  if (excl.rowCount === 1) ok("bookings has an EXCLUSION constraint", excl.rows[0].conname);
-  else bad("bookings has an EXCLUSION constraint", `found ${excl.rowCount}`);
+  const exclNames = new Set(excl.rows.map((r) => r.conname));
+  const wantExcl = ["bookings_no_overlap", "bookings_room_no_overlap"];
+  const missingExcl = wantExcl.filter((n) => !exclNames.has(n));
+  if (missingExcl.length === 0) ok("bookings has both EXCLUSION constraints", wantExcl.join(" + "));
+  else bad("bookings has both EXCLUSION constraints", `missing: ${missingExcl.join(", ")}`);
 
   const fns = [
     "create_booking", "cancel_booking", "reschedule_booking", "check_in_booking",

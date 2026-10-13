@@ -31,11 +31,25 @@ export const refreshSchema = z.object({
   refreshToken: z.string().min(10, "A refresh token is required"),
 });
 
+/**
+ * Roles an owner may hand out.
+ *
+ * CLIENT and GUEST are absent on purpose: a client account comes from
+ * /auth/register, and GUEST is not an account at all but what the actor
+ * resolver returns for nobody. Accepting either here would let an admin mint
+ * an account whose role the rest of the system never expects to see in
+ * `profiles`.
+ *
+ * The legacy label 'STAFF' is deliberately NOT accepted. It was retired in
+ * migration 24, and `role_from_app_metadata` keeps mapping it for the auth
+ * users that already carry it - but a *new* account should not be created
+ * under a name the schema no longer has.
+ */
 export const createStaffSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   password,
   fullName: z.string().trim().min(1).max(120),
-  role: z.enum(["STAFF", "ADMIN"]),
+  role: z.enum(["EMPLOYEE", "CONCIERGE", "ADMIN"]),
   /** Optionally create the linked employees row in the same call. */
   title: z.string().trim().max(120).optional(),
   bio: z.string().trim().max(2000).optional(),

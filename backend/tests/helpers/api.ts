@@ -23,7 +23,7 @@ export interface TestUser {
   email: string;
   password: string;
   token: string;
-  role: "CLIENT" | "STAFF" | "ADMIN";
+  role: "CLIENT" | "EMPLOYEE" | "CONCIERGE" | "ADMIN";
   clientId?: string | null;
   employeeId?: string | null;
 }
@@ -131,7 +131,7 @@ function once(key: string, make: () => Promise<TestUser>): Promise<TestUser> {
  * write themselves.
  */
 export async function createTestUser(opts: {
-  role: "CLIENT" | "STAFF" | "ADMIN";
+  role: "CLIENT" | "EMPLOYEE" | "CONCIERGE" | "ADMIN";
   email?: string;
   fullName?: string;
   password?: string;
@@ -191,18 +191,30 @@ export function createTestAdmin(fullName = "Test Admin"): Promise<TestUser> {
 }
 
 /**
- * A STAFF user linked to an existing employees row.
+ * An EMPLOYEE user linked to an existing employees row.
  *
- * Cached per employee, because linking a second staff account to the same
- * employee would just overwrite `employees.profile_id` and orphan the first.
+ * Cached per employee, because linking a second account to the same employee
+ * would just overwrite `employees.profile_id` and orphan the first.
  */
 export function createTestStaff(employeeId: string): Promise<TestUser> {
-  return once(`STAFF:${employeeId}`, async () => {
-    const user = await createTestUser({ role: "STAFF", fullName: "Test Staff" });
+  return once(`EMPLOYEE:${employeeId}`, async () => {
+    const user = await createTestUser({ role: "EMPLOYEE", fullName: "Test Employee" });
     await db().query(`update public.employees set profile_id = $1 where id = $2`, [user.id, employeeId]);
     user.employeeId = employeeId;
     return user;
   });
+}
+
+/**
+ * A CONCIERGE user: the front desk.
+ *
+ * Not linked to an `employees` row - a concierge is reception, not someone who
+ * delivers a service, and the schema only hangs qualifications and rotas off
+ * employees. Use this fixture for anything the desk owns: taking payment,
+ * redeeming loyalty, reassigning a room.
+ */
+export function createTestConcierge(fullName = "Test Concierge"): Promise<TestUser> {
+  return once(`CONCIERGE:${fullName}`, () => createTestUser({ role: "CONCIERGE", fullName }));
 }
 
 /** Remove users created by a suite. Bookings cascade from the profile. */

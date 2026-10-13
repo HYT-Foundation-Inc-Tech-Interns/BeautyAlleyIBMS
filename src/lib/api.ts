@@ -43,6 +43,7 @@ import type {
   PromoType,
   PromoValidation,
   QrState,
+  QuotaProgress,
   RegisterResult,
   Service,
   ServiceCategory,
@@ -335,6 +336,18 @@ export const api = {
       request<Paginated<Employee>>("GET", "/api/v1/employees", { auth: false, query }),
 
     get: (id: string) => request<Employee>("GET", `/api/v1/employees/${id}`, { auth: false }),
+
+    /**
+     * One stylist's progress against the daily quota. `date` is a plain
+     * `YYYY-MM-DD` in the branch timezone; omit it for today. OPERATIONS, so a
+     * stylist can read their own.
+     */
+    quota: (id: string, date?: string) =>
+      request<QuotaProgress>("GET", `/api/v1/employees/${id}/quota`, { query: { date } }),
+
+    /** The whole active floor at once. DESK only - it is the front desk's board. */
+    quotas: (date?: string) =>
+      request<QuotaProgress[]>("GET", "/api/v1/employees/quotas", { query: { date } }),
   },
 
   availability: (query: {
@@ -453,7 +466,7 @@ export const api = {
       email: string;
       password: string;
       fullName: string;
-      role: "STAFF" | "ADMIN";
+      role: "EMPLOYEE" | "CONCIERGE" | "ADMIN";
     }) => request<AuthUser>("POST", "/api/v1/admin/users/staff", { body }),
 
     /**

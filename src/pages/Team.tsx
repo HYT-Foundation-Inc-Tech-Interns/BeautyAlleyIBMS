@@ -11,10 +11,12 @@
  * scheduling detail with no RLS policy for a browser. Showing an empty shift
  * table would look like a data problem; omitting it and saying so does not.
  *
- * **Issuing a login is the only way to create a staff account.** The role is
+ * **Issuing a login is the only way to create a team account.** The role is
  * written to `app_metadata`, which only the service role can set, so this goes
  * through `POST /admin/users/staff` rather than through public registration.
- * That is why the form is here and not on the sign-up page.
+ * That is why the form is here and not on the sign-up page. The endpoint name
+ * is a leftover — it now issues EMPLOYEE, CONCIERGE and ADMIN accounts, and
+ * refuses the retired 'STAFF' label.
  */
 
 import * as React from "react";
@@ -25,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import type { Employee } from "@/lib/api-types";
+import { ROLE_LABEL } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/app/bits";
@@ -222,7 +225,7 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [role, setRole] = React.useState<"STAFF" | "ADMIN">("STAFF");
+  const [role, setRole] = React.useState<"EMPLOYEE" | "CONCIERGE" | "ADMIN">("EMPLOYEE");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<ApiError | null>(null);
   const [localErrors, setLocalErrors] = React.useState<Record<string, string>>({});
@@ -264,7 +267,7 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="font-display text-[19px] font-semibold tracking-tight">
-            Issue a staff login
+            Issue a team login
           </h2>
           <p className="mt-1 text-[12.5px] text-muted-foreground">
             The role is written to the account's app metadata by the server — the
@@ -282,8 +285,10 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
           <BadgeCheck className="mt-0.5 size-4 shrink-0 text-alley-700" />
           <p className="text-[12.5px] text-alley-700">
             <span className="font-medium">{created}</span> now has a{" "}
-            {role === "ADMIN" ? "administrator" : "stylist"} account. Link it to an
-            employee row to attribute check-ins to them.
+            {ROLE_LABEL[role].toLowerCase()} account.{" "}
+            {role === "EMPLOYEE"
+              ? "Link it to an employee row to attribute check-ins to them."
+              : "No employee row is needed — a concierge works the desk, not the floor."}
           </p>
         </div>
       )}
@@ -319,7 +324,7 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
             Role
           </span>
           <div className="mt-1.5 flex gap-1.5">
-            {(["STAFF", "ADMIN"] as const).map((option) => (
+            {(["EMPLOYEE", "CONCIERGE", "ADMIN"] as const).map((option) => (
               <button
                 key={option}
                 type="button"
@@ -332,7 +337,7 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
                     : "border-border bg-card hover:border-primary/30",
                 )}
               >
-                {option === "STAFF" ? "Stylist" : "Admin"}
+                {ROLE_LABEL[option]}
               </button>
             ))}
           </div>

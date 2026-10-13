@@ -393,7 +393,12 @@ describeBookings("bookings", () => {
       // Placed directly, 30 minutes out, so it sits inside the 2-hour window.
       // Created via SQL because the API would (correctly) refuse to book at a
       // time outside working hours.
-      const emp = EMP_ANA;
+      //
+      // Bea, not Ana: this slot cannot be banded (the whole point is that it is
+      // nearly now), so it is the one place two suites can genuinely race. The
+      // QR suite places its own near-now bookings for Ana, and the two would
+      // collide on the exclusion constraint whenever the workers interleave.
+      const emp = EMP_BEA;
       const start = new Date(Date.now() + 30 * 60_000);
       const end = new Date(start.getTime() + 60 * 60_000);
       const { rows } = await db().query(
@@ -419,6 +424,9 @@ describeBookings("bookings", () => {
       const admin = await createTestAdmin();
       created.push(admin);
 
+      // Same near-now slot, same stylist as the test above - safe because the
+      // previous one is deleted in `afterEach` and nothing outside this file
+      // books Bea at a time this close to now.
       const start = new Date(Date.now() + 30 * 60_000);
       const end = new Date(start.getTime() + 60 * 60_000);
       const { rows } = await db().query(
@@ -427,7 +435,7 @@ describeBookings("bookings", () => {
             subtotal_cents, discount_cents, total_cents)
          values ($1, 'Force Test', '+639170000023', $2, $3, $4, 'CONFIRMED', 0, 0, 0)
          returning id`,
-        [`BA-FORCE-${Date.now()}`, EMP_ANA, start.toISOString(), end.toISOString()]
+        [`BA-FORCE-${Date.now()}`, EMP_BEA, start.toISOString(), end.toISOString()]
       );
       rawBookings.push(rows[0].id);
 

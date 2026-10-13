@@ -15,6 +15,7 @@ import {
 } from "./bookings.schemas";
 import { authenticate, optionalAuthenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/requireRole";
+import { DESK, OPERATIONS } from "../../lib/roleGroups";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../lib/asyncHandler";
 import { AppError, CODES } from "../../lib/errors";
@@ -62,11 +63,14 @@ bookingsRouter.post(
   asyncHandler(bookingsController.create)
 );
 
-// --- staff-only listing ----------------------------------------------------
+// --- the run sheet ---------------------------------------------------------
+// Everyone who works the floor reads it: the desk to answer the phone, the
+// therapist to know what is next. Scoping an employee to only their own rows
+// is a presentation decision the dashboards make, not a gate here.
 bookingsRouter.get(
   "/",
   authenticate,
-  requireRole("STAFF", "ADMIN"),
+  requireRole(...OPERATIONS),
   validate({ query: listBookingsQuerySchema }),
   asyncHandler(bookingsController.list)
 );
@@ -102,10 +106,13 @@ bookingsRouter.get(
   asyncHandler(bookingsController.qr)
 );
 
+// --- status machine --------------------------------------------------------
+// The desk checks a client in; the therapist starts and finishes the service.
+// Both halves of the same walk-in, so both roles.
 bookingsRouter.patch(
   "/:id/status",
   authenticate,
-  requireRole("STAFF", "ADMIN"),
+  requireRole(...OPERATIONS),
   validate({ params: idParamSchema, body: updateStatusSchema }),
   asyncHandler(bookingsController.updateStatus)
 );
@@ -124,26 +131,31 @@ bookingsRouter.get(
 bookingsRouter.post(
   "/:id/notes",
   authenticate,
-  requireRole("STAFF", "ADMIN"),
+  requireRole(...OPERATIONS),
   validate({ params: idParamSchema, body: createNoteSchema }),
   asyncHandler(bookingsController.addNote)
 );
 
+// Deleting a note is the author's correction, not a records decision - so the
+// same roles as writing one, rather than the ADMIN-only treatment that the
+// softer financial deletes get.
 bookingsRouter.delete(
   "/:id/notes/:noteId",
   authenticate,
-  requireRole("STAFF", "ADMIN"),
+  requireRole(...OPERATIONS),
   validate({ params: noteParamSchema }),
   asyncHandler(bookingsController.deleteNote)
 );
 
 // --- room override ---------------------------------------------------------
-// STAFF, not ADMIN: moving a treatment to another room is a desk decision made
-// while the client is standing there.
+// The DESK, not any staff member and not ADMIN-only: moving a treatment to
+// another room is a front-desk decision made while the client is standing
+// there. A therapist reports that a room needs cleaning; they do not reassign
+// it, and an owner is not expected to be at the desk.
 bookingsRouter.patch(
   "/:id/room",
   authenticate,
-  requireRole("STAFF", "ADMIN"),
+  requireRole(...DESK),
   validate({ params: idParamSchema, body: setRoomSchema }),
   asyncHandler(bookingsController.setRoom)
 );

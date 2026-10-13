@@ -51,33 +51,44 @@ export type Area =
  * exactly — a mismatch in either direction is a bug, and the smoke test walks
  * every route as every role to prove the API agrees.
  *
- * Note the shape of the three roles:
+ * The four roles, and why they differ:
  *
- *   ADMIN  runs the business — the full record of bookings, clients, promos
- *          and employees, plus the monitoring board.
- *   STAFF  works the floor — the run sheet and the door. No money, no
- *          customer records, no employee management.
- *   CLIENT is a customer — their own bookings and nothing else.
+ *   ADMIN     runs the business — the full record of bookings, clients,
+ *             promos and employees, plus the monitoring board.
+ *   CONCIERGE runs the desk — reception, the run sheet, check-in, and (from
+ *             the transactions work) payments, receipts and loyalty. What
+ *             they do NOT get is anything that configures the business:
+ *             promos, employee records, or the board.
+ *   EMPLOYEE  works the floor — the run sheet and the door. No money, no
+ *             customer records, no employee management.
+ *   CLIENT    is a customer — their own bookings and nothing else.
  *
  * The board is ADMIN-only because `/admin/dashboard` is `requireRole("ADMIN")`
- * — a tile showing revenue has no honest staff-facing version, so staff get the
- * run sheet on Overview instead of a filtered imitation of this page.
+ * — a tile showing revenue has no honest front-desk version, so the desk gets
+ * the run sheet on Overview instead of a filtered imitation of this page.
+ *
+ * CONCIERGE and EMPLOYEE currently share a scope because the API they call
+ * does. They diverge as soon as the payment and customer-record routes land:
+ * those are `DESK`, and this table is where that shows up.
  */
 export const SCOPE: Record<Role, Area[]> = {
   ADMIN: ["overview", "bookings", "clients", "promos", "employees", "check-in", "board"],
-  STAFF: ["overview", "bookings", "check-in"],
+  CONCIERGE: ["overview", "bookings", "check-in"],
+  EMPLOYEE: ["overview", "bookings", "check-in"],
   CLIENT: ["my-bookings"],
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
   ADMIN: "Administrator",
-  STAFF: "Stylist",
+  CONCIERGE: "Concierge",
+  EMPLOYEE: "Employee",
   CLIENT: "Client",
 };
 
 export const ROLE_BLURB: Record<Role, string> = {
   ADMIN: "Full access — bookings, clients, promos and team",
-  STAFF: "Your chair and the door — run sheet and check-in",
+  CONCIERGE: "The desk — reception, run sheet and check-in",
+  EMPLOYEE: "The floor — your chair, the run sheet and the door",
   CLIENT: "Your appointments and arrival passes",
 };
 
@@ -282,7 +293,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       session,
       isAdmin: role === "ADMIN",
-      isStaff: role === "STAFF" || role === "ADMIN",
+      isStaff: role === "EMPLOYEE" || role === "CONCIERGE" || role === "ADMIN",
       can: (area: Area) => (role ? SCOPE[role].includes(area) : false),
       login,
       register,

@@ -136,6 +136,37 @@ export const employeesService = {
   },
 
   /**
+   * One employee's progress against the daily completion quota.
+   *
+   * The rule - which statuses count, which timezone decides "today", how
+   * `remaining` and `met` follow - lives in `public.employee_quota_rows()`
+   * (migration 26), not here. This method is a transport hop, so the owner's
+   * board and the stylist's own page cannot drift apart.
+   *
+   * `getById` runs first only to turn an unknown id into the API's own 404;
+   * the function raises EMPLOYEE_NOT_FOUND, which the error mapper also
+   * understands, so this is belt-and-braces rather than the only guard.
+   */
+  async quota(id: string, date?: string) {
+    await this.getById(id);
+    const { data, error } = await requireServiceRole().rpc("get_employee_quota", {
+      p_employee_id: id,
+      p_day: date ?? null,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  /** The whole active floor at once, for the board. One round trip, not N. */
+  async quotas(date?: string) {
+    const { data, error } = await requireServiceRole().rpc("get_employee_quotas", {
+      p_day: date ?? null,
+    });
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  /**
    * Free slots for a service on a date.
    *
    * The grouping is done in Node rather than SQL because the shape a client

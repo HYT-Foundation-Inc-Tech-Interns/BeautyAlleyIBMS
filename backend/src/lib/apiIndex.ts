@@ -35,7 +35,16 @@
 
 import { env } from "../config/env";
 
-export type ApiAuth = "public" | "optional" | "authenticated" | "STAFF/ADMIN" | "ADMIN";
+/**
+ * Who a route will admit.
+ *
+ * `authenticated` means any signed-in account; the named groups mirror
+ * `src/lib/roleGroups.ts`, so this index cannot describe a gate that no route
+ * actually implements. "DESK" is the front desk (CONCIERGE + ADMIN) and
+ * "OPERATIONS" is everyone who works at the branch (EMPLOYEE + CONCIERGE +
+ * ADMIN).
+ */
+export type ApiAuth = "public" | "optional" | "authenticated" | "OPERATIONS" | "DESK" | "ADMIN";
 
 export interface ApiEndpoint {
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -98,9 +107,11 @@ export const API_GROUPS: ApiGroup[] = [
       { method: "DELETE", path: "/api/v1/employees/:id", auth: "ADMIN", summary: "Deactivate a stylist." },
       { method: "PUT", path: "/api/v1/employees/:id/services", auth: "ADMIN", summary: "Set which services the stylist is qualified for." },
       { method: "PUT", path: "/api/v1/employees/:id/working-hours", auth: "ADMIN", summary: "Replace the weekly shift pattern." },
-      { method: "GET", path: "/api/v1/employees/:id/time-off", auth: "STAFF/ADMIN", summary: "Leave entries for a stylist." },
+      { method: "GET", path: "/api/v1/employees/:id/time-off", auth: "OPERATIONS", summary: "Leave entries for a stylist." },
       { method: "POST", path: "/api/v1/employees/:id/time-off", auth: "ADMIN", summary: "Add a leave entry." },
       { method: "GET", path: "/api/v1/employees/:id/performance", auth: "ADMIN", summary: "Utilisation and revenue for a stylist over a window." },
+      { method: "GET", path: "/api/v1/employees/:id/quota", auth: "OPERATIONS", summary: "One stylist's progress against the daily completed-clients quota. ?date=YYYY-MM-DD; defaults to today in the branch timezone." },
+      { method: "GET", path: "/api/v1/employees/quotas", auth: "DESK", summary: "Every active stylist's quota progress for one day, in a single call. The front desk's board." },
     ],
   },
   {
@@ -113,16 +124,16 @@ export const API_GROUPS: ApiGroup[] = [
     name: "bookings",
     endpoints: [
       { method: "POST", path: "/api/v1/bookings", auth: "optional", summary: "Create a booking. A guest supplies a name and phone; a signed-in client books against their account. A room is assigned automatically when the services need one; staff may pin one with roomId." },
-      { method: "GET", path: "/api/v1/bookings", auth: "STAFF/ADMIN", summary: "List bookings." },
+      { method: "GET", path: "/api/v1/bookings", auth: "OPERATIONS", summary: "List bookings. The run sheet - the desk and the floor both read it." },
       { method: "GET", path: "/api/v1/bookings/:id", auth: "optional", summary: "One booking. A guest booking is readable by anyone holding its uuid - the uuid is the capability." },
       { method: "POST", path: "/api/v1/bookings/:id/cancel", auth: "optional", summary: "Cancel. Refused inside the 2-hour window unless forced by staff." },
       { method: "POST", path: "/api/v1/bookings/:id/reschedule", auth: "optional", summary: "Move to a new slot and issue a fresh pass. A room clash reports ROOM_TAKEN, not SLOT_TAKEN." },
       { method: "GET", path: "/api/v1/bookings/:id/qr", auth: "optional", summary: "Re-issue the signed check-in pass." },
-      { method: "PATCH", path: "/api/v1/bookings/:id/status", auth: "STAFF/ADMIN", summary: "Move a booking through the status machine." },
-      { method: "PATCH", path: "/api/v1/bookings/:id/room", auth: "STAFF/ADMIN", summary: "Desk override of the treatment room. Rejects a room of the wrong type and one already in use." },
+      { method: "PATCH", path: "/api/v1/bookings/:id/status", auth: "OPERATIONS", summary: "Move a booking through the status machine. The desk checks in; the therapist starts and completes." },
+      { method: "PATCH", path: "/api/v1/bookings/:id/room", auth: "DESK", summary: "Front-desk override of the treatment room. Rejects a room of the wrong type and one already in use." },
       { method: "GET", path: "/api/v1/bookings/:id/notes", auth: "optional", summary: "Aftercare notes. A client sees only the ones marked shareable; staff see all." },
-      { method: "POST", path: "/api/v1/bookings/:id/notes", auth: "STAFF/ADMIN", summary: "Write an aftercare note. visibleToClient defaults to true." },
-      { method: "DELETE", path: "/api/v1/bookings/:id/notes/:noteId", auth: "STAFF/ADMIN", summary: "Delete a note outright - notes are not soft-deleted." },
+      { method: "POST", path: "/api/v1/bookings/:id/notes", auth: "OPERATIONS", summary: "Write an aftercare note. visibleToClient defaults to true." },
+      { method: "DELETE", path: "/api/v1/bookings/:id/notes/:noteId", auth: "OPERATIONS", summary: "Delete a note outright - notes are not soft-deleted." },
     ],
   },
   {
@@ -136,18 +147,18 @@ export const API_GROUPS: ApiGroup[] = [
     name: "qr",
     endpoints: [
       { method: "GET", path: "/api/v1/qr/enter", auth: "public", summary: "The walk-in door QR. Returns the branch, today's hours, the menu and the membership rules in one call. The only public route under /qr." },
-      { method: "GET", path: "/api/v1/qr/door", auth: "STAFF/ADMIN", summary: "The signed door-QR URL, for the page that prints the sticker." },
-      { method: "GET", path: "/api/v1/qr/branch", auth: "STAFF/ADMIN", summary: "Branch descriptor for the scanner. Not a credential - holding it grants nothing." },
-      { method: "POST", path: "/api/v1/qr/check-in", auth: "STAFF/ADMIN", summary: "Redeem a pass at the desk. Refuses replays and forged signatures." },
+      { method: "GET", path: "/api/v1/qr/door", auth: "ADMIN", summary: "The signed door-QR URL, for the page that prints the sticker. ADMIN-only: the artifact is permanent and unrevocable." },
+      { method: "GET", path: "/api/v1/qr/branch", auth: "OPERATIONS", summary: "Branch descriptor for the scanner. Not a credential - holding it grants nothing." },
+      { method: "POST", path: "/api/v1/qr/check-in", auth: "OPERATIONS", summary: "Redeem a pass at the desk. Refuses replays and forged signatures." },
     ],
   },
   {
     name: "rooms",
     endpoints: [
       { method: "GET", path: "/api/v1/rooms/public", auth: "public", summary: "Active rooms. The floor plan is not a secret, but notes and inactive rooms are withheld." },
-      { method: "GET", path: "/api/v1/rooms", auth: "STAFF/ADMIN", summary: "Full room list, including decommissioned ones." },
-      { method: "GET", path: "/api/v1/rooms/available", auth: "STAFF/ADMIN", summary: "Which rooms are free for a given window, and which are occupied. The override preview." },
-      { method: "GET", path: "/api/v1/rooms/:id", auth: "STAFF/ADMIN", summary: "One room." },
+      { method: "GET", path: "/api/v1/rooms", auth: "OPERATIONS", summary: "Full room list, including decommissioned ones." },
+      { method: "GET", path: "/api/v1/rooms/available", auth: "OPERATIONS", summary: "Which rooms are free for a given window, and which are occupied. The override preview." },
+      { method: "GET", path: "/api/v1/rooms/:id", auth: "OPERATIONS", summary: "One room." },
       { method: "POST", path: "/api/v1/rooms", auth: "ADMIN", summary: "Create a room." },
       { method: "PATCH", path: "/api/v1/rooms/:id", auth: "ADMIN", summary: "Update a room." },
       { method: "DELETE", path: "/api/v1/rooms/:id", auth: "ADMIN", summary: "Decommission a room. Refused while it still has upcoming bookings." },
@@ -167,10 +178,10 @@ export const API_GROUPS: ApiGroup[] = [
   {
     name: "loyalty",
     endpoints: [
-      { method: "GET", path: "/api/v1/loyalty/clients", auth: "STAFF/ADMIN", summary: "Clients with their derived visit count. ?eligibleOnly=true is the front desk's worklist." },
-      { method: "GET", path: "/api/v1/loyalty/clients/:id", auth: "STAFF/ADMIN", summary: "One client's loyalty standing." },
-      { method: "POST", path: "/api/v1/loyalty/clients/:id/promote", auth: "STAFF/ADMIN", summary: "Promote to member. Refused below the 3-visit threshold; the rate defaults to 3%." },
-      { method: "DELETE", path: "/api/v1/loyalty/clients/:id/membership", auth: "STAFF/ADMIN", summary: "Revoke membership. The visit history is untouched, so they can earn it again." },
+      { method: "GET", path: "/api/v1/loyalty/clients", auth: "DESK", summary: "Clients with their derived visit count. ?eligibleOnly=true is the front desk's worklist." },
+      { method: "GET", path: "/api/v1/loyalty/clients/:id", auth: "DESK", summary: "One client's loyalty standing." },
+      { method: "POST", path: "/api/v1/loyalty/clients/:id/promote", auth: "DESK", summary: "Promote to member. Refused below the 3-visit threshold; the rate defaults to 10%." },
+      { method: "DELETE", path: "/api/v1/loyalty/clients/:id/membership", auth: "DESK", summary: "Revoke membership. The visit history is untouched, so they can earn it again." },
     ],
   },
   {
@@ -187,7 +198,7 @@ export const API_GROUPS: ApiGroup[] = [
   {
     name: "admin",
     endpoints: [
-      { method: "POST", path: "/api/v1/admin/users/staff", auth: "ADMIN", summary: "Create a STAFF or ADMIN account." },
+      { method: "POST", path: "/api/v1/admin/users/staff", auth: "ADMIN", summary: "Create an EMPLOYEE, CONCIERGE or ADMIN account. The retired 'STAFF' label is refused." },
       { method: "GET", path: "/api/v1/admin/dashboard", auth: "ADMIN", summary: "Totals for a date range." },
       { method: "GET", path: "/api/v1/admin/clients", auth: "ADMIN", summary: "Client list with lifetime value." },
       { method: "GET", path: "/api/v1/admin/clients/export.csv", auth: "ADMIN", summary: "The client list as a CSV attachment." },
@@ -232,7 +243,9 @@ export function buildApiIndex(): ApiIndex {
     auth:
       "Send a session token as `Authorization: Bearer <access_token>`. " +
       "'public' needs no token; 'optional' changes behaviour when one is present; " +
-      "'authenticated' needs any signed-in account; 'STAFF/ADMIN' and 'ADMIN' are role-gated.",
+      "'authenticated' needs any signed-in account. The role gates are 'OPERATIONS' " +
+      "(EMPLOYEE, CONCIERGE, ADMIN - everyone who works the floor), 'DESK' (CONCIERGE " +
+      "and ADMIN - reception, payments, room assignment) and 'ADMIN' (the owner).",
     errors: "Every failure is { error: { code, message, details? } } for any status.",
     endpointCount: API_GROUPS.reduce((n, g) => n + g.endpoints.length, 0),
     groups: API_GROUPS,

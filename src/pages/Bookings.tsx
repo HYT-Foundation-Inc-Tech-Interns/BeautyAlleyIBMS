@@ -3,10 +3,13 @@
 /**
  * The bookings record.
  *
- * This is the operational heart of the console and it serves two roles from
- * one page, because the API does: `GET /bookings` is `STAFF/ADMIN`. A stylist
- * and an owner see the same rows; what differs is which of them can act on
- * them, and that is enforced server-side by `PATCH /bookings/:id/status`.
+ * This is the operational heart of the console and it serves every working
+ * role from one page, because the API does: `GET /bookings` is `OPERATIONS`,
+ * so a therapist, the concierge and the owner all read the same rows. What
+ * differs is which of them can act on them, and that is enforced server-side
+ * by `PATCH /bookings/:id/status`. Reassigning the room is narrower still —
+ * `PATCH /bookings/:id/room` is `DESK`, so only the concierge and the owner
+ * see that control.
  *
  * The status buttons are generated from `NEXT_STATUS`, which mirrors the
  * database trigger's state machine. Offering only legal transitions means the

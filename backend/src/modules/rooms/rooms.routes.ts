@@ -9,6 +9,7 @@ import {
 } from "./rooms.schemas";
 import { authenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/requireRole";
+import { OPERATIONS, OWNER } from "../../lib/roleGroups";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../lib/asyncHandler";
 
@@ -21,11 +22,13 @@ export const roomsRouter = Router();
 // reachable without a token.
 roomsRouter.get("/public", asyncHandler(roomsController.listPublic));
 
-// --- staff -----------------------------------------------------------------
-// The desk manages occupancy, so it needs the full list and the availability
-// preview. Read-only: creating or decommissioning a room is an ADMIN decision.
-const staff = [authenticate, requireRole("STAFF", "ADMIN")] as const;
-const admin = [authenticate, requireRole("ADMIN")] as const;
+// --- the floor -------------------------------------------------------------
+// Everyone who works here needs the board: the desk manages occupancy, and a
+// therapist needs to know whether the room they are about to walk into is
+// free or still being cleaned. Read-only - creating or decommissioning a room
+// is an ADMIN decision.
+const staff = [authenticate, requireRole(...OPERATIONS)] as const;
+const admin = [authenticate, requireRole(...OWNER)] as const;
 
 roomsRouter.get(
   "/available",

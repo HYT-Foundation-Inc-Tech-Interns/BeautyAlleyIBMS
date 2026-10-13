@@ -9,7 +9,13 @@
       "blurb": "Owner — the full record of bookings, clients, promos and employees"
     },
     {
-      "role": "STAFF",
+      "role": "CONCIERGE",
+      "email": "concierge@beautyalley.ph",
+      "fullName": "Mara Villanueva",
+      "blurb": "Concierge — reception, bookings, payments and loyalty, but no admin settings"
+    },
+    {
+      "role": "EMPLOYEE",
       "email": "stylist@beautyalley.ph",
       "fullName": "Ana Reyes",
       "employeeId": "22222222-0000-0000-0000-000000000001",

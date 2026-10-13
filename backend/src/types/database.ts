@@ -18,7 +18,8 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
-export type UserRole = "GUEST" | "CLIENT" | "STAFF" | "ADMIN";
+/** Mirrors the `public.user_role` enum. Migration 24 renamed STAFF to EMPLOYEE. */
+export type UserRole = "GUEST" | "CLIENT" | "EMPLOYEE" | "CONCIERGE" | "ADMIN";
 export type ServiceCategory = "SPA" | "SALON" | "WELLNESS";
 export type BookingStatus =
   | "PENDING"
@@ -754,6 +755,16 @@ export interface Database {
       };
       get_dashboard_summary: {
         Args: { p_from: string; p_to: string; p_timezone?: string | null };
+        Returns: Json;
+      };
+      /** Migration 26. One employee's daily quota progress. Raises EMPLOYEE_NOT_FOUND. */
+      get_employee_quota: {
+        Args: { p_employee_id: string; p_day?: string | null };
+        Returns: Json;
+      };
+      /** Migration 26. Every active employee's quota progress for one day. */
+      get_employee_quotas: {
+        Args: { p_day?: string | null };
         Returns: Json;
       };
       get_employee_performance: {

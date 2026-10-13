@@ -5,6 +5,7 @@ import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { paginated } from "../../lib/pagination";
 import { signQrPass, toCheckInUrl, verifyQrPass } from "../../lib/qr";
+import { OPERATIONS } from "../../lib/roleGroups";
 import type { Actor } from "../../types/actor";
 import type { BookingStatus } from "../../types/database";
 import {
@@ -75,7 +76,16 @@ function toBookingDto(row: BookingDetailRow, items: BookingItemRow[] = []) {
   };
 }
 
-const isStaff = (actor?: Actor) => actor?.role === "STAFF" || actor?.role === "ADMIN";
+/**
+ * Does this caller work at the branch?
+ *
+ * An allow-list rather than "not a client", so a role added later fails closed
+ * - it has to be named here before it can read a booking it does not own.
+ * CONCIERGE belongs: the desk needs to see the note it is handing to the
+ * therapist. GUEST is deliberately absent even though it is not a client.
+ */
+const isStaff = (actor?: Actor) =>
+  actor !== undefined && (OPERATIONS as readonly string[]).includes(actor.role);
 
 /** Row -> wire shape for an aftercare note. */
 function toNoteDto(row: BookingNoteRow) {
