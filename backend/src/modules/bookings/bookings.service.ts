@@ -5,12 +5,14 @@ import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { paginated } from "../../lib/pagination";
 import { signQrPass, toCheckInUrl, verifyQrPass } from "../../lib/qr";
+import { OPERATIONS } from "../../lib/roleGroups";
 import type { Actor } from "../../types/actor";
 import type { BookingStatus } from "../../types/database";
 import {
   bookingsRepository,
   type BookingDetailRow,
   type BookingItemRow,
+  type BookingNoteRow,
 } from "./bookings.repository";
 import type { CreateBookingInput, ListBookingsQuery, MyBookingsQuery } from "./bookings.schemas";
 
@@ -18,11 +20,15 @@ interface CreateBookingRpcResult {
   bookingId: string;
   reference: string;
   employeeId: string;
+  roomId: string | null;
+  roomType: string | null;
   startTime: string;
   endTime: string;
   status: string;
   subtotalCents: number;
   discountCents: number;
+  memberDiscountCents: number;
+  promoDiscountCents: number;
   totalCents: number;
   jti: string;
 }
@@ -51,6 +57,12 @@ function toBookingDto(row: BookingDetailRow, items: BookingItemRow[] = []) {
     subtotalCents: row.subtotal_cents,
     discountCents: row.discount_cents,
     totalCents: row.total_cents,
+    // Which room the treatment is in. Null for a service that needs none, and
+    // for every booking made before migration 17.
+    room: row.room_id ? { id: row.room_id, name: row.room_name, type: row.room_type } : null,
+    // The rate this client's booking was priced at, so the dashboard can show
+    // "member rate 3%" beside the discount rather than an unexplained amount.
+    memberDiscountPercent: row.member_discount_percent ?? 0,
     notes: row.notes,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -64,7 +76,28 @@ function toBookingDto(row: BookingDetailRow, items: BookingItemRow[] = []) {
   };
 }
 
-const isStaff = (actor?: Actor) => actor?.role === "STAFF" || actor?.role === "ADMIN";
+/**
+ * Does this caller work at the branch?
+ *
+ * An allow-list rather than "not a client", so a role added later fails closed
+ * - it has to be named here before it can read a booking it does not own.
+ * CONCIERGE belongs: the desk needs to see the note it is handing to the
+ * therapist. GUEST is deliberately absent even though it is not a client.
+ */
+const isStaff = (actor?: Actor) =>
+  actor !== undefined && (OPERATIONS as readonly string[]).includes(actor.role);
+
+/** Row -> wire shape for an aftercare note. */
+function toNoteDto(row: BookingNoteRow) {
+  return {
+    id: row.id,
+    bookingId: row.booking_id,
+    authorId: row.author_id,
+    body: row.body,
+    visibleToClient: row.visible_to_client,
+    createdAt: iso(row.created_at),
+  };
+}
 
 /**
  * May this caller act on this booking?
@@ -147,6 +180,10 @@ export const bookingsService = {
       p_promo_code: input.promoCode ?? null,
       p_actor: actor?.id ?? null,
       p_notes: input.notes ?? null,
+      // Only staff may pin a room. A client picking their own treatment room
+      // is not a thing the salon offers, and honouring it would let anyone
+      // occupy a room the desk had reserved for someone else.
+      p_room_id: isStaff(actor) ? input.roomId ?? null : null,
     });
     if (error) throw error;
 
@@ -155,7 +192,9 @@ export const bookingsService = {
       bookingId: result.bookingId,
       reference: result.reference,
       employeeId: result.employeeId,
+      roomId: result.roomId,
       totalCents: result.totalCents,
+      memberDiscountCents: result.memberDiscountCents,
       by: actor?.id ?? "guest",
     });
 
@@ -227,6 +266,61 @@ export const bookingsService = {
   async list(query: ListBookingsQuery) {
     const { rows, total } = await bookingsRepository.list(query);
     return paginated(rows.map((r) => toBookingDto(r)), total, query.page, query.limit);
+  },
+
+  // --- aftercare notes (migration 17) --------------------------------------
+
+  /**
+   * Notes on a booking.
+   *
+   * Authorisation is the same rule as reading the booking itself, so a guest
+   * holding the uuid can read the aftercare note the therapist left for them -
+   * which is the point of the note. Staff additionally see the notes flagged
+   * not-client-visible.
+   */
+  async notes(id: string, actor?: Actor) {
+    await this.detailFor(id, actor); // throws 404 if the caller may not read it
+    const rows = await bookingsRepository.notesFor(id, isStaff(actor));
+    return rows.map(toNoteDto);
+  },
+
+  async addNote(
+    id: string,
+    input: { body: string; visibleToClient: boolean },
+    actor: Actor
+  ) {
+    await this.detailFor(id, actor);
+    // The author is the staff member's employees row, not their profile: the
+    // note is attributed to the therapist, and `author_id` references
+    // employees. A staff login with no employee record writes an unattributed
+    // note rather than failing - the note matters more than the byline.
+    const authorId = actor.employeeId ?? null;
+    const row = await bookingsRepository.addNote({
+      bookingId: id,
+      authorId,
+      body: input.body,
+      visibleToClient: input.visibleToClient,
+    });
+    return toNoteDto(row);
+  },
+
+  async deleteNote(id: string, noteId: string, actor: Actor) {
+    await this.detailFor(id, actor);
+    const note = await bookingsRepository.getNote(noteId);
+    // A note id from another booking is a 404, not a silent success - the
+    // caller asked to delete something that is not where they said it was.
+    if (!note || note.booking_id !== id) {
+      throw AppError.notFound(CODES.NOT_FOUND, "No such note on this booking");
+    }
+    await bookingsRepository.deleteNote(noteId);
+  },
+
+  /** The desk moving a booking to another room (migration 18). */
+  async setRoom(id: string, roomId: string | null, actor: Actor) {
+    await this.detailFor(id, actor);
+    const result = await bookingsRepository.setRoom(id, roomId, actor.id);
+    logger.info("booking.room_changed", { bookingId: id, roomId, by: actor.id });
+    return this.detail(result.bookingId);
   },
 
   async mine(actor: Actor, query: MyBookingsQuery) {

@@ -44,7 +44,6 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { AlleyMark } from "@/components/brand/Logo";
 import { useAuth, type Area, ROLE_LABEL } from "@/auth/AuthProvider";
 
 /* ------------------------------------------------------------------ */
@@ -195,14 +194,15 @@ function AppSidebar() {
           to="/"
           className="flex items-center gap-3 rounded-lg px-1.5 py-2 transition-colors hover:bg-white/[0.05]"
         >
-          <AlleyMark className="h-9 w-9 shrink-0 text-primary-foreground" />
-          <span className="flex min-w-0 flex-col leading-none group-data-[collapsible=icon]:hidden">
-            <span className="font-display text-[17px] font-semibold tracking-tight text-primary-foreground">
-              The Beauty Alley
-            </span>
-            <span className="mt-1 text-[9.5px] font-semibold uppercase tracking-[0.24em] text-primary-foreground/45">
-              Salon OS
-            </span>
+          <img
+            src="/brand/logo-ivory.png"
+            alt="The Beauty Alley"
+            width={1912}
+            height={1912}
+            className="h-14 w-14 shrink-0 object-contain drop-shadow-[0_2px_12px_rgba(7,25,20,0.45)]"
+          />
+          <span className="min-w-0 truncate font-display text-[19px] font-semibold tracking-tight text-primary-foreground group-data-[collapsible=icon]:hidden">
+            The Beauty Alley
           </span>
         </Link>
       </SidebarHeader>

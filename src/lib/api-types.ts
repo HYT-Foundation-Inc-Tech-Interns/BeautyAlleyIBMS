@@ -15,7 +15,15 @@
  *     until the moment of display.
  */
 
-export type Role = "ADMIN" | "STAFF" | "CLIENT";
+/**
+ * The four roles, mirroring the `public.user_role` enum after migration 24.
+ *
+ * There is no `"STAFF"`. It was renamed to EMPLOYEE, and CONCIERGE was split
+ * out of it so the front desk could be given reception duties without also
+ * handing over the owner's settings. A stale `"STAFF"` in a comparison now
+ * fails to type-check rather than silently matching nobody.
+ */
+export type Role = "ADMIN" | "CONCIERGE" | "EMPLOYEE" | "CLIENT";
 
 export type ServiceCategory = "SPA" | "SALON" | "WELLNESS";
 
@@ -137,6 +145,30 @@ export interface Employee {
   serviceIds?: string[];
   /** Present only on the admin view; omitted from the public "meet the team" shape. */
   workingHours?: WorkingHour[];
+}
+
+/**
+ * Progress against the daily completed-clients quota.
+ *
+ * Derived on read from COMPLETED bookings, so it self-corrects when a booking
+ * is cancelled or re-opened - there is no counter to drift. `date` is a plain
+ * calendar day resolved in the branch timezone, not an instant.
+ */
+export interface QuotaProgress {
+  employeeId: string;
+  employeeName: string;
+  /** `YYYY-MM-DD`, in the branch timezone. */
+  date: string;
+  timezone: string;
+  /** The target for one day. */
+  quota: number;
+  /** Clients whose service was actually delivered. */
+  completed: number;
+  /** Still to come today: PENDING, CONFIRMED, CHECKED_IN or IN_SERVICE. */
+  scheduled: number;
+  /** `quota - completed`, floored at zero. */
+  remaining: number;
+  met: boolean;
 }
 
 export interface Slot {

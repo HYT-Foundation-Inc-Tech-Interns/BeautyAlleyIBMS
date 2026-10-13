@@ -41,7 +41,6 @@ import { Button } from "@/components/ui/button";
 import {
   DraggableWidgetGrid,
   type WidgetItem,
-  type WidgetSize,
 } from "@/components/ui/draggable-widget-grid";
 import { SectionHeading } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, PersonAvatar } from "@/components/app/api-bits";
@@ -69,20 +68,70 @@ interface BoardWidget extends WidgetItem {
 }
 
 const DEFAULT_BOARD: BoardWidget[] = [
-  { id: "revenue", kind: "revenue", size: "wide", label: "Revenue" },
-  { id: "bookings", kind: "bookings", size: "sm", label: "Bookings" },
-  { id: "completed", kind: "completed", size: "sm", label: "Completion rate" },
-  { id: "noshow", kind: "noshow", size: "sm", label: "No-shows" },
-  { id: "checkedin", kind: "checkedin", size: "sm", label: "Arrived" },
-  { id: "flow", kind: "flow", size: "wide", label: "Bookings per day" },
-  { id: "topservices", kind: "topservices", size: "wide", label: "Top treatments" },
-  { id: "topclients", kind: "topclients", size: "wide", label: "Best clients" },
-  { id: "runsheet", kind: "runsheet", size: "lg", label: "Today's run sheet" },
-  { id: "floor", kind: "floor", size: "tall", label: "The floor" },
-  { id: "arrivals", kind: "arrivals", size: "sm", label: "Arrivals today" },
+  { id: "revenue", kind: "revenue", w: 2, h: 1, label: "Revenue" },
+  { id: "bookings", kind: "bookings", w: 1, h: 1, label: "Bookings" },
+  { id: "completed", kind: "completed", w: 1, h: 1, label: "Completion rate" },
+  { id: "noshow", kind: "noshow", w: 1, h: 1, label: "No-shows" },
+  { id: "checkedin", kind: "checkedin", w: 1, h: 1, label: "Arrived" },
+  { id: "flow", kind: "flow", w: 2, h: 1, label: "Bookings per day" },
+  { id: "topservices", kind: "topservices", w: 2, h: 1, label: "Top treatments" },
+  { id: "topclients", kind: "topclients", w: 2, h: 1, label: "Best clients" },
+  { id: "runsheet", kind: "runsheet", w: 2, h: 2, label: "Today's run sheet" },
+  { id: "floor", kind: "floor", w: 1, h: 2, label: "The floor" },
+  { id: "arrivals", kind: "arrivals", w: 1, h: 1, label: "Arrivals today" },
 ];
 
-const STORAGE_KEY = "alley.board.v2";
+const STORAGE_KEY = "alley.board.v3";
+const LEGACY_KEY = "alley.board.v2";
+const MAX_COLUMNS = 4;
+const MAX_ROWS = 4;
+
+/** The four spans the previous `size` enum stood for. */
+const SIZE_TO_SPAN: Record<string, { w: number; h: number }> = {
+  sm: { w: 1, h: 1 },
+  wide: { w: 2, h: 1 },
+  tall: { w: 1, h: 2 },
+  lg: { w: 2, h: 2 },
+};
+
+/**
+ * Read a stored layout, accepting either the current `{w,h}` shape or the
+ * legacy `{size}` shape. Returns null if anything is untrustworthy, so the
+ * caller falls back to the defaults rather than rendering a broken board.
+ */
+function parseStored(raw: string | null, known: Set<string>): BoardWidget[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    const out: BoardWidget[] = [];
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== "object") return null;
+      const { id, kind, label } = entry as Partial<BoardWidget>;
+      if (typeof id !== "string" || !known.has(id)) return null;
+      let w: number;
+      let h: number;
+      if (typeof entry.w === "number" && typeof entry.h === "number") {
+        w = entry.w;
+        h = entry.h;
+      } else if (typeof entry.size === "string" && SIZE_TO_SPAN[entry.size]) {
+        ({ w, h } = SIZE_TO_SPAN[entry.size]);
+      } else {
+        return null;
+      }
+      out.push({
+        id,
+        kind: kind as Kind,
+        label,
+        w: Math.max(1, Math.min(Math.floor(w) || 1, MAX_COLUMNS)),
+        h: Math.max(1, Math.min(Math.floor(h) || 1, MAX_ROWS)),
+      });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
 
 /* ------------------------------------------------------------------ *
  * Everything the board reads, in one place
@@ -582,16 +631,18 @@ export default function Board() {
   const board = useBoardData(days);
 
   const [items, setItems] = React.useState<BoardWidget[]>(() => {
+    // Only trust a stored layout whose tiles still exist — a renamed kind
+    // would otherwise render a permanently blank tile.
+    const known = new Set(DEFAULT_BOARD.map((w) => w.id));
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as BoardWidget[];
-        // Only trust a stored layout whose tiles still exist — a renamed kind
-        // would otherwise render a permanently blank tile.
-        const known = new Set(DEFAULT_BOARD.map((w) => w.id));
-        if (Array.isArray(parsed) && parsed.length && parsed.every((w) => known.has(w.id))) {
-          return parsed;
-        }
+      const fresh = parseStored(localStorage.getItem(STORAGE_KEY), known);
+      if (fresh) return fresh;
+      // Migrate a v2 layout (discrete `size`) to v3 (`w`/`h`) once.
+      const migrated = parseStored(localStorage.getItem(LEGACY_KEY), known);
+      if (migrated) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        localStorage.removeItem(LEGACY_KEY);
+        return migrated;
       }
     } catch {
       /* ignore */
@@ -612,6 +663,7 @@ export default function Board() {
     setItems(DEFAULT_BOARD);
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_KEY);
     } catch {
       /* ignore */
     }
@@ -624,7 +676,7 @@ export default function Board() {
       <SectionHeading
         eyebrow="Monitoring board"
         title="Arrange the room you think in."
-        description={`Every tile is live — ${items.length} panels over the last ${days} days, read from the database. Drag to rearrange, and the layout is remembered on this device.`}
+        description={`Every tile is live — ${items.length} panels over the last ${days} days, read from the database. Drag to rearrange and drag a corner to resize; the layout is remembered on this device.`}
         action={
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-full border border-border bg-card p-0.5">
@@ -664,7 +716,7 @@ export default function Board() {
         <span className="inline-flex items-center gap-2">
           <GripVertical className="size-4 text-primary" />
           {editable
-            ? "Drag any tile to rearrange it — the grid reflows instantly."
+            ? "Click a tile to select it, drag it to rearrange, or drag its bottom-right corner to resize. Keys: Alt+arrows move · Alt +/− height · Alt+Shift +/− width."
             : "Layout is locked. Unlock to rearrange."}
         </span>
         <span className="inline-flex items-center gap-2">
@@ -708,5 +760,3 @@ export default function Board() {
     </div>
   );
 }
-
-export type { WidgetSize };

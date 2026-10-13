@@ -3,12 +3,20 @@
  *
  * The branch runs on Asia/Manila (UTC+8, no DST), and the seed gives every
  * stylist Monday-Saturday 09:00-18:00 local. So a test slot has to be a future
- * weekday between 01:00 and 10:00 UTC.
+ * open day between 01:00 and 10:00 UTC.
  *
  * Getting this wrong is the classic flaky-test trap: a test that computes
  * "tomorrow at 10am UTC" passes Monday to Friday and fails at the weekend, or
  * passes until it happens to land on a Sunday. These helpers only ever return
  * a slot that is known to be inside a shift.
+ *
+ * There are two independent traps, and both have bitten this suite:
+ *
+ *   1. a slot landing on a closed day - handled by walking to open days;
+ *   2. two different offsets landing on the *same* day, because the walk in
+ *      (1) skipped forward past a Sunday. `nextWorkingSlot` therefore counts
+ *      open days rather than calendar days, which makes it strictly
+ *      increasing. See its own note.
  */
 
 const MANILA_OFFSET_HOURS = 8;
@@ -34,6 +42,7 @@ export const SLOT_BANDS = {
   promos: 40,
   qr: 80,
   admin: 120,
+  references: 160,
 } as const;
 
 let slotBand = 0;
@@ -58,23 +67,43 @@ function manilaToUtc(date: Date, hours: number, minutes = 0): Date {
 /**
  * A future instant that is inside working hours.
  *
- * `daysAhead` is a minimum: the result is nudged forward to the next day the
- * salon is open if it would otherwise land on a Sunday, and Saturday is allowed
- * because the seed gives Saturday hours.
+ * `daysAhead` counts **open days**, not calendar days: 1 is the next day the
+ * salon is open, 2 the one after that, and so on. That distinction is the whole
+ * point of the function.
+ *
+ * The earlier version added `daysAhead` calendar days and then walked forward
+ * if the result landed on a Sunday. That silently collapses two offsets onto
+ * the same date: `nextWorkingSlot(5, 10)` and `nextWorkingSlot(6, 10)` both
+ * returned Monday whenever day 5 was a Sunday. Two tests in the same suite that
+ * book the same stylist at those offsets then collide, and the second one fails
+ * with a 409 SLOT_TAKEN that says nothing about what it was checking - on
+ * Tuesdays, and only on Tuesdays.
+ *
+ * Counting open days makes the mapping strictly increasing, so distinct offsets
+ * always produce distinct dates.
  */
 export function nextWorkingSlot(daysAhead = 3, manilaHour = 10): Date {
   const base = new Date();
-  base.setUTCDate(base.getUTCDate() + daysAhead + slotBand);
   base.setUTCHours(0, 0, 0, 0);
+  // The band is applied in calendar days, before the open-day walk. Bands are
+  // 40 apart and no suite asks for more than ~20 open days, so the walks cannot
+  // reach into a neighbouring band.
+  base.setUTCDate(base.getUTCDate() + slotBand);
 
-  // Walk forward until we reach a day the salon is open. Sunday (0) is closed.
-  for (let i = 0; i < 10; i++) {
-    const candidate = manilaToUtc(base, manilaHour);
-    const manilaWeekday = new Date(candidate.getTime() + MANILA_OFFSET_HOURS * 3_600_000).getUTCDay();
-    if (manilaWeekday !== 0) return candidate;
-    base.setUTCDate(base.getUTCDate() + 1);
+  const cursor = new Date(base.getTime());
+  let remaining = daysAhead;
+
+  // 400 iterations is ~57 open days - far beyond any offset a suite uses, and a
+  // hard stop so a mistake here fails loudly instead of spinning.
+  for (let i = 0; i < 400; i++) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    // Manila weekday of this calendar date; Sunday (0) is closed.
+    if (new Date(cursor.getTime() + MANILA_OFFSET_HOURS * 3_600_000).getUTCDay() === 0) continue;
+    remaining -= 1;
+    if (remaining === 0) return manilaToUtc(cursor, manilaHour);
   }
-  throw new Error("could not find a working slot in the next 10 days");
+
+  throw new Error(`could not find open day ${daysAhead} in the next 400 days`);
 }
 
 /** A distinct slot on the same day, `hours` later. */

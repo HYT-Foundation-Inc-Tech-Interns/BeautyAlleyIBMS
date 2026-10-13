@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Create the three demo logins the web app advertises.
+ * Create the four demo logins the web app advertises.
  *
  *   node scripts/demo-accounts.js            # create/repair, then verify
  *   node scripts/demo-accounts.js --quiet    # same, no progress output
@@ -13,7 +13,7 @@
  * session and is not what "reseed the fixtures" should mean.
  *
  * So the two are separate concerns and this script is idempotent on its own:
- * run it once, or fifty times, and the end state is the same three accounts
+ * run it once, or fifty times, and the end state is the same four accounts
  * with the same passwords and the same linked rows.
  *
  * ## Why the credentials live in a JSON file at the repo root
@@ -208,7 +208,7 @@ async function main() {
       }
 
       const linked =
-        account.role === "STAFF"
+        account.role === "EMPLOYEE"
           ? `${row.employees} employee row(s)`
           : account.role === "CLIENT"
             ? `${row.clients} client row(s)`
@@ -216,7 +216,7 @@ async function main() {
 
       log(
         `  ${row.role === account.role ? c.green + "ok" : c.red + "!!"}${c.reset} ` +
-          `${account.role.padEnd(6)} ${account.email.padEnd(26)} ${linked}`
+          `${account.role.padEnd(10)} ${account.email.padEnd(26)} ${linked}`
       );
     }
 

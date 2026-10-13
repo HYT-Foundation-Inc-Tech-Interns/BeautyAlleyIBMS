@@ -10,6 +10,10 @@ export interface ServiceRow {
   description: string | null;
   price_cents: number;
   duration_minutes: number;
+  /** Migration 17. NULL = the service needs no room. */
+  required_room_type: string | null;
+  /** Migration 17. Second catalogue level. */
+  subcategory_id: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -23,7 +27,7 @@ export interface ServiceRow {
  * literal type is what makes the inference work.
  */
 const SELECT =
-  "id, name, category, description, price_cents, duration_minutes, is_active, created_at, updated_at" as const;
+  "id, name, category, description, price_cents, duration_minutes, required_room_type, subcategory_id, is_active, created_at, updated_at" as const;
 
 type ServiceUpdate = Database["public"]["Tables"]["services"]["Update"];
 
@@ -93,6 +97,8 @@ export const servicesRepository = {
         description: input.description ?? null,
         price_cents: input.priceCents,
         duration_minutes: input.durationMinutes,
+        required_room_type: input.requiredRoomType ?? null,
+        subcategory_id: input.subcategoryId ?? null,
         is_active: input.isActive,
       })
       .select(SELECT)
@@ -111,6 +117,8 @@ export const servicesRepository = {
     if (patch.description !== undefined) row.description = patch.description;
     if (patch.priceCents !== undefined) row.price_cents = patch.priceCents;
     if (patch.durationMinutes !== undefined) row.duration_minutes = patch.durationMinutes;
+    if (patch.requiredRoomType !== undefined) row.required_room_type = patch.requiredRoomType;
+    if (patch.subcategoryId !== undefined) row.subcategory_id = patch.subcategoryId;
     if (patch.isActive !== undefined) row.is_active = patch.isActive;
 
     const { data, error } = await db.from("services").update(row).eq("id", id).select(SELECT).maybeSingle();

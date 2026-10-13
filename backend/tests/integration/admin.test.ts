@@ -236,10 +236,6 @@ describeAdmin("admin", () => {
       const admin = await createTestAdmin();
       created.push(admin);
 
-      const before = await db().query(
-        `select count(*)::int as n from public.audit_logs where action = 'booking.created'`
-      );
-
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
@@ -254,10 +250,26 @@ describeAdmin("admin", () => {
         .set(...as(admin.token));
       expect(res.status).toBe(201);
 
+      /*
+       * Ask about THIS booking, not about a global count.
+       *
+       * The original assertion was "one more booking.created row than before",
+       * which is a statement about the whole database - and four suites share
+       * it, running in parallel workers. A booking created by another suite
+       * between the two counts moved the number by two and failed a test that
+       * had done nothing wrong. Naming the booking makes the assertion about
+       * the thing under test, and it is stronger: it proves the audit row is
+       * attributed to this booking and this actor, which a count never did.
+       */
       const after = await db().query(
-        `select count(*)::int as n from public.audit_logs where action = 'booking.created'`
+        `select count(*)::int as n
+           from public.audit_logs
+          where action = 'booking.created'
+            and entity_id = $1
+            and actor_id = $2`,
+        [res.body.data.id, admin.id]
       );
-      expect(after.rows[0].n).toBe(before.rows[0].n + 1);
+      expect(after.rows[0].n).toBe(1);
     });
 
     it("filters by action", async () => {

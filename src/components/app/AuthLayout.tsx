@@ -11,7 +11,7 @@
 import * as React from "react";
 import { Link } from "react-router-dom";
 
-import { AlleyMark, AlleySprig } from "@/components/brand/Logo";
+import { AlleySprig } from "@/components/brand/Logo";
 
 export function AuthLayout({
   eyebrow,
@@ -37,14 +37,15 @@ export function AuthLayout({
         <AlleySprig className="pointer-events-none absolute -right-24 bottom-[-140px] h-[480px] w-[360px] rotate-[22deg] text-white/[0.04]" />
 
         <Link to="/" className="relative flex items-center gap-3">
-          <AlleyMark className="h-10 w-10 text-primary-foreground" />
-          <span className="flex flex-col leading-none">
-            <span className="font-display text-[19px] font-semibold tracking-tight">
-              The Beauty Alley
-            </span>
-            <span className="mt-1 text-[9.5px] font-semibold uppercase tracking-[0.26em] text-primary-foreground/50">
-              Salon OS
-            </span>
+          <img
+            src="/brand/logo-ivory.png"
+            alt="The Beauty Alley"
+            width={1912}
+            height={1912}
+            className="h-14 w-14 object-contain drop-shadow-[0_2px_12px_rgba(7,25,20,0.45)]"
+          />
+          <span className="font-display text-[19px] font-semibold leading-none tracking-tight">
+            The Beauty Alley
           </span>
         </Link>
 
@@ -88,8 +89,14 @@ export function AuthLayout({
       <main className="flex flex-col justify-center bg-background px-6 py-14 sm:px-12">
         <div className="mx-auto w-full max-w-[400px]">
           <Link to="/" className="mb-10 inline-flex items-center gap-2.5 lg:hidden">
-            <AlleyMark className="h-9 w-9 text-primary" />
-            <span className="font-display text-[17px] font-semibold tracking-tight">
+            <img
+              src="/brand/logo-emerald.png"
+              alt="The Beauty Alley"
+              width={1912}
+              height={1912}
+              className="h-14 w-14 object-contain"
+            />
+            <span className="font-display text-[19px] font-semibold tracking-tight">
               The Beauty Alley
             </span>
           </Link>

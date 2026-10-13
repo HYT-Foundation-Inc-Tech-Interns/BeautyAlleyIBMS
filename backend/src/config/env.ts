@@ -42,6 +42,11 @@ const schema = z.object({
   // Where a scanned QR pass points. Defaults to the branch check-in page.
   QR_CHECKIN_URL: z.string().url().default("https://beautyalley.app/check-in"),
 
+  // The walk-in door QR. A different sticker from the desk check-in QR: this
+  // one starts a registration, the other redeems an existing pass.
+  BRANCH_ID: z.string().trim().min(1).default("beautyalley-main"),
+  QR_ENTER_URL: z.string().url().default("https://beautyalley.app/welcome"),
+
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
 });
@@ -78,6 +83,8 @@ export const env = {
   qrSigningSecret: parsed.data.QR_SIGNING_SECRET,
   qrCheckinWindowMinutes: parsed.data.QR_CHECKIN_WINDOW_MINUTES,
   qrCheckInUrl: parsed.data.QR_CHECKIN_URL,
+  branchId: parsed.data.BRANCH_ID,
+  qrEnterUrl: parsed.data.QR_ENTER_URL,
 
   loginMaxAttempts: parsed.data.LOGIN_MAX_ATTEMPTS,
   loginLockoutMinutes: parsed.data.LOGIN_LOCKOUT_MINUTES,

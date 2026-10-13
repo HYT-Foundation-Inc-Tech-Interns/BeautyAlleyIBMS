@@ -315,6 +315,19 @@ function log(msg) {
     }
   }
 
+  // The references above were continued from the highest suffix already in use
+  // rather than drawn from `booking_counters`, so the counter is now BEHIND the
+  // reference set. Left alone, the next real booking is handed a reference that
+  // already exists: 23505 on bookings_reference_key, which the API reports as
+  // 409 CONFLICT "Booking reference collision, please retry" - and retrying
+  // walks one step further up the same colliding run, so the public booking
+  // flow stays broken for the rest of the day.
+  //
+  // Migration 27 makes the allocator self-heal, so this is no longer fatal - but
+  // the stored state should not be left lying, and a seeder that knowingly
+  // desyncs a counter is a trap for whoever reads it next.
+  const synced = await c.query("select public.sync_booking_counters() as n");
+
   await c.end();
   log("");
   log(`Demo bookings`);
@@ -322,6 +335,7 @@ function log(msg) {
   if (cleared) log(`  cleared first  ${cleared}`);
   log(`  days skipped   ${skippedDays}${skippedDays ? " (already had bookings — use --force to rebuild)" : ""}`);
   log(`  range          ${branchDay(-PAST_DAYS)} .. ${branchDay(FUTURE_DAYS)} (branch time)`);
+  log(`  counters synced ${synced.rows[0].n}`);
 })().catch((e) => {
   console.error("seed-demo-bookings failed:", e.message);
   process.exit(1);

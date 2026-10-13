@@ -37,15 +37,16 @@ export function PublicShell({
     <div className="flex min-h-screen flex-col bg-background">
       <header className="sticky top-0 z-40 border-b border-alley-900/10 bg-alley-900/95 backdrop-blur-md">
         <div className="container flex h-[70px] items-center gap-5">
-          <Link to="/" className="flex shrink-0 items-center gap-3">
-            <AlleyMark className="h-9 w-9 text-primary-foreground" />
-            <span className="hidden flex-col leading-none sm:flex">
-              <span className="font-display text-[17px] font-semibold tracking-tight text-primary-foreground">
-                The Beauty Alley
-              </span>
-              <span className="mt-1 text-[9px] font-semibold uppercase tracking-[0.24em] text-primary-foreground/50">
-                Downtown Atelier
-              </span>
+          <Link to="/" className="flex shrink-0 items-center gap-3" aria-label="The Beauty Alley — home">
+            <img
+              src="/brand/logo-ivory.png"
+              alt="The Beauty Alley"
+              width={1912}
+              height={1912}
+              className="h-14 w-14 object-contain drop-shadow-[0_2px_12px_rgba(7,25,20,0.45)]"
+            />
+            <span className="hidden font-display text-[19px] font-semibold leading-none tracking-tight text-primary-foreground sm:block">
+              The Beauty Alley
             </span>
           </Link>
 

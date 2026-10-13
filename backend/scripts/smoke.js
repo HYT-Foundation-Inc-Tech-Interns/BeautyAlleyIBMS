@@ -82,6 +82,62 @@ function workingSlot(daysAhead = 3, manilaHour = 10) {
 const SVC_MASSAGE = "11111111-0000-0000-0000-000000000001";
 const EMP_ANA = "22222222-0000-0000-0000-000000000001";
 
+/**
+ * Create a booking that is check-in-able *right now*, for a stylist who is free.
+ *
+ * The check-in window is one hour wide: a pass opens `QR_CHECKIN_WINDOW_MINUTES`
+ * before the appointment starts and closes when the appointment ends. So the
+ * start has to sit inside `[now - duration, now + window]` to be scannable the
+ * moment it is created.
+ *
+ * "Now + 20 minutes" is not safe. The seeded demo data puts real appointments on
+ * the grid, and a hardcoded offset collided with a 13:00 booking - the insert
+ * died on `bookings_no_overlap` and took the whole smoke run with it. Walk the
+ * window instead, and let the database be the oracle: attempt the insert, and on
+ * an exclusion violation (23P01) move to the next candidate. The rule is then
+ * never restated here, so it cannot drift from the constraint that enforces it.
+ *
+ * Two further concessions to a populated database, both learned the hard way:
+ *
+ *   - The booking is 30 minutes, not 60. The demo grid runs 45-minute treatments
+ *     and the gaps between them are 45 minutes wide, so a one-hour booking has
+ *     nowhere to go even when the stylist is not busy - every candidate in the
+ *     window overlaps something. The pass only has to be scannable; the
+ *     treatment length is irrelevant to what is being tested.
+ *   - Stylists are tried in turn. One stylist can genuinely be booked across the
+ *     whole window, and that is not a reason to fail a check-in test.
+ */
+async function insertCheckinableBooking(db, employeeIds, reference) {
+  const windowMs = Number(process.env.QR_CHECKIN_WINDOW_MINUTES || 60) * 60_000;
+  const durationMs = 30 * 60_000;
+  const step = 5 * 60_000;
+
+  for (const employeeId of employeeIds) {
+    for (let offset = windowMs - step; offset >= -(durationMs - step); offset -= step) {
+      const start = new Date(Date.now() + offset);
+      const end = new Date(start.getTime() + durationMs);
+      try {
+        const inserted = await db.query(
+          `insert into public.bookings
+             (reference, guest_name, guest_phone, employee_id, start_time, end_time, status,
+              subtotal_cents, discount_cents, total_cents)
+           values ($1, 'Smoke Soon', '+639009990003', $2, $3, $4, 'CONFIRMED', 250000, 0, 250000)
+           returning id`,
+          [reference, employeeId, start.toISOString(), end.toISOString()]
+        );
+        return inserted.rows[0].id;
+      } catch (err) {
+        // The stylist (or a room) is already busy then - try the next candidate.
+        // Anything else is a real failure and must not be swallowed.
+        if (err.code === "23P01") continue;
+        throw err;
+      }
+    }
+  }
+
+  throw new Error("no check-in-able slot was free for any stylist");
+}
+
 async function main() {
   const created = { bookings: [], users: [] };
   const db = new Client({
@@ -261,41 +317,63 @@ async function main() {
       return { id: user.id, token: session.access_token };
     }
 
-    const staff = await makeUser("STAFF");
+    const staff = await makeUser("EMPLOYEE");
+    const concierge = await makeUser("CONCIERGE");
     const admin = await makeUser("ADMIN");
     const staffToken = staff.token;
+    const conciergeToken = concierge.token;
     const adminToken = admin.token;
-    check("staff and admin accounts sign in and get sessions",
-      typeof staffToken === "string" && typeof adminToken === "string");
+    check("employee, concierge and admin accounts sign in and get sessions",
+      typeof staffToken === "string" && typeof conciergeToken === "string" && typeof adminToken === "string");
 
     const me = await call("GET", "/auth/me", { token: staffToken });
-    check("GET /auth/me reports the STAFF role", me.status === 200 && me.body?.data?.role === "STAFF",
+    check("GET /auth/me reports the EMPLOYEE role", me.status === 200 && me.body?.data?.role === "EMPLOYEE",
       me.body?.data?.role);
+
+    const meConcierge = await call("GET", "/auth/me", { token: conciergeToken });
+    check("GET /auth/me reports the CONCIERGE role",
+      meConcierge.status === 200 && meConcierge.body?.data?.role === "CONCIERGE",
+      meConcierge.body?.data?.role);
 
     const noToken = await call("GET", "/admin/dashboard?from=2026-01-01&to=2026-12-31");
     check("admin route without a token is 401", noToken.status === 401, `status ${noToken.status}`);
 
-    // Admin reporting is ADMIN-only; a staff token must be refused. This is the
-    // distinction the first draft of this script got wrong by using one token
-    // for everything.
+    // Admin reporting is ADMIN-only; an employee token must be refused. This is
+    // the distinction the first draft of this script got wrong by using one
+    // token for everything.
     const staffOnAdmin = await call("GET", "/admin/dashboard?from=2026-01-01&to=2026-12-31", { token: staffToken });
-    check("admin reporting refuses a STAFF token with 403",
+    check("admin reporting refuses an EMPLOYEE token with 403",
       staffOnAdmin.status === 403 && staffOnAdmin.body?.error?.code === "INSUFFICIENT_ROLE",
       `${staffOnAdmin.status} ${staffOnAdmin.body?.error?.code ?? ""}`);
 
+    // The concierge is the interesting case: running the desk must not confer
+    // admin, and being refused admin must not lock them out of the desk. Both
+    // halves are asserted, because a gate that is simply too wide also passes
+    // the "refuses" half if the route is broken outright.
+    const conciergeOnAdmin = await call("GET", "/admin/dashboard?from=2026-01-01&to=2026-12-31", { token: conciergeToken });
+    check("admin reporting refuses a CONCIERGE token with 403",
+      conciergeOnAdmin.status === 403 && conciergeOnAdmin.body?.error?.code === "INSUFFICIENT_ROLE",
+      `${conciergeOnAdmin.status} ${conciergeOnAdmin.body?.error?.code ?? ""}`);
+
+    const conciergeOnDesk = await call("GET", "/loyalty/clients?limit=1", { token: conciergeToken });
+    check("the concierge CAN read the loyalty worklist",
+      conciergeOnDesk.status === 200,
+      `${conciergeOnDesk.status} ${JSON.stringify(conciergeOnDesk.body?.error ?? "")}`);
+
     // Staff-created bookings start CONFIRMED, and check-in needs a booking that
-    // is actually inside its window - so place one ~20 minutes out, the way the
-    // QR suite does, rather than reusing the days-out booking above.
-    const soonStart = new Date(Date.now() + 20 * 60_000);
-    const soon = await db.query(
-      `insert into public.bookings
-         (reference, guest_name, guest_phone, employee_id, start_time, end_time, status,
-          subtotal_cents, discount_cents, total_cents)
-       values ($1, 'Smoke Soon', '+639009990003', $2, $3, $4, 'CONFIRMED', 250000, 0, 250000)
-       returning id`,
-      [`BA-SMOKE-${Date.now()}`, EMP_ANA, soonStart.toISOString(), new Date(soonStart.getTime() + 3_600_000).toISOString()]
+    // is actually inside its window - so place one that is scannable now, rather
+    // than reusing the days-out booking above. EMP_ANA is preferred, but any
+    // active stylist will do: the pass, the window and the status are what
+    // authorise a check-in, not whose chair it is.
+    const stylists = await db.query(
+      `select id from public.employees where is_active order by (id = $1) desc, id`,
+      [EMP_ANA]
     );
-    const soonId = soon.rows[0].id;
+    const soonId = await insertCheckinableBooking(
+      db,
+      stylists.rows.map((r) => r.id),
+      `BA-SMOKE-${Date.now()}`
+    );
     created.bookings.push(soonId);
     await db.query(`insert into public.qr_tokens (booking_id, expires_at) values ($1, now() + interval '2 days')`, [soonId]);
     const soonPass = (await call("GET", `/bookings/${soonId}/qr`)).body?.data?.pass;

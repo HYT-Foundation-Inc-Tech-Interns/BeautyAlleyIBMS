@@ -18,8 +18,17 @@ import { API_GROUPS } from "../../src/lib/apiIndex";
 
 const UUID = "00000000-0000-4000-8000-000000000000";
 
-/** Substitute the `:id` placeholder so param validation lets the route match. */
-const concrete = (path: string) => path.replace(/:id/g, UUID);
+/**
+ * Substitute every `:param` placeholder so param validation lets the route
+ * match.
+ *
+ * Replacing only `:id` missed `:noteId` in
+ * `/bookings/:id/notes/:noteId` - the literal string ":noteId" then failed the
+ * uuid check and produced a 400. That still proves the route is mounted, so the
+ * test would have kept passing, but for the wrong reason: it was measuring
+ * validation rather than mounting.
+ */
+const concrete = (path: string) => path.replace(/:[A-Za-z][A-Za-z0-9]*/g, UUID);
 
 const METHOD = {
   GET: "get",

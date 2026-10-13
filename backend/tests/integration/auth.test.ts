@@ -1,5 +1,13 @@
 import request from "supertest";
-import { api, as, createTestAdmin, createTestClient, deleteTestUsers, type TestUser } from "../helpers/api";
+import {
+  api,
+  as,
+  createTestAdmin,
+  createTestClient,
+  createTestConcierge,
+  deleteTestUsers,
+  type TestUser,
+} from "../helpers/api";
 import { connectDb, db, disconnectDb } from "../helpers/db";
 
 /**
@@ -253,15 +261,35 @@ describeAuth("auth", () => {
         .send({
           email: `staff.${Date.now()}@beautyalley.ph`,
           password: "StaffPass123!",
-          fullName: "New Staff",
-          role: "STAFF",
+          fullName: "New Employee",
+          role: "EMPLOYEE",
         });
 
       expect(res.status).toBe(403);
       expect(res.body.error.code).toBe("INSUFFICIENT_ROLE");
     });
 
-    it("lets an admin create a STAFF account whose role sticks", async () => {
+    it("refuses staff-creation from a concierge", async () => {
+      // The desk runs reception; it does not hire. This is the whole point of
+      // splitting CONCIERGE out of the old catch-all STAFF role.
+      const concierge = await createTestConcierge();
+      created.push(concierge);
+
+      const res = await request(api())
+        .post("/api/v1/admin/users/staff")
+        .set(...as(concierge.token))
+        .send({
+          email: `staff.${Date.now()}@beautyalley.ph`,
+          password: "StaffPass123!",
+          fullName: "New Employee",
+          role: "EMPLOYEE",
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("INSUFFICIENT_ROLE");
+    });
+
+    it("lets an admin create an EMPLOYEE account whose role sticks", async () => {
       const admin = await createTestAdmin();
       created.push(admin);
 
@@ -269,16 +297,57 @@ describeAuth("auth", () => {
       const res = await request(api())
         .post("/api/v1/admin/users/staff")
         .set(...as(admin.token))
-        .send({ email, password: "StaffPass123!", fullName: "New Staff", role: "STAFF" });
+        .send({ email, password: "StaffPass123!", fullName: "New Employee", role: "EMPLOYEE" });
 
       expect(res.status).toBe(201);
 
       const { rows } = await db().query(`select role from public.profiles where id = $1`, [
         res.body.data.id,
       ]);
-      expect(rows[0].role).toBe("STAFF");
+      expect(rows[0].role).toBe("EMPLOYEE");
 
       await db().query(`delete from auth.users where id = $1`, [res.body.data.id]);
+    });
+
+    it("lets an admin create a CONCIERGE account whose role sticks", async () => {
+      const admin = await createTestAdmin();
+      created.push(admin);
+
+      const email = `newconcierge.${Date.now()}@beautyalley.ph`;
+      const res = await request(api())
+        .post("/api/v1/admin/users/staff")
+        .set(...as(admin.token))
+        .send({ email, password: "StaffPass123!", fullName: "New Concierge", role: "CONCIERGE" });
+
+      expect(res.status).toBe(201);
+
+      const { rows } = await db().query(`select role from public.profiles where id = $1`, [
+        res.body.data.id,
+      ]);
+      expect(rows[0].role).toBe("CONCIERGE");
+
+      await db().query(`delete from auth.users where id = $1`, [res.body.data.id]);
+    });
+
+    it("refuses the retired STAFF label when creating an account", async () => {
+      // `role_from_app_metadata` still maps a legacy 'STAFF' for auth users
+      // that already carry it, but nothing should be able to mint a *new*
+      // account under a label the enum no longer has.
+      const admin = await createTestAdmin();
+      created.push(admin);
+
+      const res = await request(api())
+        .post("/api/v1/admin/users/staff")
+        .set(...as(admin.token))
+        .send({
+          email: `legacy.${Date.now()}@beautyalley.ph`,
+          password: "StaffPass123!",
+          fullName: "Legacy Staff",
+          role: "STAFF",
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("VALIDATION_FAILED");
     });
 
     it("refuses service creation from a client", async () => {

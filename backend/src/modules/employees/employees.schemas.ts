@@ -80,6 +80,25 @@ export const performanceQuerySchema = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
+/**
+ * Which day the quota question is about.
+ *
+ * A plain `YYYY-MM-DD` rather than an instant, because "today" means the
+ * branch's local day: the database resolves it against `branch_timezone()`.
+ * Sending a timestamp here would be a category error and would give a
+ * different answer either side of midnight.
+ *
+ * Omitted means today, so the common call needs no parameters at all.
+ */
+export const quotaQuerySchema = z.object({
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD")
+    .optional(),
+});
+
+export type QuotaQuery = z.infer<typeof quotaQuerySchema>;
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 export type ListEmployeesQuery = z.infer<typeof listEmployeesSchema>;

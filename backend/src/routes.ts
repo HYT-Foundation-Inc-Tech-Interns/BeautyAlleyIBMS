@@ -6,6 +6,9 @@ import { availabilityRouter, employeesRouter } from "./modules/employees/employe
 import { bookingsRouter, meRouter } from "./modules/bookings/bookings.routes";
 import { qrRouter } from "./modules/qr/qr.routes";
 import { promosRouter } from "./modules/promos/promos.routes";
+import { roomsRouter } from "./modules/rooms/rooms.routes";
+import { subcategoriesRouter } from "./modules/subcategories/subcategories.routes";
+import { loyaltyRouter } from "./modules/loyalty/loyalty.routes";
 import { adminRouter } from "./modules/admin/admin.routes";
 import { buildApiIndex } from "./lib/apiIndex";
 
@@ -31,5 +34,8 @@ apiRouter.use("/bookings", bookingsRouter);
 apiRouter.use("/me", meRouter);
 apiRouter.use("/qr", qrRouter);
 apiRouter.use("/promos", promosRouter);
+apiRouter.use("/rooms", roomsRouter);
+apiRouter.use("/service-subcategories", subcategoriesRouter);
+apiRouter.use("/loyalty", loyaltyRouter);
 apiRouter.use("/admin", adminRouter);
 apiRouter.use("/admin", adminAuthRouter);

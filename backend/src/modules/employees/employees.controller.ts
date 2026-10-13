@@ -54,6 +54,18 @@ export const employeesController = {
     res.status(200).json({ data: result });
   },
 
+  async quota(req: Request, res: Response) {
+    const { date } = req.query as unknown as { date?: string };
+    const result = await employeesService.quota(req.params.id, date);
+    res.status(200).json({ data: result });
+  },
+
+  async quotas(req: Request, res: Response) {
+    const { date } = req.query as unknown as { date?: string };
+    const result = await employeesService.quotas(date);
+    res.status(200).json({ data: result });
+  },
+
   async availability(req: Request, res: Response) {
     const q = req.query as unknown as {
       serviceId: string;

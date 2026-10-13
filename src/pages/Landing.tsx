@@ -145,20 +145,31 @@ export default function Landing() {
         looping clip filling the screen with the nav floating on top of it.
 
         `muted` + `playsInline` are what actually let it autoplay — a browser
-        will refuse otherwise. `poster` shows a frame from the same shoot until
-        the first bytes arrive, so there is no flash of black, and the video is
-        hidden entirely for anyone who has asked for reduced motion (the dark
-        `bg-alley-950` behind it then reads as an intentional solid hero).
+        will refuse otherwise.
+
+        The still frame is a SEPARATE <img> sitting under the video rather than
+        the `poster` attribute. That matters: a poster belongs to the video
+        element, so anything that hides the video hides the still with it — and
+        the hero then collapses to a bare green rectangle with no imagery. As a
+        sibling layer the still survives every case where the clip cannot paint:
+        before the first bytes arrive, when autoplay is refused (data saver, low
+        power mode), when the codec is unavailable, and for anyone whose system
+        asks for reduced motion.
       */}
       <section className="relative flex min-h-[100svh] items-center overflow-hidden bg-alley-950 text-primary-foreground">
+        <img
+          src="/assets/massage.jpg"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
         <video
-          className="absolute inset-0 h-full w-full object-cover motion-reduce:hidden"
+          className="absolute inset-0 h-full w-full object-cover"
           autoPlay
           muted
           loop
           playsInline
           preload="auto"
-          poster="/assets/massage.jpg"
           aria-hidden
         >
           <source src="/assets/beatyalley.mp4" type="video/mp4" />
