@@ -102,15 +102,16 @@ export default function Landing() {
         )}
       >
         <div className="container flex h-[74px] items-center gap-6">
-          <Link to="/" className="flex items-center gap-3">
-            <AlleyMark className="h-10 w-10 text-primary-foreground" />
-            <span className="hidden flex-col leading-none sm:flex">
-              <span className="font-display text-[19px] font-semibold tracking-tight text-primary-foreground">
-                The Beauty Alley
-              </span>
-              <span className="mt-1 text-[9.5px] font-semibold uppercase tracking-[0.26em] text-primary-foreground/50">
-                Downtown Atelier
-              </span>
+          <Link to="/" className="flex items-center gap-3" aria-label="The Beauty Alley — home">
+            <img
+              src="/brand/logo-ivory.png"
+              alt="The Beauty Alley"
+              width={1912}
+              height={1912}
+              className="h-14 w-14 object-contain drop-shadow-[0_2px_12px_rgba(7,25,20,0.45)]"
+            />
+            <span className="hidden font-display text-[19px] font-semibold leading-none tracking-tight text-primary-foreground drop-shadow-[0_1px_10px_rgba(7,25,20,0.45)] sm:block">
+              The Beauty Alley
             </span>
           </Link>
 
@@ -139,28 +140,51 @@ export default function Landing() {
       </header>
 
       {/* --------------------------------------------------------- hero */}
-      <section className="grain relative overflow-hidden bg-alley-900 pb-24 pt-[74px] text-primary-foreground">
-        <AlleySprig className="pointer-events-none absolute -left-24 top-10 h-[560px] w-[420px] text-white/[0.055]" />
-        <AlleySprig className="pointer-events-none absolute -right-28 bottom-[-120px] h-[520px] w-[390px] rotate-[24deg] text-white/[0.04]" />
+      {/*
+        The hero is a full-viewport video, the way thespa.com.ph opens: one
+        looping clip filling the screen with the nav floating on top of it.
+
+        `muted` + `playsInline` are what actually let it autoplay — a browser
+        will refuse otherwise. `poster` shows a frame from the same shoot until
+        the first bytes arrive, so there is no flash of black, and the video is
+        hidden entirely for anyone who has asked for reduced motion (the dark
+        `bg-alley-950` behind it then reads as an intentional solid hero).
+      */}
+      <section className="relative flex min-h-[100svh] items-center overflow-hidden bg-alley-950 text-primary-foreground">
+        <video
+          className="absolute inset-0 h-full w-full object-cover motion-reduce:hidden"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          poster="/assets/massage.jpg"
+          aria-hidden
+        >
+          <source src="/assets/beatyalley.mp4" type="video/mp4" />
+        </video>
+
+        {/* Legibility scrim — darkest under the nav and under the copy, lightest
+            in the middle so the footage still reads. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute left-1/2 top-0 h-[520px] w-[820px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(194,161,103,0.16),transparent)]"
+          className="absolute inset-0 bg-gradient-to-b from-alley-950/80 via-alley-950/40 to-alley-950/85"
         />
 
-        <div className="container relative grid items-center gap-14 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:pt-20">
-          <div className="animate-fade-up">
-            <span className="inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/[0.05] px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/75">
+        <div className="container relative z-10 pb-24 pt-[120px]">
+          <div className="max-w-2xl animate-fade-up">
+            <span className="inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-white/[0.07] px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/80 backdrop-blur-sm">
               <span className="size-1.5 rounded-full bg-champagne-400" />
               Est. 2019 · Hair, skin, nails & body
             </span>
 
-            <h1 className="mt-7 font-display text-[clamp(2.9rem,7vw,4.9rem)] font-medium leading-[0.98] tracking-[-0.02em] text-balance">
+            <h1 className="mt-7 font-display text-[clamp(2.9rem,7.5vw,5.2rem)] font-medium leading-[0.98] tracking-[-0.02em] text-balance drop-shadow-[0_2px_24px_rgba(7,25,20,0.5)]">
               Beauty, kept
               <span className="block italic text-champagne-300">impeccably</span>
               in order.
             </h1>
 
-            <p className="mt-7 max-w-xl text-[15.5px] leading-relaxed text-primary-foreground/70 text-pretty">
+            <p className="mt-7 max-w-xl text-[15.5px] leading-relaxed text-primary-foreground/80 text-pretty drop-shadow-[0_1px_12px_rgba(7,25,20,0.5)]">
               Book a treatment, arrive with a pass, and let the chair do the rest.
               Behind it all, one quietly exact system runs the floor.
             </p>
@@ -176,36 +200,27 @@ export default function Landing() {
                 asChild
                 size="lg"
                 variant="outline"
-                className="h-12 border-white/20 text-primary-foreground hover:border-white/40 hover:bg-white/10"
+                className="h-12 border-white/30 text-primary-foreground hover:border-white/60 hover:bg-white/10"
               >
                 <Link to="/services">See the menu</Link>
               </Button>
             </div>
 
-            <p className="mt-6 text-[12.5px] text-primary-foreground/50">
+            <p className="mt-6 text-[12.5px] text-primary-foreground/60">
               No account needed to book —{" "}
-              <Link to="/register" className="underline decoration-white/30 underline-offset-4 hover:text-primary-foreground/80">
+              <Link to="/register" className="underline decoration-white/30 underline-offset-4 hover:text-primary-foreground/90">
                 create one
               </Link>{" "}
               to keep your history and passes together.
             </p>
           </div>
+        </div>
 
-          <div className="relative flex justify-center lg:justify-end">
-            <div className="relative">
-              <div
-                aria-hidden
-                className="absolute inset-0 animate-slow-drift rounded-full bg-[radial-gradient(closest-side,rgba(194,161,103,0.22),transparent_72%)]"
-              />
-              <img
-                src="/brand/logo-ivory.png"
-                alt="The Beauty Alley"
-                className="relative w-[min(430px,78vw)] drop-shadow-[0_30px_60px_rgba(0,0,0,0.35)]"
-                width={860}
-                height={860}
-              />
-            </div>
-          </div>
+        {/* Scroll cue, so the hero reads as a screen you move past. */}
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-7 flex justify-center">
+          <span className="flex h-9 w-[22px] items-start justify-center rounded-full border border-white/35 p-1">
+            <span className="size-1.5 animate-bounce rounded-full bg-white/70" />
+          </span>
         </div>
       </section>
 
