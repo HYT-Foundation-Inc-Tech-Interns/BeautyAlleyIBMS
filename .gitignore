@@ -32,6 +32,11 @@ coverage/
 .tools-venv/
 .impeccable.md
 
+# Stray nested clone of this repo (it carries its own .git). Without this rule
+# `git add .` records it as a submodule gitlink, which breaks clones for
+# everyone and points at a commit that only exists locally.
+BeautyAlleyIBMS/
+
 # Editor and agent-internal state
 .workbuddy-ai/
 .vscode/
