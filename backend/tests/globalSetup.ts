@@ -10,7 +10,14 @@ import path from "path";
 import dotenv from "dotenv";
 
 export default async function globalSetup() {
-  dotenv.config({ path: path.join(__dirname, "..", ".env") });
+  // .env.local first: it holds the real credentials and wins over the tracked
+  // template. Without this the suite silently skips every credentialed test.
+  dotenv.config({
+    path: [
+      path.join(__dirname, "..", ".env.local"),
+      path.join(__dirname, "..", ".env"),
+    ],
+  });
 
   if (!process.env.DATABASE_URL) {
     // Not fatal: the unit suite does not need a database.

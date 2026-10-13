@@ -31,6 +31,11 @@ export interface BookingDetailRow {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  /** Migration 19. */
+  room_id: string | null;
+  room_name: string | null;
+  room_type: string | null;
+  member_discount_percent: number | null;
 }
 
 export interface BookingItemRow {
@@ -42,8 +47,19 @@ export interface BookingItemRow {
   duration_minutes_snapshot: number;
 }
 
+export interface BookingNoteRow {
+  id: string;
+  booking_id: string;
+  author_id: string | null;
+  body: string;
+  visible_to_client: boolean;
+  created_at: string;
+}
+
+const NOTE_SELECT = "id, booking_id, author_id, body, visible_to_client, created_at" as const;
+
 const DETAIL_SELECT =
-  "id, reference, status, start_time, end_time, employee_id, employee_name, client_id, client_name, guest_name, guest_phone, subtotal_cents, discount_cents, total_cents, promo_code_id, notes, created_at, updated_at" as const;
+  "id, reference, status, start_time, end_time, employee_id, employee_name, client_id, client_name, guest_name, guest_phone, subtotal_cents, discount_cents, total_cents, promo_code_id, notes, created_at, updated_at, room_id, room_name, room_type, member_discount_percent" as const;
 
 export const bookingsRepository = {
   async getById(id: string): Promise<BookingDetailRow | null> {
@@ -201,6 +217,89 @@ export const bookingsRepository = {
       .maybeSingle();
     if (error) throw error;
     return data as { id: string; full_name: string; phone: string | null; email: string | null } | null;
+  },
+
+  // --- migration 17: aftercare notes ---------------------------------------
+
+  /**
+   * Notes on a booking, newest first.
+   *
+   * `includeHidden` is the staff flag. A client calling this gets only the
+   * notes the therapist marked shareable - enforced here *and* by the RLS
+   * policy on booking_notes, so a bug in this line does not become a leak.
+   */
+  async notesFor(bookingId: string, includeHidden: boolean): Promise<BookingNoteRow[]> {
+    const db = requireServiceRole();
+    let q = db
+      .from("booking_notes")
+      .select(NOTE_SELECT)
+      .eq("booking_id", bookingId);
+    if (!includeHidden) q = q.eq("visible_to_client", true);
+
+    const { data, error } = await q.order("created_at", { ascending: false });
+    if (error) throw error;
+    return (data ?? []) as BookingNoteRow[];
+  },
+
+  async addNote(input: {
+    bookingId: string;
+    authorId: string | null;
+    body: string;
+    visibleToClient: boolean;
+  }): Promise<BookingNoteRow> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("booking_notes")
+      .insert({
+        booking_id: input.bookingId,
+        author_id: input.authorId,
+        body: input.body,
+        visible_to_client: input.visibleToClient,
+      })
+      .select(NOTE_SELECT)
+      .single();
+    if (error) throw error;
+    return data as BookingNoteRow;
+  },
+
+  async getNote(noteId: string): Promise<BookingNoteRow | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("booking_notes")
+      .select(NOTE_SELECT)
+      .eq("id", noteId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as BookingNoteRow) ?? null;
+  },
+
+  /**
+   * Notes are HARD deleted, unlike promos and rooms.
+   *
+   * The reasoning that makes a soft delete right elsewhere does not apply: an
+   * aftercare note is not referenced by anything, carries no revenue and has
+   * no downstream rows to cascade. A therapist who wrote a note on the wrong
+   * client should be able to remove it outright rather than leave it sitting
+   * in the table waiting to be read by mistake.
+   */
+  async deleteNote(noteId: string): Promise<void> {
+    const db = requireServiceRole();
+    const { error } = await db.from("booking_notes").delete().eq("id", noteId);
+    if (error) throw error;
+  },
+
+  // --- migration 18: the desk moving a booking's room ----------------------
+
+  /** Delegates to set_booking_room() so the type check and audit are applied. */
+  async setRoom(bookingId: string, roomId: string | null, actorId: string | null) {
+    const db = requireServiceRole();
+    const { data, error } = await db.rpc("set_booking_room", {
+      p_booking_id: bookingId,
+      p_room_id: roomId,
+      p_actor: actorId,
+    });
+    if (error) throw error;
+    return data as { bookingId: string; roomId: string | null; roomType: string | null };
   },
 };
 

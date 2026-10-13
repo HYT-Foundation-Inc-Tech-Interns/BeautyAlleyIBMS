@@ -17,6 +17,10 @@ export function toServiceDto(row: ServiceRow) {
     description: row.description,
     priceCents: row.price_cents,
     durationMinutes: row.duration_minutes,
+    // Surfaced so the booking page can say "uses a treatment room" without a
+    // second call, and so the admin table can show what is still unassigned.
+    requiredRoomType: row.required_room_type,
+    subcategoryId: row.subcategory_id,
     isActive: row.is_active,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),

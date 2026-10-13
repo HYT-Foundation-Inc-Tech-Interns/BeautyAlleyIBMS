@@ -110,5 +110,57 @@ export function toCheckInUrl(pass: string): string {
   return `${env.qrCheckInUrl}?pass=${encodeURIComponent(pass)}`;
 }
 
+/**
+ * The walk-in DOOR QR - a different sticker from the desk check-in QR.
+ *
+ * The desk QR redeems an existing pass (`/qr/check-in`); this one starts a
+ * registration, so it carries no booking and no expiry. It exists so the
+ * server can tell a genuine Beauty Alley door sticker from a URL somebody
+ * typed, which is the whole point: without it, `?b=beautyalley-main` in a
+ * link would be indistinguishable from the real thing.
+ *
+ * It is deliberately NOT a bearer credential. Verifying it grants exactly one
+ * thing - permission to read the public menu and the membership rules - all of
+ * which `GET /services` and `GET /service-subcategories/menu` already serve
+ * without any token at all. That is why a static, unrevocable signature is
+ * acceptable here and would not be for a booking pass.
+ */
+const ENTER_PREFIX = "BAW1";
+
+export function signDoorEntry(branchId: string = env.branchId): string {
+  const body = b64url(JSON.stringify({ b: branchId }));
+  return `${ENTER_PREFIX}.${body}.${sign(body)}`;
+}
+
+/** Verify a door token against a branch id, in constant time. */
+export function verifyDoorEntry(token: string, branchId: string): boolean {
+  if (typeof token !== "string") return false;
+  const parts = token.trim().split(".");
+  if (parts.length !== 3) return false;
+
+  const [prefix, body, signature] = parts;
+  if (prefix !== ENTER_PREFIX || !body || !signature) return false;
+
+  const expected = sign(body);
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+
+  // The body must name the branch the caller claims, or a token minted for one
+  // branch would open another.
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as { b?: string };
+    return payload?.b === branchId;
+  } catch {
+    return false;
+  }
+}
+
+/** The URL the door QR image encodes. */
+export function toDoorEntryUrl(branchId: string = env.branchId): string {
+  const token = signDoorEntry(branchId);
+  return `${env.qrEnterUrl}?b=${encodeURIComponent(branchId)}&k=${encodeURIComponent(token)}`;
+}
+
 /** Exported for tests. */
-export const __testing = { PREFIX, sign };
+export const __testing = { PREFIX, ENTER_PREFIX, sign };

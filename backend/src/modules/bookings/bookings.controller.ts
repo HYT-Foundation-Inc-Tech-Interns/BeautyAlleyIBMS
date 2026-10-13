@@ -42,4 +42,24 @@ export const bookingsController = {
     const result = await bookingsService.qr(req.params.id, req.actor);
     res.status(200).json({ data: result });
   },
+
+  async notes(req: Request, res: Response) {
+    const result = await bookingsService.notes(req.params.id, req.actor);
+    res.status(200).json({ data: result });
+  },
+
+  async addNote(req: Request, res: Response) {
+    const result = await bookingsService.addNote(req.params.id, req.body, req.actor as Actor);
+    res.status(201).json({ data: result });
+  },
+
+  async deleteNote(req: Request, res: Response) {
+    await bookingsService.deleteNote(req.params.id, req.params.noteId, req.actor as Actor);
+    res.status(204).send();
+  },
+
+  async setRoom(req: Request, res: Response) {
+    const result = await bookingsService.setRoom(req.params.id, req.body.roomId, req.actor as Actor);
+    res.status(200).json({ data: result });
+  },
 };

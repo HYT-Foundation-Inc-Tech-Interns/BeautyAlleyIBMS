@@ -29,6 +29,8 @@ export type BookingStatus =
   | "CANCELLED"
   | "NO_SHOW";
 export type PromoType = "PERCENT" | "FIXED";
+/** Migration 17. `required_room_type` on a service is NULL when no room is needed. */
+export type RoomType = "MASSAGE" | "FACIAL" | "NAIL" | "WAXING" | "SAUNA" | "VIP" | "OTHER";
 
 export interface Database {
   public: {
@@ -68,6 +70,10 @@ export interface Database {
           email: string | null;
           notes: string | null;
           is_active: boolean;
+          /** Migration 17. NULL until staff promote the client. */
+          member_since: string | null;
+          /** Migration 17. Member rate on every booking, stacked with promos. */
+          discount_percent: number;
           created_at: string;
           updated_at: string;
         };
@@ -79,6 +85,8 @@ export interface Database {
           email?: string | null;
           notes?: string | null;
           is_active?: boolean;
+          member_since?: string | null;
+          discount_percent?: number;
         };
         Update: {
           profile_id?: string | null;
@@ -87,6 +95,8 @@ export interface Database {
           email?: string | null;
           notes?: string | null;
           is_active?: boolean;
+          member_since?: string | null;
+          discount_percent?: number;
         };
         Relationships: [];
       };
@@ -128,6 +138,10 @@ export interface Database {
           description: string | null;
           price_cents: number;
           duration_minutes: number;
+          /** Migration 17. NULL = the service needs no room. */
+          required_room_type: RoomType | null;
+          /** Migration 17. Second catalogue level. */
+          subcategory_id: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -139,6 +153,8 @@ export interface Database {
           description?: string | null;
           price_cents: number;
           duration_minutes: number;
+          required_room_type?: RoomType | null;
+          subcategory_id?: string | null;
           is_active?: boolean;
         };
         Update: {
@@ -147,6 +163,8 @@ export interface Database {
           description?: string | null;
           price_cents?: number;
           duration_minutes?: number;
+          required_room_type?: RoomType | null;
+          subcategory_id?: string | null;
           is_active?: boolean;
         };
         Relationships: [];
@@ -232,6 +250,8 @@ export interface Database {
           total_cents: number;
           promo_code_id: string | null;
           notes: string | null;
+          /** Migration 17. Set by the auto-assigner, overridable at the desk. */
+          room_id: string | null;
           cancelled_at: string | null;
           cancellation_reason: string | null;
           created_at: string;
@@ -252,6 +272,7 @@ export interface Database {
           total_cents: number;
           promo_code_id?: string | null;
           notes?: string | null;
+          room_id?: string | null;
           cancelled_at?: string | null;
           cancellation_reason?: string | null;
         };
@@ -262,6 +283,7 @@ export interface Database {
           cancelled_at?: string | null;
           cancellation_reason?: string | null;
           notes?: string | null;
+          room_id?: string | null;
         };
         Relationships: [];
       };
@@ -363,6 +385,90 @@ export interface Database {
         Relationships: [];
       };
 
+      // --- migration 17 ------------------------------------------------------
+
+      rooms: {
+        Row: {
+          id: string;
+          name: string;
+          room_type: RoomType;
+          capacity: number;
+          notes: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          room_type: RoomType;
+          capacity?: number;
+          notes?: string | null;
+          is_active?: boolean;
+        };
+        Update: {
+          name?: string;
+          room_type?: RoomType;
+          capacity?: number;
+          notes?: string | null;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
+
+      service_subcategories: {
+        Row: {
+          id: string;
+          category: ServiceCategory;
+          name: string;
+          slug: string;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          category: ServiceCategory;
+          name: string;
+          slug: string;
+          sort_order?: number;
+          is_active?: boolean;
+        };
+        Update: {
+          category?: ServiceCategory;
+          name?: string;
+          slug?: string;
+          sort_order?: number;
+          is_active?: boolean;
+        };
+        Relationships: [];
+      };
+
+      booking_notes: {
+        Row: {
+          id: string;
+          booking_id: string;
+          author_id: string | null;
+          body: string;
+          visible_to_client: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          booking_id: string;
+          author_id?: string | null;
+          body: string;
+          visible_to_client?: boolean;
+        };
+        Update: {
+          author_id?: string | null;
+          body?: string;
+          visible_to_client?: boolean;
+        };
+        Relationships: [];
+      };
+
       qr_tokens: {
         Row: {
           id: string;
@@ -456,6 +562,11 @@ export interface Database {
           notes: string | null;
           created_at: string;
           updated_at: string;
+          /** Migration 19. */
+          room_id: string | null;
+          room_name: string | null;
+          room_type: RoomType | null;
+          member_discount_percent: number | null;
         };
         Relationships: [];
       };
@@ -497,10 +608,31 @@ export interface Database {
         };
         Relationships: [];
       };
+      /**
+       * Migration 17. The visit count is derived here, never stored, so
+       * cancelling a booking corrects it. `count(*) filter` in the view is a
+       * bigint, which PostgREST renders as a number - typed as `number` to
+       * match the other reporting views.
+       */
+      v_client_loyalty: {
+        Row: {
+          client_id: string;
+          full_name: string;
+          phone: string | null;
+          email: string | null;
+          member_since: string | null;
+          discount_percent: number;
+          completed_visits: number;
+          eligible_for_membership: boolean;
+        };
+        Relationships: [];
+      };
     };
 
     Functions: {
       branch_timezone: { Args: Record<string, never>; Returns: string };
+      /** Migration 17. Completed visits needed before staff may promote. */
+      membership_visit_threshold: { Args: Record<string, never>; Returns: number };
       next_booking_reference: { Args: { p_day?: string | null }; Returns: string };
       write_audit: {
         Args: {
@@ -552,19 +684,44 @@ export interface Database {
           p_actor?: string | null;
           p_notes?: string | null;
           p_enforce_hours?: boolean;
+          /** Migration 18. NULL = auto-assign a room when the service needs one. */
+          p_room_id?: string | null;
         };
         Returns: {
           bookingId: string;
           reference: string;
           employeeId: string;
+          roomId: string | null;
+          roomType: RoomType | null;
           startTime: string;
           endTime: string;
           status: BookingStatus;
           subtotalCents: number;
           discountCents: number;
+          memberDiscountCents: number;
+          promoDiscountCents: number;
           totalCents: number;
           jti: string;
         };
+      };
+      // --- migration 18: membership and the desk's room override -------------
+      promote_client: {
+        Args: { p_client_id: string; p_discount_percent?: number; p_actor?: string | null };
+        Returns: {
+          clientId: string;
+          memberSince: string;
+          discountPercent: number;
+          completedVisits: number;
+          threshold: number;
+        };
+      };
+      revoke_membership: {
+        Args: { p_client_id: string; p_actor?: string | null };
+        Returns: { clientId: string; memberSince: null; discountPercent: number };
+      };
+      set_booking_room: {
+        Args: { p_booking_id: string; p_room_id: string | null; p_actor?: string | null };
+        Returns: { bookingId: string; roomId: string | null; roomType: RoomType | null };
       };
       cancel_booking: {
         Args: {

@@ -23,6 +23,8 @@ export const CODES = {
   QR_EXPIRED: "QR_EXPIRED",
   QR_TOO_EARLY: "QR_TOO_EARLY",
   QR_TOO_LATE: "QR_TOO_LATE",
+  ROOM_REQUIRED: "ROOM_REQUIRED",
+  ROOM_TYPE_MISMATCH: "ROOM_TYPE_MISMATCH",
 
   // --- 401 / 403 -----------------------------------------------------------
   UNAUTHENTICATED: "UNAUTHENTICATED",
@@ -39,9 +41,13 @@ export const CODES = {
   EMPLOYEE_NOT_FOUND: "EMPLOYEE_NOT_FOUND",
   SERVICE_NOT_FOUND: "SERVICE_NOT_FOUND",
   CLIENT_NOT_FOUND: "CLIENT_NOT_FOUND",
+  ROOM_NOT_FOUND: "ROOM_NOT_FOUND",
 
   // --- 409 conflict --------------------------------------------------------
   SLOT_TAKEN: "SLOT_TAKEN",
+  ROOM_TAKEN: "ROOM_TAKEN",
+  NO_ROOM_AVAILABLE: "NO_ROOM_AVAILABLE",
+  NOT_ELIGIBLE_FOR_MEMBERSHIP: "NOT_ELIGIBLE_FOR_MEMBERSHIP",
   ALREADY_CHECKED_IN: "ALREADY_CHECKED_IN",
   ALREADY_CANCELLED: "ALREADY_CANCELLED",
   INVALID_STATUS_TRANSITION: "INVALID_STATUS_TRANSITION",
@@ -136,6 +142,14 @@ const PG_FUNCTION_ERRORS: Record<string, { status: number; code: string }> = {
   QR_REVOKED: { status: 400, code: CODES.QR_INVALID },
   QR_TOO_EARLY: { status: 400, code: CODES.QR_TOO_EARLY },
   QR_TOO_LATE: { status: 400, code: CODES.QR_TOO_LATE },
+  // --- migration 18: rooms and membership ----------------------------------
+  ROOM_REQUIRED: { status: 400, code: CODES.ROOM_REQUIRED },
+  ROOM_TYPE_MISMATCH: { status: 400, code: CODES.ROOM_TYPE_MISMATCH },
+  ROOM_NOT_FOUND: { status: 404, code: CODES.ROOM_NOT_FOUND },
+  ROOM_TAKEN: { status: 409, code: CODES.ROOM_TAKEN },
+  NO_ROOM_AVAILABLE: { status: 409, code: CODES.NO_ROOM_AVAILABLE },
+  CLIENT_NOT_FOUND: { status: 404, code: CODES.CLIENT_NOT_FOUND },
+  NOT_ELIGIBLE_FOR_MEMBERSHIP: { status: 409, code: CODES.NOT_ELIGIBLE_FOR_MEMBERSHIP },
 };
 
 /** SQLSTATE classes we care about. */
@@ -230,6 +244,15 @@ export function toAppError(err: unknown): AppError {
     // A unique violation on the booking reference is worth naming precisely.
     if (code === "23505" && /reference/i.test(anyErr?.details || message)) {
       return new AppError(409, CODES.CONFLICT, "Booking reference collision, please retry", undefined, message);
+    }
+    // Two different constraints raise 23P01 and they mean different things to
+    // the person at the desk: the stylist is busy, or the room is. Postgres
+    // names the constraint in the message, so the distinction is available -
+    // reporting both as SLOT_TAKEN would send them looking for the wrong
+    // problem. This is the path taken when the raw insert (not create_booking,
+    // which discriminates for itself) is the one that trips.
+    if (code === "23P01" && /bookings_room_no_overlap/.test(`${message} ${anyErr?.details ?? ""}`)) {
+      return new AppError(409, CODES.ROOM_TAKEN, humanise(CODES.ROOM_TAKEN), undefined, message);
     }
     return new AppError(byState.status, byState.code, humanise(byState.code), undefined, message);
   }
@@ -340,6 +363,15 @@ const MESSAGES: Record<string, string> = {
   [CODES.QR_EXPIRED]: "That check-in code has expired.",
   [CODES.QR_TOO_EARLY]: "This pass is not active yet.",
   [CODES.QR_TOO_LATE]: "This appointment has already ended.",
+  [CODES.ROOM_TAKEN]: "That room is already booked for that time.",
+  [CODES.NO_ROOM_AVAILABLE]: "No room of the right type is free at that time.",
+  [CODES.ROOM_REQUIRED]:
+    "These services need more than one kind of room. Choose a room at the desk.",
+  [CODES.ROOM_TYPE_MISMATCH]: "That room is not equipped for this service.",
+  [CODES.ROOM_NOT_FOUND]: "No such room.",
+  [CODES.NOT_ELIGIBLE_FOR_MEMBERSHIP]:
+    "This client has not completed enough visits to become a member yet.",
+  [CODES.CLIENT_NOT_FOUND]: "No such client.",
   [CODES.CONFLICT]: "That conflicts with an existing record.",
   [CODES.VALIDATION_FAILED]: "The request contained invalid data.",
   [CODES.FORBIDDEN]: "You do not have access to that.",

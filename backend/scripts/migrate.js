@@ -64,7 +64,15 @@ function listMigrations() {
         file,
         version: file.split("_")[0],
         sql,
-        checksum: crypto.createHash("sha256").update(sql).digest("hex").slice(0, 16),
+        checksum: crypto
+          .createHash("sha256")
+          // Hash the LF form, never the raw bytes. Git checks these files out
+          // with CRLF on Windows (core.autocrlf), and hashing the raw content
+          // would make every already-applied migration look "changed" - which
+          // blocks the runner from applying anything new, permanently.
+          .update(sql.replace(/\r\n/g, "\n"))
+          .digest("hex")
+          .slice(0, 16),
         bytes: Buffer.byteLength(sql),
       };
     });

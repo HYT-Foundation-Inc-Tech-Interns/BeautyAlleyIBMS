@@ -112,26 +112,65 @@ export const API_GROUPS: ApiGroup[] = [
   {
     name: "bookings",
     endpoints: [
-      { method: "POST", path: "/api/v1/bookings", auth: "optional", summary: "Create a booking. A guest supplies a name and phone; a signed-in client books against their account." },
+      { method: "POST", path: "/api/v1/bookings", auth: "optional", summary: "Create a booking. A guest supplies a name and phone; a signed-in client books against their account. A room is assigned automatically when the services need one; staff may pin one with roomId." },
       { method: "GET", path: "/api/v1/bookings", auth: "STAFF/ADMIN", summary: "List bookings." },
       { method: "GET", path: "/api/v1/bookings/:id", auth: "optional", summary: "One booking. A guest booking is readable by anyone holding its uuid - the uuid is the capability." },
       { method: "POST", path: "/api/v1/bookings/:id/cancel", auth: "optional", summary: "Cancel. Refused inside the 2-hour window unless forced by staff." },
-      { method: "POST", path: "/api/v1/bookings/:id/reschedule", auth: "optional", summary: "Move to a new slot and issue a fresh pass." },
+      { method: "POST", path: "/api/v1/bookings/:id/reschedule", auth: "optional", summary: "Move to a new slot and issue a fresh pass. A room clash reports ROOM_TAKEN, not SLOT_TAKEN." },
       { method: "GET", path: "/api/v1/bookings/:id/qr", auth: "optional", summary: "Re-issue the signed check-in pass." },
       { method: "PATCH", path: "/api/v1/bookings/:id/status", auth: "STAFF/ADMIN", summary: "Move a booking through the status machine." },
+      { method: "PATCH", path: "/api/v1/bookings/:id/room", auth: "STAFF/ADMIN", summary: "Desk override of the treatment room. Rejects a room of the wrong type and one already in use." },
+      { method: "GET", path: "/api/v1/bookings/:id/notes", auth: "optional", summary: "Aftercare notes. A client sees only the ones marked shareable; staff see all." },
+      { method: "POST", path: "/api/v1/bookings/:id/notes", auth: "STAFF/ADMIN", summary: "Write an aftercare note. visibleToClient defaults to true." },
+      { method: "DELETE", path: "/api/v1/bookings/:id/notes/:noteId", auth: "STAFF/ADMIN", summary: "Delete a note outright - notes are not soft-deleted." },
     ],
   },
   {
     name: "me",
     endpoints: [
       { method: "GET", path: "/api/v1/me/bookings", auth: "authenticated", summary: "The caller's own bookings." },
+      { method: "GET", path: "/api/v1/me/loyalty", auth: "authenticated", summary: "The caller's own visit count and member standing. Scoped to the token, so there is no id to tamper with." },
     ],
   },
   {
     name: "qr",
     endpoints: [
+      { method: "GET", path: "/api/v1/qr/enter", auth: "public", summary: "The walk-in door QR. Returns the branch, today's hours, the menu and the membership rules in one call. The only public route under /qr." },
+      { method: "GET", path: "/api/v1/qr/door", auth: "STAFF/ADMIN", summary: "The signed door-QR URL, for the page that prints the sticker." },
       { method: "GET", path: "/api/v1/qr/branch", auth: "STAFF/ADMIN", summary: "Branch descriptor for the scanner. Not a credential - holding it grants nothing." },
       { method: "POST", path: "/api/v1/qr/check-in", auth: "STAFF/ADMIN", summary: "Redeem a pass at the desk. Refuses replays and forged signatures." },
+    ],
+  },
+  {
+    name: "rooms",
+    endpoints: [
+      { method: "GET", path: "/api/v1/rooms/public", auth: "public", summary: "Active rooms. The floor plan is not a secret, but notes and inactive rooms are withheld." },
+      { method: "GET", path: "/api/v1/rooms", auth: "STAFF/ADMIN", summary: "Full room list, including decommissioned ones." },
+      { method: "GET", path: "/api/v1/rooms/available", auth: "STAFF/ADMIN", summary: "Which rooms are free for a given window, and which are occupied. The override preview." },
+      { method: "GET", path: "/api/v1/rooms/:id", auth: "STAFF/ADMIN", summary: "One room." },
+      { method: "POST", path: "/api/v1/rooms", auth: "ADMIN", summary: "Create a room." },
+      { method: "PATCH", path: "/api/v1/rooms/:id", auth: "ADMIN", summary: "Update a room." },
+      { method: "DELETE", path: "/api/v1/rooms/:id", auth: "ADMIN", summary: "Decommission a room. Refused while it still has upcoming bookings." },
+    ],
+  },
+  {
+    name: "catalogue",
+    endpoints: [
+      { method: "GET", path: "/api/v1/service-subcategories/menu", auth: "public", summary: "The catalogue grouped by category then subcategory - the booking page's menu." },
+      { method: "GET", path: "/api/v1/service-subcategories", auth: "public", summary: "Subcategories, flat." },
+      { method: "GET", path: "/api/v1/service-subcategories/:id", auth: "public", summary: "One subcategory, with how many services are filed under it." },
+      { method: "POST", path: "/api/v1/service-subcategories", auth: "ADMIN", summary: "Add a classification, e.g. a new massage style. The slug is derived from the name when omitted." },
+      { method: "PATCH", path: "/api/v1/service-subcategories/:id", auth: "ADMIN", summary: "Update a subcategory." },
+      { method: "DELETE", path: "/api/v1/service-subcategories/:id", auth: "ADMIN", summary: "Deactivate a subcategory." },
+    ],
+  },
+  {
+    name: "loyalty",
+    endpoints: [
+      { method: "GET", path: "/api/v1/loyalty/clients", auth: "STAFF/ADMIN", summary: "Clients with their derived visit count. ?eligibleOnly=true is the front desk's worklist." },
+      { method: "GET", path: "/api/v1/loyalty/clients/:id", auth: "STAFF/ADMIN", summary: "One client's loyalty standing." },
+      { method: "POST", path: "/api/v1/loyalty/clients/:id/promote", auth: "STAFF/ADMIN", summary: "Promote to member. Refused below the 3-visit threshold; the rate defaults to 3%." },
+      { method: "DELETE", path: "/api/v1/loyalty/clients/:id/membership", auth: "STAFF/ADMIN", summary: "Revoke membership. The visit history is untouched, so they can earn it again." },
     ],
   },
   {

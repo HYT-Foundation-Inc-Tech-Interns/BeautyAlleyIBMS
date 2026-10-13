@@ -14,8 +14,14 @@ import path from "path";
 import dotenv from "dotenv";
 
 // Loaded here as well as in src/config/env.ts, because these assertions run
-// before any src module is imported.
-dotenv.config({ path: path.join(__dirname, "..", ".env") });
+// before any src module is imported. .env.local carries the real credentials
+// and is read first; .env is the tracked template and fills in the gaps.
+dotenv.config({
+  path: [
+    path.join(__dirname, "..", ".env.local"),
+    path.join(__dirname, "..", ".env"),
+  ],
+});
 
 // Tests must never accidentally run against production settings.
 process.env.NODE_ENV = "test";
@@ -27,7 +33,7 @@ for (const key of REQUIRED) {
   if (!process.env[key]) {
     throw new Error(
       `Missing ${key}. The tests run against a real Supabase project - ` +
-        `copy backend/.env.example to backend/.env and fill it in.`
+        `copy backend/.env.example to backend/.env.local and fill it in.`
     );
   }
 }

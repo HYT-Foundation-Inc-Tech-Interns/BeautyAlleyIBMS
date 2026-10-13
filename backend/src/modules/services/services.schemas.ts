@@ -3,6 +3,20 @@ import { paginationSchema } from "../../lib/pagination";
 
 export const serviceCategory = z.enum(["SPA", "SALON", "WELLNESS"]);
 
+/**
+ * Migration 17. NULL means the service needs no room at all - a chair at a
+ * station is enough - which is why it is optional rather than defaulted.
+ */
+export const roomType = z.enum([
+  "MASSAGE",
+  "FACIAL",
+  "NAIL",
+  "WAXING",
+  "SAUNA",
+  "VIP",
+  "OTHER",
+]);
+
 /** Columns a client may sort by. Anything else is rejected before it reaches SQL. */
 export const SERVICE_SORT_COLUMNS = [
   "name",
@@ -32,6 +46,10 @@ export const createServiceSchema = z.object({
   description: z.string().trim().max(2000).optional(),
   priceCents: z.coerce.number().int().min(0, "Price cannot be negative"),
   durationMinutes: z.coerce.number().int().min(5, "A service must last at least 5 minutes").max(720),
+  /** Which kind of room this treatment occupies. Omit for no room. */
+  requiredRoomType: roomType.nullable().optional(),
+  /** The second catalogue level, e.g. "Deep Tissue" under SPA. */
+  subcategoryId: z.string().uuid().nullable().optional(),
   isActive: z.boolean().default(true),
 });
 
