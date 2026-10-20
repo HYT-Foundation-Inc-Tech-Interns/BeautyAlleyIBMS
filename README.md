@@ -24,7 +24,7 @@ not a 401 — if the API is not up.
 cd backend
 npm install
 npm run build
-node dist/index.js          # http://127.0.0.1:4000
+npm start                   # http://127.0.0.1:4000
 
 # terminal 2 — the app
 npm install
