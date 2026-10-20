@@ -1,51 +1,35 @@
-import { createApp } from "./app";
-import { env, hasServiceRoleKey } from "./config/env";
+/**
+ * Entry point for Vercel's Express preset: the default export is the handler.
+ *
+ * The application is built inside a try/catch on purpose. `createApp()` pulls
+ * in config/env.ts (which validates the environment) and db/supabase.ts (which
+ * needs a project URL and key). Either one throws before a single request is
+ * handled when the deployment is misconfigured, and on a serverless platform
+ * that surfaces as an opaque FUNCTION_INVOCATION_FAILED. Catching it turns a
+ * configuration mistake into a 500 that names the problem.
+ *
+ * `require` rather than `import` so the load is synchronous and catchable here;
+ * this package is CommonJS. There is deliberately no `listen` call - Vercel
+ * owns the server, and `src/local.ts` is the entry for running one locally.
+ */
+import express, { type Express } from "express";
 import { logger } from "./lib/logger";
 
-const app = createApp();
+let app: Express;
 
-const server = app.listen(env.port, () => {
-  logger.info("server.started", { port: env.port, env: env.nodeEnv });
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  app = (require("./app") as typeof import("./app")).createApp();
+} catch (e) {
+  const error = e instanceof Error ? e : new Error(String(e));
+  logger.error("backend.init.failed", { message: error.message });
 
-  // Said out loud at boot rather than discovered on the first 503. Half the
-  // API is unusable without this key, and the failure would otherwise surface
-  // as an opaque error much later.
-  if (!hasServiceRoleKey) {
-    logger.warn(
-      "SUPABASE_SERVICE_ROLE_KEY is not set - authenticated and write endpoints will return 503. " +
-        "Add it to backend/.env and restart."
-    );
-  }
-});
-
-function shutdown(reason: string, code = 0) {
-  logger.info("server.shutdown", { reason, code });
-  server.close(() => process.exit(code));
-  // Do not hang forever on a stuck keep-alive connection.
-  setTimeout(() => process.exit(code || 1), 10_000).unref();
+  app = express();
+  app.use((_req, res) => {
+    res.status(500).json({
+      error: { code: "BACKEND_INIT_FAILED", message: error.message },
+    });
+  });
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-
-/**
- * Process-level failures.
- *
- * Node 20 already exits on an unhandled rejection or an uncaught exception, but
- * it does so silently - no final log line, no flush, no chance to see what
- * happened. These handlers keep the same outcome (a non-zero exit, so a
- * supervisor restarts) while recording the cause first.
- *
- * They deliberately do not swallow the error and keep running: after an
- * uncaught exception the process is in an unknown state, and a web server that
- * continues in an unknown state is worse than one that restarts.
- */
-process.on("unhandledRejection", (reason) => {
-  logger.error("process.unhandledRejection", { reason });
-  shutdown("unhandledRejection", 1);
-});
-
-process.on("uncaughtException", (err) => {
-  logger.error("process.uncaughtException", { err });
-  shutdown("uncaughtException", 1);
-});
+export default app;
