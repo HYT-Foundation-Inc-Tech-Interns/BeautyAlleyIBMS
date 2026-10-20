@@ -50,6 +50,11 @@ import type {
   Session,
 } from "./api-types";
 
+const DEV_API_BASE = "http://127.0.0.1:4000";
+
+/** A URL that only ever resolves to the machine running the browser. */
+const LOOPBACK = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
+
 /**
  * Where the API lives. Overridable with `VITE_API_URL` so a deployment does
  * not need a code change; defaults to the local dev server.
@@ -58,11 +63,19 @@ import type {
  * same-origin (`/api/v1/...`). On Vercel the frontend and backend are two
  * services behind one domain, and the `vercel.json` rewrite sends `/api/*`
  * to the backend, so no absolute URL is needed there.
+ *
+ * A loopback `VITE_API_URL` is ignored outside development. That value can
+ * only mean a dev setting leaked into the host's environment, and honouring
+ * it points every visitor's browser at *their own* machine - which shows up
+ * as `ERR_CONNECTION_REFUSED` on 127.0.0.1 and reads like a dead backend.
  */
-export const API_BASE = (
-  (import.meta.env.VITE_API_URL as string | undefined) ??
-  (import.meta.env.DEV ? "http://127.0.0.1:4000" : "")
-).replace(/\/+$/, "");
+function resolveApiBase(): string {
+  const override = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+  if (override && (import.meta.env.DEV || !LOOPBACK.test(override))) return override;
+  return import.meta.env.DEV ? DEV_API_BASE : "";
+}
+
+export const API_BASE = resolveApiBase().replace(/\/+$/, "");
 
 /* ------------------------------------------------------------------ *
  * Errors
