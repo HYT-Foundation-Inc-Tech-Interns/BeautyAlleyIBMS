@@ -30,6 +30,16 @@ const config: Config = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        /*
+         * A functional colour, not a brand one: "this number went the right
+         * way" has to read as green in either palette. It was previously
+         * hard-coded to `alley-600`, which would have turned a good trend
+         * rosewood inside the console.
+         */
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
@@ -81,9 +91,17 @@ const config: Config = {
         },
         clay: "#B4472F",
       },
+      /*
+       * Both families resolve through CSS variables declared in `index.css`.
+       *
+       * That indirection is the whole trick behind the console re-skin: adding
+       * `.console` to `document.body` overrides `--font-display` to the UI sans,
+       * so every `font-display` in the dashboards changes family at once. A
+       * literal here would have meant editing 24 files by hand and missing some.
+       */
       fontFamily: {
-        display: ['"Cormorant Garamond"', "ui-serif", "Georgia", "serif"],
-        sans: ['"Hanken Grotesk"', "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -92,9 +110,14 @@ const config: Config = {
         xl: "calc(var(--radius) + 6px)",
         "2xl": "calc(var(--radius) + 14px)",
       },
+      /*
+       * Shadow tint follows the palette via `--shadow-color`, so a card lift is
+       * emerald-tinted on the public site and warm-neutral in the console
+       * without either one hard-coding a colour.
+       */
       boxShadow: {
-        soft: "0 1px 2px rgba(14,43,35,0.04), 0 8px 24px -12px rgba(14,43,35,0.14)",
-        lift: "0 2px 4px rgba(14,43,35,0.05), 0 24px 48px -20px rgba(14,43,35,0.28)",
+        soft: "0 1px 2px rgb(var(--shadow-color) / 0.05), 0 8px 24px -12px rgb(var(--shadow-color) / 0.16)",
+        lift: "0 2px 4px rgb(var(--shadow-color) / 0.06), 0 24px 48px -20px rgb(var(--shadow-color) / 0.3)",
       },
       /*
        * `ease-out-quart` is used across the app (button, sheet, sidebar, progress,

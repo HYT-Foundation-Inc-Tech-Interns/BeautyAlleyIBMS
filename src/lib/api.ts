@@ -23,6 +23,10 @@
 
 import type {
   ApiErrorBody,
+  AttendanceRecord,
+  AttendanceStatus,
+  AttendanceSummary,
+  AttendanceToday,
   AuditLog,
   AuthUser,
   Availability,
@@ -48,15 +52,30 @@ import type {
   Service,
   ServiceCategory,
   Session,
+  Task,
+  TaskCounts,
+  TaskPriority,
+  TaskStatus,
 } from "./api-types";
 
 /**
  * Where the API lives. Overridable with `VITE_API_URL` so a deployment does
- * not need a code change; defaults to the local dev server.
+ * not need a code change.
+ *
+ * Empty by default, in development too, which makes every request same-origin
+ * (`/api/v1/...`). Vite proxies `/api` to the backend in dev (see
+ * `vite.config.ts`), and in production `vercel.json` rewrites `/api/*` to it.
+ *
+ * It used to default to `http://127.0.0.1:4000` in dev, which meant the browser
+ * made a cross-origin request and the backend had to name the exact dev origin
+ * in `ALLOWED_ORIGINS`. That coupling broke the moment Vite took a different
+ * port - a stray second dev server was enough - and the failure looked like a
+ * dead API rather than a rejected origin.
  */
-export const API_BASE = (
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://127.0.0.1:4000"
-).replace(/\/+$/, "");
+export const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(
+  /\/+$/,
+  "",
+);
 
 /* ------------------------------------------------------------------ *
  * Errors
@@ -125,6 +144,31 @@ let tokens: TokenPort = {
 /** Called once by the auth provider. */
 export function bindTokens(port: TokenPort) {
   tokens = port;
+  refreshInFlight = null;
+}
+
+/**
+ * One refresh at a time.
+ *
+ * Supabase refresh tokens are single-use: a successful refresh returns a new
+ * one and invalidates the old. Without this, a page that fires three requests
+ * with an expired access token called `refresh()` three times with the same
+ * token - the first rotated it, the other two were rejected as already used,
+ * and the provider logged the user out while their session was still perfectly
+ * valid. It looked like random sign-outs on a slow network.
+ *
+ * Every caller that arrives while a refresh is in flight waits on the same
+ * promise, so there is exactly one rotation per expiry.
+ */
+let refreshInFlight: Promise<Session | null> | null = null;
+
+function refreshOnce(): Promise<Session | null> {
+  if (!refreshInFlight) {
+    refreshInFlight = tokens.refresh().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
 }
 
 /* ------------------------------------------------------------------ *
@@ -153,7 +197,9 @@ async function send(
   opts: RequestOptions,
   session: Session | null,
 ): Promise<Response> {
-  const url = new URL(API_BASE + path);
+  // Resolved against the page origin, so an empty `API_BASE` yields a
+  // same-origin request and a `VITE_API_URL` override still wins.
+  const url = new URL(API_BASE + path, window.location.origin);
   for (const [key, value] of Object.entries(opts.query ?? {})) {
     if (value === undefined || value === null || value === "") continue;
     url.searchParams.set(key, String(value));
@@ -178,7 +224,7 @@ async function send(
     throw new ApiError(
       0,
       "NETWORK",
-      `Cannot reach the booking API at ${API_BASE}. Is the server running?`,
+      `Cannot reach the booking API at ${url.origin}. Is the server running?`,
       cause,
     );
   }
@@ -243,7 +289,7 @@ async function request<T>(
   const res = await send(method, path, opts, tokens.get());
 
   if (res.status === 401 && allowRefresh && opts.auth !== false) {
-    const refreshed = await tokens.refresh();
+    const refreshed = await refreshOnce();
     if (refreshed) return request<T>(method, path, opts, false);
   }
 
@@ -254,7 +300,7 @@ async function request<T>(
 async function requestText(path: string): Promise<string> {
   const res = await send("GET", path, {}, tokens.get());
   if (res.status === 401) {
-    const refreshed = await tokens.refresh();
+    const refreshed = await refreshOnce();
     if (refreshed) {
       const retry = await send("GET", path, {}, refreshed);
       if (!retry.ok) throw await asError(retry);
@@ -382,6 +428,10 @@ export const api = {
     setStatus: (id: string, status: BookingStatus) =>
       request<Booking>("PATCH", `/api/v1/bookings/${id}/status`, { body: { status } }),
 
+    /** Desk only. Clients never choose a stylist - the server assigns one. */
+    setEmployee: (id: string, employeeId: string) =>
+      request<Booking>("PATCH", `/api/v1/bookings/${id}/employee`, { body: { employeeId } }),
+
     mine: (query: ListQuery & { status?: BookingStatus; upcoming?: boolean } = {}) =>
       request<Paginated<Booking>>("GET", "/api/v1/me/bookings", { query }),
   },
@@ -391,6 +441,111 @@ export const api = {
 
     checkIn: (pass: string) =>
       request<CheckInResult>("POST", "/api/v1/qr/check-in", { body: { pass } }),
+  },
+
+  attendance: {
+    /**
+     * The caller's own standing today, plus which button should be live.
+     * `reason` is a sentence the UI can show verbatim, so the client never has
+     * to re-derive why a button is disabled.
+     */
+    me: () => request<AttendanceToday>("GET", "/api/v1/attendance/me"),
+
+    /**
+     * History. An EMPLOYEE is pinned to their own rows by the server whatever
+     * they send; naming a colleague is a 403, not a silent override.
+     */
+    list: (
+      query: ListQuery & {
+        from?: string;
+        to?: string;
+        employeeId?: string;
+        status?: AttendanceStatus;
+      } = {},
+    ) => request<Paginated<AttendanceRecord>>("GET", "/api/v1/attendance", { query }),
+
+    summary: (
+      query: { from?: string; to?: string; employeeId?: string; status?: AttendanceStatus } = {},
+    ) => request<AttendanceSummary>("GET", "/api/v1/attendance/summary", { query }),
+
+    get: (id: string) => request<AttendanceRecord>("GET", `/api/v1/attendance/${id}`),
+
+    /** The server stamps the time — the client cannot backdate a clock-in. */
+    clockIn: (body: { employeeId?: string; remarks?: string } = {}) =>
+      request<AttendanceRecord>("POST", "/api/v1/attendance/clock-in", { body }),
+
+    clockOut: (body: { employeeId?: string; remarks?: string } = {}) =>
+      request<AttendanceRecord>("POST", "/api/v1/attendance/clock-out", { body }),
+
+    /** DESK only: reception fixes a forgotten time-out or files a day of leave. */
+    amend: (
+      id: string,
+      body: {
+        timeIn?: string;
+        timeOut?: string | null;
+        status?: AttendanceStatus;
+        remarks?: string | null;
+      },
+    ) => request<AttendanceRecord>("PATCH", `/api/v1/attendance/${id}`, { body }),
+  },
+
+  tasks: {
+    /**
+     * The board. One endpoint, correctly scoped: the desk sees every task, an
+     * employee only their own — the server decides, not the query string.
+     */
+    list: (
+      query: ListQuery & {
+        employeeId?: string;
+        status?: TaskStatus;
+        priority?: TaskPriority;
+        overdue?: boolean;
+      } = {},
+    ) => request<Paginated<Task>>("GET", "/api/v1/tasks", { query }),
+
+    /** The employee's own list. Always scoped to the token. */
+    mine: (
+      query: ListQuery & { status?: TaskStatus; priority?: TaskPriority; overdue?: boolean } = {},
+    ) => request<Paginated<Task>>("GET", "/api/v1/tasks/mine", { query }),
+
+    counts: (employeeId?: string) =>
+      request<TaskCounts>("GET", "/api/v1/tasks/counts", { query: { employeeId } }),
+
+    get: (id: string) => request<Task>("GET", `/api/v1/tasks/${id}`),
+
+    /** DESK only — the concierge assigns the work. */
+    create: (body: {
+      title: string;
+      description?: string;
+      employeeId: string;
+      priority?: TaskPriority;
+      dueAt?: string;
+      instructions?: string;
+    }) => request<Task>("POST", "/api/v1/tasks", { body }),
+
+    /** DESK only. An employee may not rename or reassign their own task. */
+    update: (
+      id: string,
+      body: {
+        title?: string;
+        description?: string | null;
+        employeeId?: string;
+        priority?: TaskPriority;
+        status?: TaskStatus;
+        dueAt?: string | null;
+        instructions?: string | null;
+        completionNotes?: string | null;
+      },
+    ) => request<Task>("PATCH", `/api/v1/tasks/${id}`, { body }),
+
+    /** The employee's own progress: a status move plus completion notes. */
+    setStatus: (id: string, status: TaskStatus, completionNotes?: string) =>
+      request<Task>("PATCH", `/api/v1/tasks/${id}/status`, {
+        body: { status, completionNotes },
+      }),
+
+    /** A soft cancel — the row survives so the history is not erased. */
+    cancel: (id: string) => request<Task>("POST", `/api/v1/tasks/${id}/cancel`),
   },
 
   promos: {
@@ -515,12 +670,26 @@ export const STATUS_TONE: Record<BookingStatus, StatusTone> = {
   NO_SHOW: "destructive",
 };
 
-/** The transitions the database will accept, mirroring migration 11's trigger. */
+/**
+ * The transitions the database will accept, mirroring migration 11's trigger.
+ *
+ * Two things here are load-bearing and easy to get wrong:
+ *
+ *   PENDING -> CHECKED_IN is legal and is the path a guest actually takes.
+ *   A self-service booking is born PENDING; the guest turns up and scans at
+ *   the desk. Without this entry the check-in page showed the row with no
+ *   buttons at all, because that page only surfaces CHECKED_IN / COMPLETED /
+ *   NO_SHOW.
+ *
+ *   IN_SERVICE has exactly one exit, COMPLETED. Offering NO_SHOW there is not
+ *   merely untidy - the trigger rejects it, so the button was a guaranteed
+ *   409 `INVALID_STATUS_TRANSITION`.
+ */
 export const NEXT_STATUS: Record<BookingStatus, BookingStatus[]> = {
-  PENDING: ["CONFIRMED", "CANCELLED", "NO_SHOW"],
+  PENDING: ["CONFIRMED", "CHECKED_IN", "CANCELLED", "NO_SHOW"],
   CONFIRMED: ["CHECKED_IN", "CANCELLED", "NO_SHOW"],
   CHECKED_IN: ["IN_SERVICE", "COMPLETED", "NO_SHOW"],
-  IN_SERVICE: ["COMPLETED", "NO_SHOW"],
+  IN_SERVICE: ["COMPLETED"],
   COMPLETED: [],
   CANCELLED: [],
   NO_SHOW: [],

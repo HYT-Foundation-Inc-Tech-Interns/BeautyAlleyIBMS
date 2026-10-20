@@ -10,7 +10,7 @@
  */
 
 import * as React from "react";
-import { AlertTriangle, Inbox, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Inbox, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -31,9 +31,11 @@ export function StatusBadge({ status, className }: { status: BookingStatus; clas
 }
 
 const CATEGORY_META: Record<ServiceCategory, { label: string; className: string }> = {
-  SPA: { label: "Spa", className: "border-alley-200 bg-alley-50 text-alley-700" },
+  SPA: { label: "Spa", className: "border-primary/25 bg-primary/10 text-primary" },
   SALON: { label: "Salon", className: "border-champagne-300/70 bg-champagne-300/20 text-champagne-600" },
-  WELLNESS: { label: "Wellness", className: "border-sand-400/60 bg-sand-100 text-sand-700" },
+  // `text-sand-700` used to be here, but the `sand` scale stops at 400 — so
+  // Tailwind emitted nothing for it and the label inherited whatever it sat on.
+  WELLNESS: { label: "Wellness", className: "border-border bg-muted text-muted-foreground" },
 };
 
 export function CategoryBadge({
@@ -55,15 +57,34 @@ export function CategoryBadge({
  * Loading / error / empty
  * ------------------------------------------------------------------ */
 
+/**
+ * The waiting state.
+ *
+ * It carries the mark rather than a bare spinner: a blank page with a rotating
+ * arc reads as "something is broken and retrying", while the logo reads as
+ * "the salon is opening". The ring spins so the page still looks alive; the
+ * logo stays still, because a pulsing crest looks like a rendering fault.
+ */
 export function Loading({ label = "Loading…", className }: { label?: string; className?: string }) {
   return (
     <div
       className={cn(
-        "flex items-center justify-center gap-2.5 rounded-xl border border-dashed border-border py-16 text-[13px] text-muted-foreground",
+        "flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-16 text-[13px] text-muted-foreground",
         className,
       )}
     >
-      <Loader2 className="size-4 animate-spin" />
+      <span className="relative flex size-16 items-center justify-center">
+        <span
+          aria-hidden
+          className="absolute inset-0 animate-spin rounded-full border-2 border-primary/15 border-t-primary/70"
+        />
+        <img
+          src="/brand/logo-mark.png"
+          alt=""
+          className="size-11 object-contain"
+          draggable={false}
+        />
+      </span>
       {label}
     </div>
   );

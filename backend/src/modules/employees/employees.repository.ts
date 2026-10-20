@@ -126,21 +126,32 @@ export const employeesRepository = {
     return (data ?? []) as TimeOffRow[];
   },
 
-  async create(input: CreateEmployeeInput): Promise<EmployeeRow> {
+  /**
+   * Migration 35: the employee and their qualifications are one statement.
+   *
+   * This used to be `create` followed by `setServices`, and a service id that
+   * did not exist made the second call fail after the first had committed -
+   * so POST /employees returned 400 and left a qualified-for-nothing employee
+   * behind. The existence check is inside the function now, so it either all
+   * applies or none of it does.
+   */
+  async create(input: CreateEmployeeInput, actorId: string | null = null): Promise<EmployeeRow> {
     const db = requireServiceRole();
-    const { data, error } = await db
-      .from("employees")
-      .insert({
-        full_name: input.fullName,
-        title: input.title ?? null,
-        bio: input.bio ?? null,
-        profile_id: input.profileId ?? null,
-        is_active: input.isActive,
-      })
-      .select(SELECT)
-      .single();
+    const { data, error } = await db.rpc("create_employee", {
+      p_full_name: input.fullName,
+      p_title: input.title ?? null,
+      p_bio: input.bio ?? null,
+      p_profile_id: input.profileId ?? null,
+      p_is_active: input.isActive,
+      p_service_ids: input.serviceIds,
+      p_actor: actorId,
+    });
     if (error) throw error;
-    return data as EmployeeRow;
+
+    const id = data as string;
+    const row = await this.getById(id);
+    if (!row) throw AppError.internal("employee disappeared mid-create");
+    return row;
   },
 
   async update(id: string, patch: UpdateEmployeeInput): Promise<EmployeeRow | null> {
@@ -160,7 +171,9 @@ export const employeesRepository = {
   async setServices(employeeId: string, serviceIds: string[]) {
     const db = requireServiceRole();
     // Validate first, so an unknown service id is a 400 rather than a foreign
-    // key error the client cannot act on.
+    // key error the client cannot act on. The write itself is one function:
+    // a delete-then-insert through PostgREST could commit the delete and then
+    // fail the insert, leaving the stylist qualified for nothing.
     if (serviceIds.length > 0) {
       const { data, error } = await db.from("services").select("id").in("id", serviceIds);
       if (error) throw error;
@@ -171,20 +184,12 @@ export const employeesRepository = {
       }
     }
 
-    // Replace-all semantics: the caller sends the complete desired set. A
-    // delete-then-insert is not atomic through PostgREST, but both statements
-    // are idempotent and the table has no dependents, so a failure between
-    // them leaves an employee temporarily unqualified rather than corrupt.
-    const { error: delError } = await db.from("employee_services").delete().eq("employee_id", employeeId);
-    if (delError) throw delError;
-
-    if (serviceIds.length > 0) {
-      const { error: insError } = await db
-        .from("employee_services")
-        .insert(serviceIds.map((serviceId) => ({ employee_id: employeeId, service_id: serviceId })));
-      if (insError) throw insError;
-    }
-    return serviceIds;
+    const { data, error } = await db.rpc("replace_employee_services", {
+      p_employee_id: employeeId,
+      p_service_ids: serviceIds,
+    });
+    if (error) throw error;
+    return (data as string[] | null) ?? serviceIds;
   },
 
   async setWorkingHours(
@@ -195,7 +200,8 @@ export const employeesRepository = {
 
     // Overlapping shifts on the same day would make availability ambiguous.
     // The unique constraint only catches an identical start time, so the
-    // overlap check has to happen here.
+    // overlap check has to happen here - and it is a pure function of the
+    // payload, so it costs nothing to do before the write.
     for (let i = 0; i < hours.length; i++) {
       for (let j = i + 1; j < hours.length; j++) {
         const a = hours[i];
@@ -209,20 +215,20 @@ export const employeesRepository = {
       }
     }
 
-    const { error: delError } = await db.from("working_hours").delete().eq("employee_id", employeeId);
-    if (delError) throw delError;
+    // Migration 34. The function re-validates `end_time > start_time` before it
+    // deletes anything, because the table's CHECK constraint fires *after* the
+    // delete would have committed - which used to wipe a stylist's entire
+    // schedule and report it as a 500.
+    const { error } = await db.rpc("replace_working_hours", {
+      p_employee_id: employeeId,
+      p_hours: hours.map((h) => ({
+        weekday: h.weekday,
+        start_time: h.startTime,
+        end_time: h.endTime,
+      })),
+    });
+    if (error) throw error;
 
-    if (hours.length > 0) {
-      const { error: insError } = await db.from("working_hours").insert(
-        hours.map((h) => ({
-          employee_id: employeeId,
-          weekday: h.weekday,
-          start_time: h.startTime,
-          end_time: h.endTime,
-        }))
-      );
-      if (insError) throw insError;
-    }
     return this.workingHoursFor(employeeId);
   },
 

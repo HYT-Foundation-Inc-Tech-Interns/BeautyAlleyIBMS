@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { bookingsController } from "./bookings.controller";
 import {
+  assignEmployeeSchema,
   cancelBookingSchema,
   createBookingSchema,
   createNoteSchema,
@@ -158,4 +159,16 @@ bookingsRouter.patch(
   requireRole(...DESK),
   validate({ params: idParamSchema, body: setRoomSchema }),
   asyncHandler(bookingsController.setRoom)
+);
+
+// --- stylist assignment ----------------------------------------------------
+// Clients do not choose a stylist when they book; the server assigns one. The
+// desk overrides it, so this is DESK for the same reason the room override is:
+// it is a front-desk decision made with the client in front of you.
+bookingsRouter.patch(
+  "/:id/employee",
+  authenticate,
+  requireRole(...DESK),
+  validate({ params: idParamSchema, body: assignEmployeeSchema }),
+  asyncHandler(bookingsController.setEmployee)
 );

@@ -185,6 +185,31 @@ export const API_GROUPS: ApiGroup[] = [
     ],
   },
   {
+    name: "attendance",
+    endpoints: [
+      { method: "GET", path: "/api/v1/attendance/me", auth: "OPERATIONS", summary: "The caller's own attendance standing: today's record, whether they are clocked in, and the next legal action. The employee dashboard's clock-in card." },
+      { method: "GET", path: "/api/v1/attendance/summary", auth: "OPERATIONS", summary: "Totals for a date range - days present, leave, hours worked and a per-day breakdown. Scoped to the caller for an employee, whole-floor for the desk." },
+      { method: "GET", path: "/api/v1/attendance", auth: "OPERATIONS", summary: "Attendance history. ?from=&to=&employeeId=&status=. An employee sees only their own records." },
+      { method: "POST", path: "/api/v1/attendance/clock-in", auth: "OPERATIONS", summary: "Time in. The server writes the timestamp; a second time-in for the same day is a 409." },
+      { method: "POST", path: "/api/v1/attendance/clock-out", auth: "OPERATIONS", summary: "Time out. Closes today's open session and derives the hours worked. Refused with no open session, or twice." },
+      { method: "GET", path: "/api/v1/attendance/:id", auth: "OPERATIONS", summary: "One attendance record, with the hours worked and the rostered shift." },
+      { method: "PATCH", path: "/api/v1/attendance/:id", auth: "DESK", summary: "Correct a record - a forgotten time-out, or a day of leave entered after the fact." },
+    ],
+  },
+  {
+    name: "tasks",
+    endpoints: [
+      { method: "GET", path: "/api/v1/tasks/mine", auth: "OPERATIONS", summary: "The caller's own assigned tasks. The employee's My Tasks page." },
+      { method: "GET", path: "/api/v1/tasks/counts", auth: "OPERATIONS", summary: "Pending, in-progress, overdue and completed counts for the dashboard tiles." },
+      { method: "GET", path: "/api/v1/tasks", auth: "OPERATIONS", summary: "Tasks. ?employeeId=&status=&priority=&q=&overdue=. The desk sees every task; an employee sees only their own." },
+      { method: "POST", path: "/api/v1/tasks", auth: "DESK", summary: "Assign a task to an employee. An identical open task for the same person is refused as a double-submit." },
+      { method: "GET", path: "/api/v1/tasks/:id", auth: "OPERATIONS", summary: "One task." },
+      { method: "PATCH", path: "/api/v1/tasks/:id/status", auth: "OPERATIONS", summary: "Move the caller's own task to IN_PROGRESS, COMPLETED or PENDING, with optional completion notes. Transitions are enforced by a database trigger." },
+      { method: "PATCH", path: "/api/v1/tasks/:id", auth: "DESK", summary: "Edit, reassign, or change the status of a task." },
+      { method: "POST", path: "/api/v1/tasks/:id/cancel", auth: "DESK", summary: "Cancel a task. Soft - the record of the work asked for survives." },
+    ],
+  },
+  {
     name: "promos",
     endpoints: [
       { method: "POST", path: "/api/v1/promos/validate", auth: "optional", summary: "Preview a code against a cart. An unknown code is a 200 with valid:false, not a 4xx." },

@@ -37,8 +37,12 @@ import Bookings from "@/pages/Bookings";
 import Clients from "@/pages/Clients";
 import Promos from "@/pages/Promos";
 import CheckIn from "@/pages/CheckIn";
+import ScanArrivals from "@/pages/ScanArrivals";
 import Team from "@/pages/Team";
 import Board from "@/pages/Board";
+import Tasks from "@/pages/Tasks";
+import MyTasks from "@/pages/MyTasks";
+import Attendance from "@/pages/Attendance";
 import MyBookings from "@/pages/MyBookings";
 import NotFound from "@/pages/NotFound";
 
@@ -117,6 +121,38 @@ export default function App() {
             element={
               <RequireArea area="check-in">
                 <CheckIn />
+              </RequireArea>
+            }
+          />
+          <Route
+            path="scan-arrivals"
+            element={
+              <RequireArea area="scan-arrivals">
+                <ScanArrivals />
+              </RequireArea>
+            }
+          />
+          <Route
+            path="tasks"
+            element={
+              <RequireArea area="tasks">
+                <Tasks />
+              </RequireArea>
+            }
+          />
+          <Route
+            path="my-tasks"
+            element={
+              <RequireArea area="my-tasks">
+                <MyTasks />
+              </RequireArea>
+            }
+          />
+          <Route
+            path="attendance"
+            element={
+              <RequireArea area="attendance">
+                <Attendance />
               </RequireArea>
             }
           />

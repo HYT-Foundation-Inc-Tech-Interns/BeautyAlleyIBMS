@@ -43,6 +43,10 @@ export type Area =
   | "promos"
   | "employees"
   | "check-in"
+  | "scan-arrivals"
+  | "tasks"
+  | "my-tasks"
+  | "attendance"
   | "board"
   | "my-bookings";
 
@@ -72,9 +76,32 @@ export type Area =
  * those are `DESK`, and this table is where that shows up.
  */
 export const SCOPE: Record<Role, Area[]> = {
-  ADMIN: ["overview", "bookings", "clients", "promos", "employees", "check-in", "board"],
-  CONCIERGE: ["overview", "bookings", "check-in"],
-  EMPLOYEE: ["overview", "bookings", "check-in"],
+  ADMIN: [
+    "overview",
+    "bookings",
+    "clients",
+    "promos",
+    "employees",
+    "check-in",
+    "scan-arrivals",
+    "tasks",
+    "attendance",
+    "board",
+  ],
+  /*
+   * The desk owns the front of house: the run sheet, the door, the arrival
+   * scanner, and the task board it writes work onto. It also reads the whole
+   * floor's attendance — reception is who notices a stylist has not clocked in.
+   */
+  CONCIERGE: ["overview", "bookings", "check-in", "scan-arrivals", "tasks", "attendance"],
+  /*
+   * The floor gets its own two screens — the work assigned to it and its own
+   * clock — plus the run sheet and the door. It deliberately does NOT get the
+   * task board (`tasks`): that is where work is *assigned*, and an employee
+   * assigning work to a colleague is not a thing this system is for. It gets
+   * `my-tasks` instead, which the API scopes to the caller's own row.
+   */
+  EMPLOYEE: ["overview", "bookings", "check-in", "my-tasks", "attendance"],
   CLIENT: ["my-bookings"],
 };
 

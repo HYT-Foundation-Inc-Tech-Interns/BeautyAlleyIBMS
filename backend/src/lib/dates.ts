@@ -19,6 +19,8 @@
  * change only; the instant is unchanged.
  */
 
+import { env } from "../config/env";
+
 /**
  * Normalise a timestamp string to `Z`-suffixed ISO-8601.
  *
@@ -36,4 +38,29 @@ export function iso(value: string | null | undefined): string {
 /** As `iso()`, but preserves null so an optional field stays optional. */
 export function isoOrNull(value: string | null | undefined): string | null {
   return value === null || value === undefined ? null : iso(value);
+}
+
+/**
+ * The branch's calendar day for an instant, as `YYYY-MM-DD`.
+ *
+ * "Today" is the salon's local day, not UTC's. At 09:00 in Manila it is still
+ * the previous day in UTC, so a UTC-derived day would file the morning shift
+ * under yesterday - the same trap migration 26 documents for the quota, and
+ * migration 29 for attendance.
+ *
+ * Built from `formatToParts` rather than by slicing a formatted string, so the
+ * result does not depend on the locale's chosen separator. (`en-CA` happens to
+ * render `YYYY-MM-DD`, but that is a property of the locale data, not a
+ * guarantee this code should lean on.)
+ */
+export function branchDay(instant: Date = new Date(), timeZone: string = env.branchTimezone): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+
+  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${pick("year")}-${pick("month")}-${pick("day")}`;
 }

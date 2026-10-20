@@ -1,4 +1,5 @@
 import { requireServiceRole } from "../../db/supabase";
+import { toRange, type Pagination } from "../../lib/pagination";
 import type { Database } from "../../types/database";
 
 type LoyaltyRow = Database["public"]["Views"]["v_client_loyalty"]["Row"];
@@ -49,19 +50,31 @@ export const loyaltyRepository = {
   },
 
   /**
-   * Every client with their derived visit count.
+   * A page of clients with their derived visit count.
    *
-   * `eligible_only` is filtered in Node rather than in SQL because the flag is
-   * computed by the view and PostgREST cannot filter on a computed column
-   * without a second view. The client table is small enough for that to be
-   * free, and the alternative - a stored `eligible` flag - is exactly the
-   * denormalisation migration 17 set out to avoid.
+   * Every filter - including `eligibleOnly` - is applied by the database. The
+   * previous implementation fetched the whole table and filtered in Node,
+   * justified by a claim that PostgREST cannot filter a computed view column.
+   * That is wrong: `.eq("eligible_for_membership", true)` works and returns the
+   * eligible rows exactly. Only a HEAD count *with* a filter on a view fails,
+   * and this never used a count. Filtering in SQL is worth the correction
+   * because the desk list is now paginated - an in-memory filter would have to
+   * page the unfiltered table first and hand back a short page.
    */
-  async list(opts: { eligibleOnly: boolean; memberOnly: boolean; q?: string }): Promise<LoyaltyRow[]> {
+  async list(opts: {
+    eligibleOnly: boolean;
+    memberOnly: boolean;
+    q?: string;
+    /** `sort` is required here because every caller passes the validated schema. */
+    pagination: Pagination & { sort: string };
+  }): Promise<{ rows: LoyaltyRow[]; total: number }> {
     const db = requireServiceRole();
-    let q = db.from("v_client_loyalty").select(SELECT);
+    const { from, to } = toRange(opts.pagination);
+
+    let q = db.from("v_client_loyalty").select(SELECT, { count: "exact" });
 
     if (opts.memberOnly) q = q.not("member_since", "is", null);
+    if (opts.eligibleOnly) q = q.eq("eligible_for_membership", true);
     if (opts.q) {
       // Escape the LIKE metacharacters so a search for "100%" is a search for
       // that text, not a wildcard.
@@ -69,11 +82,14 @@ export const loyaltyRepository = {
       q = q.or(`full_name.ilike.%${safe}%,phone.ilike.%${safe}%`);
     }
 
-    const { data, error } = await q.order("full_name");
-    if (error) throw error;
+    const { data, error, count } = await q
+      // The sort column is whitelisted by the zod enum upstream, so this
+      // cannot be used to inject an expression.
+      .order(opts.pagination.sort, { ascending: opts.pagination.order === "asc" })
+      .range(from, to);
 
-    const rows = (data ?? []) as LoyaltyRow[];
-    return opts.eligibleOnly ? rows.filter((r) => r.eligible_for_membership) : rows;
+    if (error) throw error;
+    return { rows: (data ?? []) as LoyaltyRow[], total: count ?? 0 };
   },
 
   /** The configured threshold, read from the database rather than hardcoded. */

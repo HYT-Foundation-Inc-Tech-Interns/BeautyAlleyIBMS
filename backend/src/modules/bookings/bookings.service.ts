@@ -63,6 +63,10 @@ function toBookingDto(row: BookingDetailRow, items: BookingItemRow[] = []) {
     // The rate this client's booking was priced at, so the dashboard can show
     // "member rate 3%" beside the discount rather than an unexplained amount.
     memberDiscountPercent: row.member_discount_percent ?? 0,
+    // Which treatments this booking covers, so the list can link to the
+    // catalogue without a second request per row. Also what `?serviceId=`
+    // filters on.
+    serviceIds: row.service_ids ?? [],
     notes: row.notes,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -206,28 +210,23 @@ export const bookingsService = {
     };
   },
 
-  /** Lazily create the clients row for a signed-in profile. */
+  /**
+   * Lazily create the clients row for a signed-in profile.
+   *
+   * `clients.profile_id` is unique, so a plain insert made the very first
+   * booking a race with itself: a client double-tapping "Book" got a 23505 on
+   * the second request and a 500 instead of their booking. `ensure_client_for
+   * _profile()` (migration 34) does the get-or-create as one statement, so the
+   * second request finds the row the first one created.
+   */
   async ensureClientRow(actor: Actor): Promise<string> {
     const db = requireServiceRole();
-    const profile = await db
-      .from("profiles")
-      .select("full_name, phone")
-      .eq("id", actor.id)
-      .maybeSingle();
-    if (profile.error) throw profile.error;
-
-    const { data, error } = await db
-      .from("clients")
-      .insert({
-        profile_id: actor.id,
-        full_name: profile.data?.full_name || actor.fullName || actor.email || "Client",
-        phone: profile.data?.phone ?? null,
-        email: actor.email,
-      })
-      .select("id")
-      .single();
+    const { data, error } = await db.rpc("ensure_client_for_profile", {
+      p_profile_id: actor.id,
+      p_email: actor.email ?? null,
+    });
     if (error) throw error;
-    return (data as { id: string }).id;
+    return data as string;
   },
 
   passFor(bookingId: string, jti: string, endTime: string) {
@@ -265,7 +264,13 @@ export const bookingsService = {
 
   async list(query: ListBookingsQuery) {
     const { rows, total } = await bookingsRepository.list(query);
-    return paginated(rows.map((r) => toBookingDto(r)), total, query.page, query.limit);
+    const items = await bookingsRepository.itemsForMany(rows.map((r) => r.id));
+    return paginated(
+      rows.map((r) => toBookingDto(r, items.get(r.id) ?? [])),
+      total,
+      query.page,
+      query.limit
+    );
   },
 
   // --- aftercare notes (migration 17) --------------------------------------
@@ -323,6 +328,26 @@ export const bookingsService = {
     return this.detail(result.bookingId);
   },
 
+  /**
+   * The desk choosing the stylist (migration 39).
+   *
+   * Clients no longer pick one, so `create_booking` assigns at random from the
+   * qualified, rostered, free candidates. This is how the desk disagrees. The
+   * database owns the rules - qualification, shift, leave, overlap - and
+   * raises a code for each, which the error mapper turns into the sentence the
+   * concierge sees.
+   */
+  async setEmployee(id: string, employeeId: string, actor: Actor) {
+    await this.detailFor(id, actor);
+    const result = await bookingsRepository.setEmployee(id, employeeId, actor.id);
+    logger.info("booking.employee_assigned", {
+      bookingId: id,
+      employeeId,
+      by: actor.id,
+    });
+    return this.detail(result.bookingId);
+  },
+
   async mine(actor: Actor, query: MyBookingsQuery) {
     if (!actor.clientId) {
       // A signed-in account with no client row simply has no bookings. Not an
@@ -330,7 +355,13 @@ export const bookingsService = {
       return paginated([], 0, query.page, query.limit);
     }
     const { rows, total } = await bookingsRepository.listForClient(actor.clientId, query);
-    return paginated(rows.map((r) => toBookingDto(r)), total, query.page, query.limit);
+    const items = await bookingsRepository.itemsForMany(rows.map((r) => r.id));
+    return paginated(
+      rows.map((r) => toBookingDto(r, items.get(r.id) ?? [])),
+      total,
+      query.page,
+      query.limit
+    );
   },
 
   async cancel(
@@ -395,8 +426,26 @@ export const bookingsService = {
     const row = await bookingsRepository.getById(id);
     if (!row) throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
 
-    const updated = await bookingsRepository.setStatus(id, status);
-    if (!updated) throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
+    // Cancelling is not a status write. It has to stamp `cancelled_at`, revoke
+    // the pass, release the promo and write its own audit row - all of which
+    // cancel_booking() does in one transaction. A bare `status = 'CANCELLED'`
+    // update fails the table's CHECK constraint outright, which is why this
+    // endpoint used to reject every cancellation.
+    if (status === "CANCELLED") {
+      const { booking } = await this.cancel(id, { force: true }, actor);
+      return booking;
+    }
+
+    // Everything else goes through a function so the status write and its
+    // audit row are one transaction. Writing the column directly left
+    // COMPLETED and NO_SHOW with no trail at all.
+    const db = requireServiceRole();
+    const { error } = await db.rpc("set_booking_status", {
+      p_booking_id: id,
+      p_status: status,
+      p_actor: actor.id,
+    });
+    if (error) throw error;
 
     logger.info("booking.status_changed", {
       bookingId: id,

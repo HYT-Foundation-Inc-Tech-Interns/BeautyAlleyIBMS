@@ -77,6 +77,10 @@ export default function Login() {
         </>
       }
       aside={
+        // Development only. `auth/demo.ts` exports empty values in a production
+        // build, so rendering this panel there would show an empty card - and
+        // the credentials it fills must never reach a public bundle at all.
+        import.meta.env.DEV ? (
         <div className="rounded-xl border border-border/80 bg-sand-50 p-4">
           <p className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             <Sparkles className="size-3.5 text-champagne-500" />
@@ -116,6 +120,7 @@ export default function Login() {
             ))}
           </div>
         </div>
+        ) : undefined
       }
     >
       <form onSubmit={onSubmit} className="space-y-5" noValidate>

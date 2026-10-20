@@ -9,6 +9,8 @@ import { promosRouter } from "./modules/promos/promos.routes";
 import { roomsRouter } from "./modules/rooms/rooms.routes";
 import { subcategoriesRouter } from "./modules/subcategories/subcategories.routes";
 import { loyaltyRouter } from "./modules/loyalty/loyalty.routes";
+import { attendanceRouter } from "./modules/attendance/attendance.routes";
+import { tasksRouter } from "./modules/tasks/tasks.routes";
 import { adminRouter } from "./modules/admin/admin.routes";
 import { buildApiIndex } from "./lib/apiIndex";
 
@@ -37,5 +39,7 @@ apiRouter.use("/promos", promosRouter);
 apiRouter.use("/rooms", roomsRouter);
 apiRouter.use("/service-subcategories", subcategoriesRouter);
 apiRouter.use("/loyalty", loyaltyRouter);
+apiRouter.use("/attendance", attendanceRouter);
+apiRouter.use("/tasks", tasksRouter);
 apiRouter.use("/admin", adminRouter);
 apiRouter.use("/admin", adminAuthRouter);

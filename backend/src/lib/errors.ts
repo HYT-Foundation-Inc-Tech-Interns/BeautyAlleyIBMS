@@ -12,6 +12,8 @@
 export const CODES = {
   // --- 400 bad request -----------------------------------------------------
   VALIDATION_FAILED: "VALIDATION_FAILED",
+  /** A `?page=` past the last page. PostgREST's PGRST103/416, made legible. */
+  PAGE_OUT_OF_RANGE: "PAGE_OUT_OF_RANGE",
   SERVICES_REQUIRED: "SERVICES_REQUIRED",
   SERVICES_INVALID: "SERVICES_INVALID",
   START_TIME_REQUIRED: "START_TIME_REQUIRED",
@@ -25,6 +27,9 @@ export const CODES = {
   QR_TOO_LATE: "QR_TOO_LATE",
   ROOM_REQUIRED: "ROOM_REQUIRED",
   ROOM_TYPE_MISMATCH: "ROOM_TYPE_MISMATCH",
+  NO_ACTIVE_SESSION: "NO_ACTIVE_SESSION",
+  /** Migration 34. A shift that ends before it starts. */
+  WORKING_HOURS_INVALID: "WORKING_HOURS_INVALID",
 
   // --- 401 / 403 -----------------------------------------------------------
   UNAUTHENTICATED: "UNAUTHENTICATED",
@@ -34,6 +39,7 @@ export const CODES = {
   FORBIDDEN: "FORBIDDEN",
   EMPLOYEE_NOT_QUALIFIED: "EMPLOYEE_NOT_QUALIFIED",
   INSUFFICIENT_ROLE: "INSUFFICIENT_ROLE",
+  NOT_TASK_OWNER: "NOT_TASK_OWNER",
 
   // --- 404 -----------------------------------------------------------------
   NOT_FOUND: "NOT_FOUND",
@@ -42,6 +48,9 @@ export const CODES = {
   SERVICE_NOT_FOUND: "SERVICE_NOT_FOUND",
   CLIENT_NOT_FOUND: "CLIENT_NOT_FOUND",
   ROOM_NOT_FOUND: "ROOM_NOT_FOUND",
+  TASK_NOT_FOUND: "TASK_NOT_FOUND",
+  ATTENDANCE_NOT_FOUND: "ATTENDANCE_NOT_FOUND",
+  PROFILE_NOT_FOUND: "PROFILE_NOT_FOUND",
 
   // --- 409 conflict --------------------------------------------------------
   SLOT_TAKEN: "SLOT_TAKEN",
@@ -51,6 +60,15 @@ export const CODES = {
   ALREADY_CHECKED_IN: "ALREADY_CHECKED_IN",
   ALREADY_CANCELLED: "ALREADY_CANCELLED",
   INVALID_STATUS_TRANSITION: "INVALID_STATUS_TRANSITION",
+  BOOKING_IN_PROGRESS: "BOOKING_IN_PROGRESS",
+  EMPLOYEE_UNAVAILABLE: "EMPLOYEE_UNAVAILABLE",
+  USE_CANCEL_BOOKING: "USE_CANCEL_BOOKING",
+  ALREADY_TIMED_IN: "ALREADY_TIMED_IN",
+  ALREADY_TIMED_OUT: "ALREADY_TIMED_OUT",
+  TASK_STATUS_TRANSITION: "TASK_STATUS_TRANSITION",
+  DUPLICATE_TASK: "DUPLICATE_TASK",
+  /** Migration 34. Raised by deactivate_room(); the message carries the count. */
+  ROOM_STILL_BOOKED: "ROOM_STILL_BOOKED",
   CONFLICT: "CONFLICT",
 
   // --- 429 -----------------------------------------------------------------
@@ -150,6 +168,24 @@ const PG_FUNCTION_ERRORS: Record<string, { status: number; code: string }> = {
   NO_ROOM_AVAILABLE: { status: 409, code: CODES.NO_ROOM_AVAILABLE },
   CLIENT_NOT_FOUND: { status: 404, code: CODES.CLIENT_NOT_FOUND },
   NOT_ELIGIBLE_FOR_MEMBERSHIP: { status: 409, code: CODES.NOT_ELIGIBLE_FOR_MEMBERSHIP },
+  // --- migration 30: tasks -------------------------------------------------
+  TASK_STATUS_TRANSITION: { status: 409, code: CODES.TASK_STATUS_TRANSITION },
+  // --- migration 32/33: booking correctness --------------------------------
+  // The service was already under way, so its appointment time is a record
+  // rather than a plan. 409, because the request is well formed and the
+  // booking simply is not in a state that accepts it.
+  BOOKING_IN_PROGRESS: { status: 409, code: CODES.BOOKING_IN_PROGRESS },
+  // The named employee is on leave for that window.
+  EMPLOYEE_UNAVAILABLE: { status: 409, code: CODES.EMPLOYEE_UNAVAILABLE },
+  // set_booking_status refuses CANCELLED on purpose. Reaching this means the
+  // service routed a cancellation past cancel_booking(), which is a bug.
+  USE_CANCEL_BOOKING: { status: 409, code: CODES.USE_CANCEL_BOOKING },
+  // --- migration 34: atomicity --------------------------------------------
+  // A shift that ends before it starts. 400, and raised *before* the delete in
+  // replace_working_hours, so the stylist keeps the hours they already had.
+  WORKING_HOURS_INVALID: { status: 400, code: CODES.WORKING_HOURS_INVALID },
+  ROOM_STILL_BOOKED: { status: 409, code: CODES.ROOM_STILL_BOOKED },
+  PROFILE_NOT_FOUND: { status: 404, code: CODES.PROFILE_NOT_FOUND },
 };
 
 /** SQLSTATE classes we care about. */
@@ -161,6 +197,11 @@ const PG_SQLSTATE: Record<string, { status: number; code: string }> = {
   "22P02": { status: 400, code: CODES.VALIDATION_FAILED }, // invalid_text_representation
   "42501": { status: 403, code: CODES.FORBIDDEN }, // insufficient_privilege
   PGRST116: { status: 404, code: CODES.NOT_FOUND }, // PostgREST: no rows
+  // PostgREST answers a `range()` that starts past the last row with HTTP 416.
+  // Unmapped, that surfaced as a 500 on every paginated endpoint - a stale
+  // `?page=9` link, or one click past the end. The request is well formed and
+  // the collection exists, so 400 with a precise code beats 500.
+  PGRST103: { status: 400, code: CODES.PAGE_OUT_OF_RANGE }, // range not satisfiable
 };
 
 /** PROMO_* codes all carry the same status. */
@@ -358,6 +399,10 @@ const MESSAGES: Record<string, string> = {
   [CODES.BOOKING_NOT_FOUND]: "No such booking.",
   [CODES.ALREADY_CANCELLED]: "This booking is already cancelled.",
   [CODES.ALREADY_CHECKED_IN]: "This booking has already been checked in.",
+  [CODES.BOOKING_IN_PROGRESS]:
+    "This appointment has already started, so its time can no longer be moved.",
+  [CODES.EMPLOYEE_UNAVAILABLE]: "That stylist is on leave during that time.",
+  [CODES.USE_CANCEL_BOOKING]: "Use the cancel endpoint to cancel a booking.",
   [CODES.INVALID_STATUS_TRANSITION]: "That status change is not allowed.",
   [CODES.QR_INVALID]: "That check-in code is not valid.",
   [CODES.QR_EXPIRED]: "That check-in code has expired.",
@@ -374,7 +419,20 @@ const MESSAGES: Record<string, string> = {
   [CODES.CLIENT_NOT_FOUND]: "No such client.",
   [CODES.CONFLICT]: "That conflicts with an existing record.",
   [CODES.VALIDATION_FAILED]: "The request contained invalid data.",
+  [CODES.PAGE_OUT_OF_RANGE]: "That page is past the end of the list.",
   [CODES.FORBIDDEN]: "You do not have access to that.",
+  [CODES.ALREADY_TIMED_IN]: "You have already timed in today.",
+  [CODES.ALREADY_TIMED_OUT]: "You have already timed out today.",
+  [CODES.NO_ACTIVE_SESSION]: "There is no open session to time out of. Time in first.",
+  [CODES.ATTENDANCE_NOT_FOUND]: "No attendance record for that day.",
+  [CODES.TASK_NOT_FOUND]: "No such task.",
+  [CODES.NOT_TASK_OWNER]: "That task is assigned to someone else.",
+  [CODES.TASK_STATUS_TRANSITION]: "That status change is not allowed for this task.",
+  [CODES.DUPLICATE_TASK]: "An open task with that title already exists for this employee.",
+  [CODES.WORKING_HOURS_INVALID]: "Each shift must end after it starts.",
+  [CODES.ROOM_STILL_BOOKED]:
+    "That room still has bookings that have not finished. Move them before decommissioning it.",
+  [CODES.PROFILE_NOT_FOUND]: "No profile for that account.",
 };
 
 function humanise(code: string): string {

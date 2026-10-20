@@ -53,3 +53,6 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# cloudflared binary downloaded by backend/scripts/tunnel.js (~70MB, per-OS)
+backend/bin/

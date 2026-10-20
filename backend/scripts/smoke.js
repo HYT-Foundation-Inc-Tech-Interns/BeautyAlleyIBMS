@@ -160,11 +160,13 @@ async function main() {
     );
 
     // The root used to be a bare `NOT_FOUND`, which reads as "broken" when the
-    // service is fine and simply has no page there. It now serves a JSON index.
-    const indexRes = await fetch(`${BASE}/`);
-    const indexBody = await indexRes.json();
-    const indexData = indexBody?.data;
-    check("the root serves a service index rather than a bare 404",
+    // service is fine and simply has no page there. It now answers with either
+    // the JSON service index (API-only) or the app shell (SERVE_APP=1, i.e. the
+    // tunnel) - both are correct, so the index itself is asserted at /api/v1,
+    // which serves it in either mode, and the root only has to be useful.
+    const indexRes = await call("GET", "");
+    const indexData = indexRes.body?.data;
+    check("GET /api/v1 serves the service index",
       indexRes.status === 200 && indexData?.endpointCount > 0,
       `${indexData?.endpointCount ?? 0} endpoints documented`);
     check("the index says it is an API with no HTML page",
@@ -173,10 +175,14 @@ async function main() {
       Array.isArray(indexData?.groups) &&
         indexData.groups.every((g) => g.endpoints.every((e) => e.path.startsWith("/api/v1") || e.path === "/health")),
       `${indexData?.groups?.length ?? 0} groups`);
+    check("the index reports its own base URL",
+      indexData?.baseUrl === "/api/v1", indexData?.baseUrl);
 
-    const versionRoot = await call("GET", "");
-    check("GET /api/v1 also answers with the index", versionRoot.status === 200 && versionRoot.body?.data?.baseUrl === "/api/v1",
-      `status ${versionRoot.status}`);
+    const rootRes = await fetch(`${BASE}/`);
+    const rootType = rootRes.headers.get("content-type") || "";
+    check("the root is never a bare 404 - it is the index or the app",
+      rootRes.status === 200,
+      `status ${rootRes.status} ${rootType.includes("text/html") ? "(app shell)" : "(index)"}`);
 
     // ---------------------------------------------------------------------
     section("1. Public catalogue (publishable key only)");

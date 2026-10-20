@@ -15,10 +15,9 @@ const badgeVariants = cva(
         outline: "border-border text-foreground",
         champagne:
           "border-champagne-300/70 bg-champagne-300/25 text-champagne-600",
-        success:
-          "border-alley-200 bg-alley-50 text-alley-700",
+        success: "border-success/25 bg-success/10 text-success",
         warning: "border-champagne-300/70 bg-champagne-300/20 text-champagne-600",
-        destructive: "border-clay/25 bg-clay/10 text-clay",
+        destructive: "border-destructive/25 bg-destructive/10 text-destructive",
       },
     },
     defaultVariants: {

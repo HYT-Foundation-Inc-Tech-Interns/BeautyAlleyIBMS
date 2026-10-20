@@ -148,7 +148,7 @@ export default function MyBookings() {
                       {peso(booking.totalCents)}
                     </span>
                     {booking.discountCents > 0 && (
-                      <span className="block text-[11px] text-alley-600">
+                      <span className="block text-[11px] text-primary">
                         {peso(booking.discountCents)} off
                       </span>
                     )}

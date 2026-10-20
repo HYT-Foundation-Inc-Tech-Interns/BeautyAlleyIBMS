@@ -1,5 +1,6 @@
 import { isoOrNull } from "../../lib/dates";
 import { AppError, CODES } from "../../lib/errors";
+import { paginated } from "../../lib/pagination";
 import { loyaltyRepository } from "./loyalty.repository";
 import type { ListLoyaltyQuery, PromoteClientInput } from "./loyalty.schemas";
 import type { Database } from "../../types/database";
@@ -50,17 +51,25 @@ export const loyaltyService = {
   },
 
   async list(query: ListLoyaltyQuery) {
-    const [rows, threshold] = await Promise.all([
-      loyaltyRepository.list(query),
+    const [result, threshold] = await Promise.all([
+      loyaltyRepository.list({
+        eligibleOnly: query.eligibleOnly,
+        memberOnly: query.memberOnly,
+        q: query.q,
+        pagination: query,
+      }),
       loyaltyRepository.threshold(),
     ]);
-    // Not paginated: the eligibility flag is computed by the view, so filtering
-    // has to happen after the fetch. A salon has hundreds of clients, not
-    // millions, and the desk wants the whole eligible list in one go anyway.
-    return {
-      data: rows.map((r) => toLoyaltyDto(r, threshold)),
-      meta: { total: rows.length, threshold },
-    };
+    // `threshold` travels with the page because the desk needs it to render
+    // "2 more visits to earn 3%" on every row, and a second round trip per
+    // page load to learn a value that changes once a year is not worth it.
+    const page = paginated(
+      result.rows.map((r) => toLoyaltyDto(r, threshold)),
+      result.total,
+      query.page,
+      query.limit
+    );
+    return { ...page, meta: { ...page.meta, threshold } };
   },
 
   async promote(clientId: string, input: PromoteClientInput, actorId: string | null) {

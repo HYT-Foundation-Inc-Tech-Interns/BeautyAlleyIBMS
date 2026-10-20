@@ -1,6 +1,5 @@
 import { requireServiceRole } from "../../db/supabase";
 import { toRange, type Pagination } from "../../lib/pagination";
-import type { BookingStatus } from "../../types/database";
 import type { ListBookingsQuery, MyBookingsQuery } from "./bookings.schemas";
 
 /**
@@ -36,6 +35,8 @@ export interface BookingDetailRow {
   room_name: string | null;
   room_type: string | null;
   member_discount_percent: number | null;
+  /** Migration 32. Empty array when the booking has no service rows. */
+  service_ids: string[];
 }
 
 export interface BookingItemRow {
@@ -59,7 +60,7 @@ export interface BookingNoteRow {
 const NOTE_SELECT = "id, booking_id, author_id, body, visible_to_client, created_at" as const;
 
 const DETAIL_SELECT =
-  "id, reference, status, start_time, end_time, employee_id, employee_name, client_id, client_name, guest_name, guest_phone, subtotal_cents, discount_cents, total_cents, promo_code_id, notes, created_at, updated_at, room_id, room_name, room_type, member_discount_percent" as const;
+  "id, reference, status, start_time, end_time, employee_id, employee_name, client_id, client_name, guest_name, guest_phone, subtotal_cents, discount_cents, total_cents, promo_code_id, notes, created_at, updated_at, room_id, room_name, room_type, member_discount_percent, service_ids" as const;
 
 export const bookingsRepository = {
   async getById(id: string): Promise<BookingDetailRow | null> {
@@ -80,6 +81,37 @@ export const bookingsRepository = {
     return (data ?? []) as BookingItemRow[];
   },
 
+  /**
+   * The same rows for a whole page of bookings, in one query.
+   *
+   * The list endpoints used to omit items entirely, so `items` was `[]` on
+   * every row they returned. Every consumer then rendered "—" where the
+   * treatment goes and summed the durations to 0 — the run sheet said "0 min"
+   * for every booking on it. Loading them per row would have been an N+1; this
+   * is one `IN (...)` for the page.
+   */
+  async itemsForMany(bookingIds: string[]): Promise<Map<string, BookingItemRow[]>> {
+    const grouped = new Map<string, BookingItemRow[]>();
+    if (bookingIds.length === 0) return grouped;
+
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("booking_items")
+      .select(
+        "id, booking_id, service_id, employee_id, name_snapshot, price_cents_snapshot, duration_minutes_snapshot"
+      )
+      .in("booking_id", bookingIds)
+      .order("name_snapshot");
+    if (error) throw error;
+
+    for (const row of (data ?? []) as (BookingItemRow & { booking_id: string })[]) {
+      const list = grouped.get(row.booking_id);
+      if (list) list.push(row);
+      else grouped.set(row.booking_id, [row]);
+    }
+    return grouped;
+  },
+
   async list(
     query: ListBookingsQuery
   ): Promise<{ rows: BookingDetailRow[]; total: number }> {
@@ -90,6 +122,10 @@ export const bookingsRepository = {
     if (query.status) q = q.eq("status", query.status);
     if (query.employeeId) q = q.eq("employee_id", query.employeeId);
     if (query.clientId) q = q.eq("client_id", query.clientId);
+    // Migration 32 added `service_ids` to the view for exactly this. The filter
+    // used to be validated and then dropped on the floor, so a caller asking
+    // for one treatment silently got every booking.
+    if (query.serviceId) q = q.contains("service_ids", [query.serviceId]);
     if (query.from) q = q.gte("start_time", `${query.from}T00:00:00Z`);
     if (query.to) q = q.lte("start_time", `${query.to}T23:59:59Z`);
     if (query.q) {
@@ -187,18 +223,15 @@ export const bookingsRepository = {
     return data;
   },
 
-  /** Direct status write. The database trigger is what actually validates it. */
-  async setStatus(bookingId: string, status: BookingStatus) {
-    const db = requireServiceRole();
-    const { data, error } = await db
-      .from("bookings")
-      .update({ status })
-      .eq("id", bookingId)
-      .select("id, reference, status, updated_at")
-      .maybeSingle();
-    if (error) throw error;
-    return data;
-  },
+  /**
+   * There is deliberately no `setStatus` here.
+   *
+   * A direct `update({ status })` cannot express cancellation (the table
+   * requires `cancelled_at` to be set in the same statement) and writes no
+   * audit row. Both live in SQL now: `cancel_booking()` and
+   * `set_booking_status()`. Reintroducing a direct writer would reintroduce
+   * the bug.
+   */
 
   async countAll(): Promise<number> {
     const db = requireServiceRole();
@@ -300,6 +333,20 @@ export const bookingsRepository = {
     });
     if (error) throw error;
     return data as { bookingId: string; roomId: string | null; roomType: string | null };
+  },
+
+  // --- migration 39: the desk choosing the stylist -------------------------
+
+  /** Delegates to reassign_booking_employee() so every rule and the audit apply. */
+  async setEmployee(bookingId: string, employeeId: string, actorId: string | null) {
+    const db = requireServiceRole();
+    const { data, error } = await db.rpc("reassign_booking_employee", {
+      p_booking_id: bookingId,
+      p_employee_id: employeeId,
+      p_actor: actorId,
+    });
+    if (error) throw error;
+    return data as { bookingId: string; employeeId: string };
   },
 };
 

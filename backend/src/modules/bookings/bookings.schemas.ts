@@ -108,6 +108,17 @@ export const setRoomSchema = z.object({
   roomId: z.string().uuid().nullable(),
 });
 
+/**
+ * Desk override of the stylist.
+ *
+ * Clients do not choose one when they book - the server assigns a qualified,
+ * rostered, free stylist at random - so this is the only way a named stylist
+ * is ever attached to a self-service booking.
+ */
+export const assignEmployeeSchema = z.object({
+  employeeId: z.string().uuid("Choose a stylist"),
+});
+
 export const myBookingsQuerySchema = paginationSchema.extend({
   status: bookingStatus.optional(),
   upcoming: z.coerce.boolean().default(false),

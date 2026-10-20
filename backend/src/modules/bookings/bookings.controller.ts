@@ -62,4 +62,13 @@ export const bookingsController = {
     const result = await bookingsService.setRoom(req.params.id, req.body.roomId, req.actor as Actor);
     res.status(200).json({ data: result });
   },
+
+  async setEmployee(req: Request, res: Response) {
+    const result = await bookingsService.setEmployee(
+      req.params.id,
+      req.body.employeeId,
+      req.actor as Actor
+    );
+    res.status(200).json({ data: result });
+  },
 };

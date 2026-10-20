@@ -30,7 +30,13 @@ export default async function globalSetup() {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { Client } = require("pg");
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { seed } = require("../scripts/seed.js");
+  const { seed, databaseHost } = require("../scripts/seed.js");
+
+  // Say out loud which database is about to be truncated. The seed guard
+  // refuses NODE_ENV=production, but a test run pointed at the wrong hosted
+  // project is the realistic accident, and this line is how it gets noticed.
+  // eslint-disable-next-line no-console
+  console.log(`[globalSetup] seeding ${databaseHost()}`);
 
   const client = new Client({
     connectionString: process.env.DATABASE_URL,

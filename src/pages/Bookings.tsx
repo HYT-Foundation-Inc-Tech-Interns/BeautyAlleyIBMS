@@ -18,15 +18,18 @@
  */
 
 import * as React from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   Filter,
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
+  UserRound,
   X,
 } from "lucide-react";
 
@@ -81,9 +84,24 @@ function useDebounced<T>(value: T, ms = 300) {
 }
 
 export default function Bookings() {
-  const [range, setRange] = React.useState<Range>("upcoming");
-  const [status, setStatus] = React.useState<BookingStatus | "">("");
-  const [term, setTerm] = React.useState("");
+  /*
+   * Seeded from the URL once, on mount, so another page can hand this one a
+   * question instead of a bare page: `/app/bookings?range=all&q=BA-1A2B` opens
+   * on that booking. Only the first read is taken — after that the controls own
+   * the state, because a URL that keeps overwriting what you type is worse than
+   * one that is a moment out of date.
+   */
+  const [params] = useSearchParams();
+  const seedRange = params.get("range");
+  const seedStatus = params.get("status");
+
+  const [range, setRange] = React.useState<Range>(() =>
+    RANGES.some((r) => r.id === seedRange) ? (seedRange as Range) : "upcoming",
+  );
+  const [status, setStatus] = React.useState<BookingStatus | "">(() =>
+    STATUSES.includes(seedStatus as BookingStatus) ? (seedStatus as BookingStatus) : "",
+  );
+  const [term, setTerm] = React.useState(() => params.get("q") ?? "");
   const [page, setPage] = React.useState(1);
   const q = useDebounced(term);
 
@@ -221,7 +239,7 @@ export default function Bookings() {
 
       {actionError && <ErrorNote error={actionError} />}
 
-      {/* --------------------------------------------------------- table */}
+      {/* --------------------------------------------------------- records */}
       {list.error ? (
         <ErrorNote error={list.error} onRetry={list.reload} />
       ) : list.initial ? (
@@ -255,140 +273,137 @@ export default function Bookings() {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-soft">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-border/70 bg-sand-50">
-                  {["When", "Who", "Treatment", "Stylist", "Total", "Status", ""].map((heading, i) => (
-                    <th
-                      key={heading || `col-${i}`}
-                      className={cn(
-                        "px-3 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground",
-                        i === 0 && "pl-5",
-                        i === 6 && "pr-5 text-right",
-                      )}
-                    >
-                      {heading}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((booking) => {
-                  const who = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
-                  const next = NEXT_STATUS[booking.status];
-                  return (
-                    <tr key={booking.id} className="border-b border-border/60 last:border-0">
-                      <td className="py-3.5 pl-5 pr-3">
-                        <p className="text-[12.5px] font-semibold tabular-nums">
-                          {branchTime(booking.startTime)}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {branchDay(booking.startTime)}
-                        </p>
-                      </td>
+        /*
+         * Cards, not a table. The console's home page already reads as a stack
+         * of appointment cards, and the same row is the right shape here: a
+         * table forced six columns into 900px, which pushed the reference and
+         * the treatment into each other on a laptop. The card wraps instead of
+         * overflowing, and a row means the same thing on both pages.
+         */
+        <ol className="space-y-3">
+          {rows.map((booking) => {
+            const who = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
+            const next = NEXT_STATUS[booking.status];
+            return (
+              <li
+                key={booking.id}
+                className="flex flex-wrap items-center gap-4 rounded-xl border border-border/80 bg-card p-5 shadow-soft"
+              >
+                <span className="flex min-w-[70px] flex-col rounded-lg bg-sand-50 px-3 py-2 text-center">
+                  <span className="font-display text-[16px] font-semibold leading-none tabular-nums">
+                    {branchTime(booking.startTime)}
+                  </span>
+                  <span className="mt-1 text-[10px] text-muted-foreground">
+                    {branchDay(booking.startTime)}
+                  </span>
+                </span>
 
-                      <td className="px-3 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <PersonAvatar name={who} className="size-8 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="truncate text-[12.5px] font-medium">{who}</p>
-                            <p className="truncate font-mono text-[10.5px] text-muted-foreground">
-                              {booking.reference}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
+                <PersonAvatar name={who} className="size-10 shrink-0" />
 
-                      <td className="max-w-[220px] px-3 py-3.5">
-                        <p className="truncate text-[12.5px]">
-                          {booking.items.map((i) => i.name).join(", ") || "—"}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {booking.items.reduce((n, i) => n + i.durationMinutes, 0)} min
-                        </p>
-                      </td>
+                <div className="min-w-[190px] flex-1">
+                  <div className="flex flex-wrap items-baseline gap-x-2.5">
+                    <p className="font-display text-[17px] font-semibold leading-tight tracking-tight">
+                      {who}
+                    </p>
+                    <span className="font-mono text-[10.5px] text-muted-foreground">
+                      {booking.reference}
+                    </span>
+                  </div>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Sparkles className="size-3" />
+                      {booking.items.map((i) => i.name).join(", ") || "—"}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <UserRound className="size-3" />
+                      {booking.employee.fullName}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock3 className="size-3" />
+                      {booking.items.reduce((n, i) => n + i.durationMinutes, 0)} min
+                    </span>
+                  </p>
+                  {booking.notes && (
+                    <p className="mt-1.5 truncate text-[11.5px] text-champagne-600">
+                      Note: {booking.notes}
+                    </p>
+                  )}
+                </div>
 
-                      <td className="px-3 py-3.5 text-[12.5px]">{booking.employee.fullName}</td>
+                <div className="shrink-0 text-right">
+                  <p className="text-[13px] font-medium tabular-nums">
+                    {peso(booking.totalCents)}
+                  </p>
+                  {booking.discountCents > 0 && (
+                    <p className="text-[10.5px] text-primary">
+                      −{peso(booking.discountCents)}
+                    </p>
+                  )}
+                </div>
 
-                      <td className="px-3 py-3.5">
-                        <span className="text-[12.5px] font-medium tabular-nums">
-                          {peso(booking.totalCents)}
-                        </span>
-                        {booking.discountCents > 0 && (
-                          <span className="block text-[10.5px] text-alley-600">
-                            −{peso(booking.discountCents)}
-                          </span>
-                        )}
-                      </td>
+                <StatusBadge status={booking.status} />
 
-                      <td className="px-3 py-3.5">
-                        <StatusBadge status={booking.status} />
-                      </td>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  {next.length === 0 ? (
+                    <span className="text-[11.5px] text-muted-foreground">Settled</span>
+                  ) : (
+                    next.slice(0, 2).map((s, index) => {
+                      const destructive = s === "NO_SHOW" || s === "CANCELLED";
+                      return (
+                        <Button
+                          key={s}
+                          size="sm"
+                          // The forward move is the loud one, as on the run
+                          // sheet: two identical buttons make the desk read
+                          // both before choosing, which is the cost this list
+                          // exists to avoid.
+                          variant={destructive ? "ghost" : index === 0 ? "default" : "outline"}
+                          className={cn(destructive && "text-clay hover:bg-clay/10")}
+                          disabled={busyId === booking.id}
+                          onClick={() => advance(booking, s)}
+                        >
+                          {STATUS_LABEL[s]}
+                        </Button>
+                      );
+                    })
+                  )}
+                  {booking.client === null && booking.status !== "CANCELLED" && (
+                    <Button asChild size="sm" variant="ghost">
+                      <Link to={`/pass/${booking.id}`}>Pass</Link>
+                    </Button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
 
-                      <td className="py-3.5 pl-3 pr-5">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          {next.length === 0 ? (
-                            <span className="text-[11px] text-muted-foreground">Settled</span>
-                          ) : (
-                            next.slice(0, 2).map((s) => (
-                              <Button
-                                key={s}
-                                size="sm"
-                                variant={s === "NO_SHOW" || s === "CANCELLED" ? "ghost" : "outline"}
-                                className={cn(
-                                  (s === "NO_SHOW" || s === "CANCELLED") &&
-                                    "text-clay hover:bg-clay/10",
-                                )}
-                                disabled={busyId === booking.id}
-                                onClick={() => advance(booking, s)}
-                              >
-                                {STATUS_LABEL[s]}
-                              </Button>
-                            ))
-                          )}
-                          {booking.client === null && booking.status !== "CANCELLED" && (
-                            <Button asChild size="sm" variant="ghost">
-                              <Link to={`/pass/${booking.id}`}>Pass</Link>
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {meta && meta.totalPages > 1 && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-border/80 bg-card px-5 py-3.5 shadow-soft">
+          <p className="text-[12px] text-muted-foreground">
+            Page {meta.page} of {meta.totalPages} · {meta.total} bookings
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!meta.hasPrev}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="size-3.5" />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!meta.hasNext}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+              <ChevronRight className="size-3.5" />
+            </Button>
           </div>
-
-          {meta && meta.totalPages > 1 && (
-            <div className="flex items-center justify-between gap-4 border-t border-border/70 px-5 py-3.5">
-              <p className="text-[12px] text-muted-foreground">
-                Page {meta.page} of {meta.totalPages} · {meta.total} bookings
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!meta.hasPrev}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="size-3.5" />
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!meta.hasNext}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                  <ChevronRight className="size-3.5" />
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

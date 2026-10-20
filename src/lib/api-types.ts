@@ -113,6 +113,14 @@ export interface Me {
  * Catalogue
  * ------------------------------------------------------------------ */
 
+/** The second catalogue level, e.g. "IV Drips". */
+export interface ServiceSubcategory {
+  id: string;
+  slug: string;
+  name: string;
+  category: ServiceCategory;
+}
+
 export interface Service {
   id: string;
   name: string;
@@ -120,6 +128,23 @@ export interface Service {
   description: string | null;
   priceCents: number;
   durationMinutes: number;
+  /**
+   * The catalogue group. `null` means the salon floor — a haircut, a colour —
+   * which has no subcategory because it is the default rather than a
+   * classification.
+   */
+  subcategory: ServiceSubcategory | null;
+  subcategoryId?: string | null;
+  /**
+   * The formulation as a display string, e.g. "Glutathione, Vitamin C".
+   *
+   * `null` together with `ingredientsVerified: false` means the salon has not
+   * confirmed it. The UI must say so rather than invent a list — see
+   * `Services.tsx`.
+   */
+  ingredients: string | null;
+  ingredientsVerified: boolean;
+  requiredRoomType?: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -214,10 +239,21 @@ export interface Booking {
   subtotalCents: number;
   discountCents: number;
   totalCents: number;
+  /** Null when the treatment needs no room, and for pre-migration-17 bookings. */
+  room: { id: string; name: string; type: string } | null;
+  /** The member rate this booking was priced at. 0 for non-members. */
+  memberDiscountPercent: number;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
   items: BookingItem[];
+  /**
+   * The service ids on this booking, denormalised onto the detail view in
+   * migration 32. `items` carries the same information but only when the API
+   * has loaded them, and `items[].serviceId` is nullable for services that
+   * were deleted after the booking was made — this array never is.
+   */
+  serviceIds: string[];
   /** Only returned by create/reschedule — the pass is re-issuable via `/qr`. */
   qr?: QrPass;
 }
@@ -347,4 +383,118 @@ export interface AuditLog {
   entityId: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Attendance
+ * ------------------------------------------------------------------ */
+
+/** Mirrors `public.attendance_status`. */
+export type AttendanceStatus = "PRESENT" | "HALF_DAY" | "LEAVE" | "ABSENT";
+
+export const ATTENDANCE_STATUSES: AttendanceStatus[] = ["PRESENT", "HALF_DAY", "LEAVE", "ABSENT"];
+
+export interface AttendanceRecord {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  /** `YYYY-MM-DD` in the branch timezone. A calendar day, not an instant. */
+  date: string;
+  timeIn: string;
+  /** Null while the session is still open. */
+  timeOut: string | null;
+  status: AttendanceStatus;
+  remarks: string | null;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  /** Null until the session closes — "not finished" is not "zero hours". */
+  minutesWorked: number | null;
+  hoursWorked: number | null;
+  /** Minutes past the rostered start, or null when no shift is configured. */
+  minutesLate: number | null;
+  late: boolean;
+  /** True while clocked in and not yet clocked out. */
+  open: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AttendanceTotals {
+  present: number;
+  halfDay: number;
+  leave: number;
+  absent: number;
+  /** Sessions still open right now. */
+  open: number;
+  /** Only closed sessions contribute to the hours. */
+  completedDays: number;
+  totalMinutes: number;
+  totalHours: number;
+  averageHours: number | null;
+}
+
+export interface AttendanceSummary {
+  from: string;
+  to: string;
+  employeeId: string | null;
+  totals: AttendanceTotals;
+  byDay: { day: string; records: number; minutes: number; hours: number }[];
+}
+
+/** The caller's own standing today, and which button should be live. */
+export interface AttendanceToday {
+  employeeId: string | null;
+  date: string;
+  record: AttendanceRecord | null;
+  clockedIn: boolean;
+  canClockIn: boolean;
+  canClockOut: boolean;
+  /** A sentence to show under the button, so the UI never has to guess. */
+  reason: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Tasks
+ * ------------------------------------------------------------------ */
+
+/** Mirrors `public.task_priority`. */
+export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+
+export const TASK_PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+
+/** Mirrors `public.task_status`. */
+export type TaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+
+export const TASK_STATUSES: TaskStatus[] = ["PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
+
+export interface Task {
+  id: string;
+  /** The human-readable id the UI shows as "Task ID", e.g. `TASK-0007`. */
+  reference: string;
+  number: number;
+  title: string;
+  description: string | null;
+  employeeId: string;
+  employeeName: string;
+  assignedById: string | null;
+  assignedBy: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  dueAt: string | null;
+  instructions: string | null;
+  completionNotes: string | null;
+  completedAt: string | null;
+  /** Late and still open. Computed in SQL so both dashboards agree. */
+  overdue: boolean;
+  /** What this task may become next — mirrors the DB trigger. */
+  nextStatuses: TaskStatus[];
+  assignedAt: string;
+  updatedAt: string;
+}
+
+export interface TaskCounts {
+  pending: number;
+  inProgress: number;
+  overdue: number;
+  completed: number;
 }

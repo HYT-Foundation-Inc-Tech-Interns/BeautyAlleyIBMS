@@ -13,7 +13,7 @@ export const employeesController = {
   },
 
   async create(req: Request, res: Response) {
-    const result = await employeesService.create(req.body);
+    const result = await employeesService.create(req.body, req.actor?.id ?? null);
     res.status(201).json({ data: result });
   },
 

@@ -203,14 +203,39 @@ export const roomsRepository = {
    * Bookings that would make this room unusable right now - the reason a
    * decommission is refused.
    */
+  /**
+   * Deactivate through `deactivate_room()` (migration 34), which re-checks for
+   * unfinished bookings under a row lock and writes the audit row. Passing
+   * `isActive: false` to `update()` instead would be a check-then-act race.
+   */
+  async deactivate(id: string, actorId: string | null): Promise<void> {
+    const db = requireServiceRole();
+    const { error } = await db.rpc("deactivate_room", {
+      p_room_id: id,
+      p_actor: actorId,
+    });
+    if (error) throw error;
+  },
+
+  /**
+   * How many bookings on this room have not finished yet.
+   *
+   * The four non-terminal statuses, rather than only PENDING and CONFIRMED: a
+   * client who is checked in and mid-treatment is very much using the room,
+   * and the old version of this query let the desk decommission it.
+   *
+   * Must stay in step with `deactivate_room()` in migration 34, which is the
+   * actual guard. This one exists only so the desk gets a message naming the
+   * room and the count instead of a generic conflict.
+   */
   async futureBookingsFor(roomId: string): Promise<number> {
     const db = requireServiceRole();
     const { count, error } = await db
       .from("bookings")
       .select("id", { count: "exact", head: true })
       .eq("room_id", roomId)
-      .in("status", ["PENDING", "CONFIRMED"] as unknown as RoomStatusColumn[])
-      .gte("end_time", new Date().toISOString());
+      .in("status", ["PENDING", "CONFIRMED", "CHECKED_IN", "IN_SERVICE"] as unknown as RoomStatusColumn[])
+      .gt("end_time", new Date().toISOString());
     if (error) throw error;
     return count ?? 0;
   },

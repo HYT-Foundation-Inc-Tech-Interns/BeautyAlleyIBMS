@@ -28,10 +28,8 @@ import {
   Clock3,
   MapPin,
   QrCode,
-  Scissors,
   ShieldCheck,
   Sparkles,
-  Star,
 } from "lucide-react";
 
 import { cn, minutesToLabel, peso } from "@/lib/utils";
@@ -118,7 +116,18 @@ export default function Landing() {
           <PublicNavLinks className="ml-auto hidden lg:flex" />
 
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
-            {signedIn && (
+            {/*
+             * Two different doors, and they stay two different links.
+             *
+             * The home page is the public site; the console is a staff tool.
+             * Sending a signed-out visitor to `/app` only bounces them through
+             * the auth guard to `/login?next=/app`, which is the same page by a
+             * longer route - and it leaves a `next` parameter behind that makes
+             * the login look like a detour rather than the entrance. When
+             * signed in there is nothing to log into, so the link becomes the
+             * console instead.
+             */}
+            {signedIn ? (
               <Button
                 asChild
                 variant="ghost"
@@ -126,6 +135,15 @@ export default function Landing() {
                 className="hidden text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground sm:inline-flex"
               >
                 <Link to="/app">Open console</Link>
+              </Button>
+            ) : (
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="hidden text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground sm:inline-flex"
+              >
+                <Link to="/login">Staff sign in</Link>
               </Button>
             )}
             <Button asChild size="sm" variant="champagne" className="h-9 px-5">
@@ -473,32 +491,7 @@ export default function Landing() {
               </li>
             </ul>
           </div>
-	  {/*---
-          <div>
-            <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              For the team
-            </h3>
-            <ul className="mt-4 space-y-2.5 text-[13px]">
-              <li>
-                <Link
-                  to="/login"
-                  className="inline-flex items-center gap-1.5 text-foreground/75 transition-colors hover:text-primary"
-                >
-                  <Scissors className="size-3.5" /> Staff sign in
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/register"
-                  className="inline-flex items-center gap-1.5 text-foreground/75 transition-colors hover:text-primary"
-                >
-                  <Star className="size-3.5" /> Create an account
-                </Link>
-              </li>
-            </ul>
-          </div>
-          ---*/}
-	</div>
+        </div>
 
 	<div className="border-t border-border/70">
           <div className="container flex flex-wrap items-center justify-between gap-3 py-6 text-[12px] text-muted-foreground">

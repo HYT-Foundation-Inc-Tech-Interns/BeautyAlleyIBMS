@@ -3,6 +3,21 @@ import { toRange, type Pagination } from "../../lib/pagination";
 import type { Database } from "../../types/database";
 import type { CreateServiceInput, UpdateServiceInput } from "./services.schemas";
 
+/**
+ * The second catalogue level, embedded rather than fetched separately.
+ *
+ * A service belongs to at most one subcategory, and the catalogue page needs
+ * the *name* to group by — so it is joined here instead of making the client
+ * fetch the subcategory list and stitch the two together. One request, one
+ * source of truth for what "IV Drips" is called.
+ */
+export interface ServiceSubcategoryRef {
+  id: string;
+  slug: string;
+  name: string;
+  category: "SPA" | "SALON" | "WELLNESS";
+}
+
 export interface ServiceRow {
   id: string;
   name: string;
@@ -14,6 +29,15 @@ export interface ServiceRow {
   required_room_type: string | null;
   /** Migration 17. Second catalogue level. */
   subcategory_id: string | null;
+  /** Migration 22. NULL when the salon has not confirmed the formulation. */
+  ingredients: string | null;
+  /**
+   * Migration 23. When false, `ingredients` is NULL and the catalogue must say
+   * the formulation is being confirmed rather than guess one.
+   */
+  ingredients_verified: boolean;
+  /** Embedded by the select below; NULL for the salon floor services. */
+  subcategory: ServiceSubcategoryRef | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -27,7 +51,7 @@ export interface ServiceRow {
  * literal type is what makes the inference work.
  */
 const SELECT =
-  "id, name, category, description, price_cents, duration_minutes, required_room_type, subcategory_id, is_active, created_at, updated_at" as const;
+  "id, name, category, description, price_cents, duration_minutes, required_room_type, subcategory_id, ingredients, ingredients_verified, is_active, created_at, updated_at, subcategory:service_subcategories(id, slug, name, category)" as const;
 
 type ServiceUpdate = Database["public"]["Tables"]["services"]["Update"];
 

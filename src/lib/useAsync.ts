@@ -39,9 +39,28 @@ export function useAsync<T>(key: string, fn: () => Promise<T>): AsyncState<T> {
   const fnRef = React.useRef(fn);
   fnRef.current = fn;
 
+  // Which key the data currently on screen belongs to.
+  const keyRef = React.useRef(key);
+
   React.useEffect(() => {
     const ticket = ++seen.current;
+    const keyChanged = keyRef.current !== key;
+    keyRef.current = key;
+
     setLoading(true);
+
+    // A new key means a different record. Keeping the previous result visible
+    // while the next request is in flight showed the *old* client's details
+    // under the newly selected one - the stale-detail bug on the clients and
+    // team pages, where a slow response left the wrong person on screen with
+    // nothing to indicate it was stale.
+    //
+    // Deliberately only on a key change: `reload()` keeps the current rows up
+    // so a refresh does not blank the table.
+    if (keyChanged) {
+      setData(null);
+      setError(null);
+    }
 
     fnRef
       .current()

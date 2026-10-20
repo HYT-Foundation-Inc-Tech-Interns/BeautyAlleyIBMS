@@ -167,6 +167,25 @@ async function main() {
       }
 
       if (account.clientId) {
+        /*
+         * Detach first, then attach.
+         *
+         * `clients.profile_id` is UNIQUE. A demo client who has ever signed up
+         * through the app gets a clients row created for them automatically, so
+         * by the time this script runs there can already be a *different* row
+         * holding this profile id. Setting it on the seeded row then fails with
+         * 23505 and the whole run aborts - which is exactly how the Concierge
+         * account ended up half-created and unable to sign in.
+         *
+         * Clearing the stale link is safe: the row itself is kept, along with
+         * every booking hanging off it. Only the "this profile owns me"
+         * pointer moves to the canonical seeded row.
+         */
+        await db.query(
+          `update public.clients set profile_id = null where profile_id = $1 and id <> $2`,
+          [userId, account.clientId]
+        );
+
         const res = await db.query(
           `update public.clients set profile_id = $1, email = $2 where id = $3`,
           [userId, account.email, account.clientId]
@@ -254,7 +273,7 @@ async function main() {
   }
 
   log(`${c.bold}${c.green}All demo accounts ready.${c.reset}`);
-  log(`Password for all three: ${c.cyan}${demo.password}${c.reset}`);
+  log(`Password for all ${demo.accounts.length}: ${c.cyan}${demo.password}${c.reset}`);
 }
 
 if (require.main === module) {

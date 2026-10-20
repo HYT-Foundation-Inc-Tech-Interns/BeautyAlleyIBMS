@@ -21,6 +21,27 @@ export function toServiceDto(row: ServiceRow) {
     // second call, and so the admin table can show what is still unassigned.
     requiredRoomType: row.required_room_type,
     subcategoryId: row.subcategory_id,
+    /** The group the catalogue renders this under. NULL = the salon floor. */
+    subcategory: row.subcategory
+      ? {
+          id: row.subcategory.id,
+          slug: row.subcategory.slug,
+          name: row.subcategory.name,
+          category: row.subcategory.category,
+        }
+      : null,
+    /**
+     * The formulation, and whether it is confirmed.
+     *
+     * Both are sent, and the pair is the point: `ingredients: null` with
+     * `ingredientsVerified: false` means "we do not know yet, do not guess",
+     * which is a different statement from a service that genuinely has none.
+     * The catalogue is what turns that into a sentence — the API does not
+     * invent a placeholder string, because a placeholder in the payload is one
+     * careless render away from being shown as fact.
+     */
+    ingredients: row.ingredients,
+    ingredientsVerified: row.ingredients_verified,
     isActive: row.is_active,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),

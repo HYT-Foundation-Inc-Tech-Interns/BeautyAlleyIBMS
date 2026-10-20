@@ -26,8 +26,25 @@ describeQr("QR check-in", () => {
    */
   const placedBookings: string[] = [];
 
+  /**
+   * Active stylists, EMP_ANA first.
+   *
+   * `placeBooking` rotates through these when the requested slot is taken. The
+   * pass, the check-in window and the booking's status are what authorise a
+   * check-in - not whose chair it is - so moving to a free stylist keeps every
+   * time-based assertion (inside the window, too early, too late, replayed)
+   * exactly as intended while removing a collision that has nothing to do with
+   * what is being tested.
+   */
+  let candidateEmployees: string[] = [];
+
   beforeAll(async () => {
     await connectDb();
+    const { rows } = await db().query(
+      `select id from public.employees where is_active order by (id = $1) desc, id`,
+      [EMP_ANA]
+    );
+    candidateEmployees = rows.map((r: { id: string }) => r.id);
   });
 
   afterEach(async () => {
@@ -62,19 +79,50 @@ describeQr("QR check-in", () => {
    *     instead of the pass it means to replay. Cancelling afterwards - status
    *     plus token revocation, exactly as `cancel_booking` does it - gives the
    *     test a genuine, revoked pass.
+   *
+   * The insert is retried on the next stylist if the slot is taken. Guest
+   * bookings have no `client_id`, so they do not cascade away when a suite
+   * deletes its test users - which means a booking left behind by an earlier
+   * suite (or a demo grid covering today) can occupy the exact window this
+   * suite asks for. That is a collision with someone else's fixture, not a
+   * property of check-in, so it is resolved by moving rather than by failing.
    */
   async function placeBooking(opts: { startInMinutes: number; durationMinutes?: number; status?: string }) {
     const start = new Date(Date.now() + opts.startInMinutes * 60_000);
     const end = new Date(start.getTime() + (opts.durationMinutes ?? 60) * 60_000);
-    const { rows } = await db().query(
-      `insert into public.bookings
-         (reference, guest_name, guest_phone, employee_id, start_time, end_time, status,
-          subtotal_cents, discount_cents, total_cents)
-       values ($1, 'QR Guest', '+639190000001', $2, $3, $4, 'CONFIRMED', 250000, 0, 250000)
-       returning id`,
-      [`BA-QR-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, EMP_ANA, start.toISOString(), end.toISOString()]
-    );
-    const bookingId = rows[0].id as string;
+
+    let bookingId: string | undefined;
+    let lastError: unknown;
+
+    for (const employeeId of candidateEmployees.length ? candidateEmployees : [EMP_ANA]) {
+      try {
+        const { rows } = await db().query(
+          `insert into public.bookings
+             (reference, guest_name, guest_phone, employee_id, start_time, end_time, status,
+              subtotal_cents, discount_cents, total_cents)
+           values ($1, 'QR Guest', '+639190000001', $2, $3, $4, 'CONFIRMED', 250000, 0, 250000)
+           returning id`,
+          [
+            `BA-QR-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            employeeId,
+            start.toISOString(),
+            end.toISOString(),
+          ]
+        );
+        bookingId = rows[0].id as string;
+        break;
+      } catch (err) {
+        // 23P01: every stylist is busy in this exact window.
+        if ((err as { code?: string }).code === "23P01") {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (!bookingId) throw lastError ?? new Error("placeBooking found no free stylist");
+
     placedBookings.push(bookingId);
 
     await db().query(

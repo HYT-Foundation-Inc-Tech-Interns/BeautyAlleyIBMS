@@ -25,6 +25,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import {
   ArrowRight,
   CalendarDays,
+  Check,
   CheckCircle2,
   Clock3,
   RefreshCw,
@@ -34,8 +35,8 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { branchTime, branchToday, cn, peso, relativeToNow, shiftDayKey } from "@/lib/utils";
-import { api, ApiError, NEXT_STATUS } from "@/lib/api";
+import { branchDay, branchTime, branchToday, cn, peso, relativeToNow, shiftDayKey } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Badge } from "@/components/ui/badge";
@@ -65,9 +66,25 @@ function AdminOverview() {
 
   const summary = useAsync(`overview:dashboard:${from}:${to}`, () => api.admin.dashboard(from, to));
 
+  /*
+   * `created_at`, not `start_time`.
+   *
+   * Sorting by appointment time descending returns the *furthest-future*
+   * bookings - the ones made weeks ago for a date nobody has thought about
+   * since - and calls them "latest". What an owner opening the console wants
+   * is what came in just now, which is a question about `created_at`. The
+   * appointment time is still on the row, so both readings are available.
+   */
   const recent = useAsync("overview:recent", async () =>
-    (await api.admin.bookings({ limit: 8, sort: "start_time", order: "desc" })).data,
+    (await api.admin.bookings({ limit: 8, sort: "created_at", order: "desc" })).data,
   );
+
+  /** One button, one refresh. Reloading the totals and leaving the list stale
+   *  (or the reverse) is how a page ends up disagreeing with itself. */
+  function refreshAll() {
+    summary.reload();
+    recent.reload();
+  }
 
   const totals = summary.data?.totals;
   const noShowRate = totals && totals.bookings > 0 ? (totals.noShow / totals.bookings) * 100 : 0;
@@ -105,7 +122,7 @@ function AdminOverview() {
                 </button>
               ))}
             </div>
-            <Button variant="outline" size="icon" aria-label="Refresh" onClick={summary.reload}>
+            <Button variant="outline" size="icon" aria-label="Refresh" onClick={refreshAll}>
               <RefreshCw className="size-4" />
             </Button>
           </div>
@@ -304,10 +321,15 @@ function RecentBookings({
   return (
     <section className="rounded-xl border border-border/80 bg-card shadow-soft">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-6 py-4">
-        <h2 className="font-display text-[19px] font-semibold tracking-tight">Latest bookings</h2>
+        <div className="min-w-0">
+          <h2 className="font-display text-[19px] font-semibold tracking-tight">Just booked</h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Newest reservations first — the appointment itself may be weeks out.
+          </p>
+        </div>
         <Link
-          to="/app/bookings"
-          className="inline-flex items-center gap-1.5 text-[12.5px] text-primary hover:underline"
+          to="/app/bookings?range=all"
+          className="inline-flex shrink-0 items-center gap-1.5 text-[12.5px] text-primary hover:underline"
         >
           Open the full record
           <ArrowRight className="size-3.5" />
@@ -322,9 +344,23 @@ function RecentBookings({
         ) : state.data && state.data.length > 0 ? (
           <ul className="divide-y divide-border/60">
             {state.data.map((booking) => (
-              <li key={booking.id} className="flex flex-wrap items-center gap-4 px-2 py-3.5">
-                <span className="w-16 shrink-0 text-[12.5px] font-semibold tabular-nums text-muted-foreground">
-                  {branchTime(booking.startTime)}
+              /*
+               * The row is the target, not a link buried at the end of it. The
+               * overlay navigates into the record pre-filtered to this booking's
+               * reference, so clicking a row lands on that row rather than on a
+               * list of everything.
+               */
+              <li
+                key={booking.id}
+                className="relative flex flex-wrap items-center gap-4 rounded-lg px-2 py-3.5 transition-colors hover:bg-primary/[0.035]"
+              >
+                <span className="flex w-[92px] shrink-0 flex-col leading-tight">
+                  <span className="whitespace-nowrap text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
+                    {branchDay(booking.startTime)}
+                  </span>
+                  <span className="mt-1 text-[13px] font-semibold tabular-nums">
+                    {branchTime(booking.startTime)}
+                  </span>
                 </span>
                 <PersonAvatar
                   name={booking.client?.fullName ?? booking.guest?.name ?? "Guest"}
@@ -335,7 +371,9 @@ function RecentBookings({
                     {booking.client?.fullName ?? booking.guest?.name ?? "Guest booking"}
                   </p>
                   <p className="truncate text-[11.5px] text-muted-foreground">
-                    {booking.items.map((i) => i.name).join(", ") || "—"} · {booking.employee.fullName}
+                    {booking.items.map((i) => i.name).join(", ") || "—"} ·{" "}
+                    {booking.employee.fullName} · booked{" "}
+                    {relativeToNow(booking.createdAt)}
                   </p>
                 </div>
                 <span className="font-mono text-[11px] text-muted-foreground">
@@ -345,6 +383,15 @@ function RecentBookings({
                   {peso(booking.totalCents)}
                 </span>
                 <StatusBadge status={booking.status} />
+                <Link
+                  to={`/app/bookings?range=all&q=${encodeURIComponent(booking.reference)}`}
+                  className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                >
+                  <span className="sr-only">
+                    Open booking {booking.reference} for{" "}
+                    {booking.client?.fullName ?? booking.guest?.name ?? "guest"}
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -364,7 +411,184 @@ function RecentBookings({
  * EMPLOYEE and CONCIERGE — the run sheet
  * ------------------------------------------------------------------ */
 
+/**
+ * The one move each status is actually waiting for.
+ *
+ * The state machine in `NEXT_STATUS` is wider than the run sheet needs: a
+ * PENDING booking legally has four successors, so rendering all of them puts
+ * four buttons on every row and turns a twenty-booking day into eighty
+ * decisions taken while standing up. The sheet shows the forward move — the
+ * thing that happens next — and "No-show", which only appears once the guest
+ * could actually fail to arrive.
+ *
+ * Cancel is deliberately absent: a cancellation is a correction to the record,
+ * made at a desk with the booking in front of you, not a step in the queue. It
+ * is still available on the full record at /app/bookings, where the same
+ * `PATCH /bookings/:id/status` enforces the same rules.
+ */
+const PRIMARY_MOVE: Partial<Record<BookingStatus, { to: BookingStatus; label: string }>> = {
+  PENDING: { to: "CONFIRMED", label: "Confirm" },
+  CONFIRMED: { to: "CHECKED_IN", label: "Arrived" },
+  CHECKED_IN: { to: "IN_SERVICE", label: "Seated" },
+  IN_SERVICE: { to: "COMPLETED", label: "Done" },
+};
+
+/**
+ * The desk's notification, and its override.
+ *
+ * A self-service booking arrives PENDING with a stylist already attached: the
+ * server picks at random from the people who are qualified, rostered and free
+ * at that time. The client never saw a name, so the desk is the first human to
+ * review the match — this card is where they see it, and the select beside
+ * each row is how they disagree.
+ *
+ * It renders only when something is waiting. An always-present panel reading
+ * "no new requests" trains the eye to skip it, which is the opposite of a
+ * notification.
+ */
+function NewRequests({ onChanged }: { onChanged: () => void }) {
+  const pending = useAsync("overview:requests", async () =>
+    (
+      await api.bookings.list({
+        status: "PENDING",
+        from: branchToday(),
+        limit: 20,
+        sort: "created_at",
+        order: "desc",
+      })
+    ).data,
+  );
+
+  const staff = useAsync("overview:requests:staff", async () =>
+    (await api.employees.list({ limit: 50 })).data,
+  );
+
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<ApiError | null>(null);
+
+  async function reassign(booking: Booking, employeeId: string) {
+    if (!employeeId || employeeId === booking.employee.id) return;
+    setBusyId(booking.id);
+    setError(null);
+    try {
+      await api.bookings.setEmployee(booking.id, employeeId);
+      pending.reload();
+      onChanged();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not change the stylist"),
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function confirm(booking: Booking) {
+    setBusyId(booking.id);
+    setError(null);
+    try {
+      await api.bookings.setStatus(booking.id, "CONFIRMED");
+      pending.reload();
+      onChanged();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not confirm that booking"),
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const rows = pending.data ?? [];
+  if (pending.error) return <ErrorNote error={pending.error} onRetry={pending.reload} />;
+  if (pending.initial || rows.length === 0) return null;
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.04] shadow-soft">
+      <div className="flex flex-wrap items-center gap-3 border-b border-primary/15 px-5 py-4">
+        <span className="flex size-9 items-center justify-center rounded-full bg-primary text-[13px] font-semibold tabular-nums text-primary-foreground">
+          {rows.length}
+        </span>
+        <div className="min-w-0">
+          <h2 className="font-display text-[19px] font-semibold leading-tight tracking-tight">
+            New requests
+          </h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Booked online with a stylist chosen for them. Change it, then confirm.
+          </p>
+        </div>
+        <Button variant="ghost" size="sm" className="ml-auto" onClick={pending.reload}>
+          <RefreshCw className="size-3.5" />
+          Refresh
+        </Button>
+      </div>
+
+      {error && <ErrorNote error={error} className="m-4" />}
+
+      <ul className="divide-y divide-border/60">
+        {rows.map((booking) => {
+          const guest = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
+          const known = staff.data?.some((person) => person.id === booking.employee.id) ?? true;
+          return (
+            <li key={booking.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+              <span className="flex min-w-[74px] shrink-0 flex-col leading-tight">
+                <span className="text-[12.5px] font-semibold tabular-nums">
+                  {branchTime(booking.startTime)}
+                </span>
+                <span className="text-[10.5px] text-muted-foreground">
+                  {branchDay(booking.startTime)}
+                </span>
+              </span>
+
+              <PersonAvatar name={guest} className="size-8 shrink-0" />
+
+              <div className="min-w-[150px] flex-1">
+                <p className="truncate text-[13px] font-medium">{guest}</p>
+                <p className="truncate text-[11.5px] text-muted-foreground">
+                  {booking.items.map((i) => i.name).join(", ") || "—"} · booked{" "}
+                  {relativeToNow(booking.createdAt)}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label htmlFor={`stylist-${booking.id}`} className="sr-only">
+                  Stylist for {guest}
+                </label>
+                <select
+                  id={`stylist-${booking.id}`}
+                  value={booking.employee.id}
+                  disabled={busyId === booking.id || !staff.data}
+                  onChange={(e) => void reassign(booking, e.target.value)}
+                  className="h-9 max-w-[190px] rounded-lg border border-border bg-card px-2.5 text-[12.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                >
+                  {!known && <option value={booking.employee.id}>{booking.employee.fullName}</option>}
+                  {staff.data?.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.fullName}
+                      {person.title ? ` — ${person.title}` : ""}
+                    </option>
+                  ))}
+                </select>
+
+                <Button
+                  size="sm"
+                  disabled={busyId === booking.id}
+                  onClick={() => void confirm(booking)}
+                >
+                  <Check className="size-3.5" />
+                  Confirm
+                </Button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 function RunSheet({ name }: { name: string }) {
+  const { role } = useAuth();
   const today = branchToday();
 
   const list = useAsync(`overview:runsheet:${today}`, async () =>
@@ -407,7 +631,14 @@ function RunSheet({ name }: { name: string }) {
       <SectionHeading
         eyebrow="Your chair"
         title={`Good day${name ? `, ${name.split(" ")[0]}` : ""}.`}
-        description={`Today's run sheet — ${rows.length} booking${rows.length === 1 ? "" : "s"}, ${arrived} already arrived.`}
+        description={
+          // While the list is in flight the counts are not 0, they are unknown —
+          // and "0 bookings" is a claim, not a placeholder. Say what is actually
+          // happening instead of asserting an empty day that may not be empty.
+          list.initial
+            ? "Reading today's diary…"
+            : `Today's run sheet — ${rows.length} booking${rows.length === 1 ? "" : "s"}, ${arrived} already arrived.`
+        }
         action={
           <Button variant="outline" onClick={list.reload}>
             <RefreshCw className="size-4" />
@@ -417,6 +648,10 @@ function RunSheet({ name }: { name: string }) {
       />
 
       {actionError && <ErrorNote error={actionError} />}
+
+      {/* The desk is the only role that may move a booking to another stylist,
+          so the request queue is theirs. A therapist sees the run sheet below. */}
+      {role === "CONCIERGE" && <NewRequests onChanged={list.reload} />}
 
       {list.error ? (
         <ErrorNote error={list.error} onRetry={list.reload} />
@@ -431,7 +666,9 @@ function RunSheet({ name }: { name: string }) {
       ) : (
         <ol className="space-y-3">
           {rows.map((booking) => {
-            const next = NEXT_STATUS[booking.status];
+            const move = PRIMARY_MOVE[booking.status];
+            const canNoShow =
+              booking.status === "CONFIRMED" || booking.status === "CHECKED_IN";
             const guest = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
             return (
               <li
@@ -476,35 +713,31 @@ function RunSheet({ name }: { name: string }) {
 
                 <StatusBadge status={booking.status} />
 
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {next.length === 0 ? (
-                    <span className="text-[11.5px] text-muted-foreground">Settled</span>
-                  ) : (
-                    next.map((status) => (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {move ? (
+                    <>
                       <Button
-                        key={status}
                         size="sm"
-                        variant={status === "NO_SHOW" || status === "CANCELLED" ? "ghost" : "outline"}
-                        className={cn(
-                          (status === "NO_SHOW" || status === "CANCELLED") &&
-                            "text-clay hover:bg-clay/10",
-                        )}
                         disabled={busyId === booking.id}
-                        onClick={() => advance(booking, status)}
+                        onClick={() => advance(booking, move.to)}
                       >
-                        {status === "CHECKED_IN"
-                          ? "Arrived"
-                          : status === "IN_SERVICE"
-                            ? "Seated"
-                            : status === "COMPLETED"
-                              ? "Done"
-                              : status === "NO_SHOW"
-                                ? "No-show"
-                                : status === "CANCELLED"
-                                  ? "Cancel"
-                                  : "Confirm"}
+                        {move.label}
+                        <ArrowRight className="size-3.5" />
                       </Button>
-                    ))
+                      {canNoShow && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-clay hover:bg-clay/10"
+                          disabled={busyId === booking.id}
+                          onClick={() => advance(booking, "NO_SHOW")}
+                        >
+                          No-show
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[11.5px] text-muted-foreground">Settled</span>
                   )}
                 </div>
               </li>
@@ -522,8 +755,14 @@ function RunSheet({ name }: { name: string }) {
           .
         </p>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">{rows.length} today</Badge>
-          <Badge variant="success">{arrived} arrived</Badge>
+          {list.initial ? (
+            <Badge variant="outline">Counting…</Badge>
+          ) : (
+            <>
+              <Badge variant="outline">{rows.length} today</Badge>
+              <Badge variant="success">{arrived} arrived</Badge>
+            </>
+          )}
         </div>
       </div>
     </div>

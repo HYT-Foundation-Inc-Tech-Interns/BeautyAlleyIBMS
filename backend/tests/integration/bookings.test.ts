@@ -1,5 +1,5 @@
 import request from "supertest";
-import { api, as, createTestAdmin, createTestClient, deleteTestUsers, type TestUser } from "../helpers/api";
+import { api, as, createTestAdmin, createTestClient, createTestConcierge, deleteTestUsers, type TestUser } from "../helpers/api";
 import { connectDb, db, disconnectDb } from "../helpers/db";
 import { ISO, SLOT_BANDS, nextWorkingSlot, shiftHours, useSlotBand } from "../helpers/time";
 
@@ -218,6 +218,76 @@ describeBookings("bookings", () => {
       expect(res.status).toBe(201);
       // Only Cara does hair, so the choice is forced.
       expect(res.body.data.employee.id).toBe(EMP_CARA);
+    });
+  });
+
+  /**
+   * The desk's override.
+   *
+   * A self-service booking now arrives with a stylist already on it, chosen by
+   * `create_booking` at random from the people who are qualified, rostered and
+   * free. This is how the desk disagrees - and the rules have to hold here
+   * too, or the override becomes a way around qualification and availability.
+   */
+  describe("PATCH /api/v1/bookings/:id/employee", () => {
+    /** Facial, because both Ana and Bea are qualified for it. */
+    async function facialFor(day: number, hour: number, guest: string) {
+      const res = await request(api())
+        .post("/api/v1/bookings")
+        .send({
+          serviceIds: [SVC_FACIAL],
+          employeeId: EMP_ANA,
+          startTime: ISO(nextWorkingSlot(day, hour)),
+          guest: { name: guest, phone: "+639170000011" },
+        });
+      expect(res.status).toBe(201);
+      return res.body.data.id as string;
+    }
+
+    it("moves a booking to another qualified stylist", async () => {
+      const desk = await createTestConcierge("Desk Assigner");
+      created.push(desk);
+
+      const id = await facialFor(20, 11, "Reassign Me");
+
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${id}/employee`)
+        .set(...as(desk.token))
+        .send({ employeeId: EMP_BEA });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.employee.id).toBe(EMP_BEA);
+    });
+
+    it("refuses a stylist who is not qualified for the treatment", async () => {
+      const desk = await createTestConcierge("Desk Assigner");
+      created.push(desk);
+
+      const id = await facialFor(21, 11, "Wrong Stylist Again");
+
+      // Cara does hair only.
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${id}/employee`)
+        .set(...as(desk.token))
+        .send({ employeeId: EMP_CARA });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("EMPLOYEE_NOT_QUALIFIED");
+    });
+
+    it("is closed to a client", async () => {
+      const client = await createTestClient("Not The Desk");
+      created.push(client);
+
+      const id = await facialFor(22, 11, "Client Picker");
+
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${id}/employee`)
+        .set(...as(client.token))
+        .send({ employeeId: EMP_BEA });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("INSUFFICIENT_ROLE");
     });
   });
 
@@ -599,6 +669,60 @@ describeBookings("bookings", () => {
       // rather than silently booked against the victim.
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("CLIENT_REQUIRED");
+    });
+  });
+
+  describe("list payload", () => {
+    /*
+     * The list endpoints used to omit `items` entirely, so every row came back
+     * with `items: []`. The console then showed "—" where the treatment goes
+     * and the run sheet summed the durations to "0 min" for every booking on
+     * it. A booking row that cannot say what it is for is not a record.
+     *
+     * Asserted against the detail endpoint rather than against service names,
+     * so the test survives a catalogue edit.
+     */
+    it("carries the items on a list row, matching what the detail returns", async () => {
+      const admin = await createTestAdmin("List Payload Admin");
+      created.push(admin);
+
+      const slot = nextWorkingSlot(19, 10);
+      const made = await request(api())
+        .post("/api/v1/bookings")
+        .send({
+          serviceIds: [SVC_FACIAL, SVC_MASSAGE], // 45 + 60 = 105 minutes
+          employeeId: EMP_ANA,
+          startTime: ISO(slot),
+          guest: { name: "Guest List", phone: "+639170000019" },
+        });
+      expect(made.status).toBe(201);
+      const id = made.body.data.id;
+
+      const detail = await request(api()).get(`/api/v1/bookings/${id}`);
+      expect(detail.status).toBe(200);
+
+      const list = await request(api())
+        .get("/api/v1/bookings?limit=100&sort=start_time&order=asc")
+        .set(...as(admin.token));
+      expect(list.status).toBe(200);
+
+      const row = list.body.data.find((b: { id: string }) => b.id === id);
+      expect(row).toBeDefined();
+      expect(row.items).toHaveLength(2);
+      expect(row.items).toEqual(detail.body.data.items);
+
+      const minutes = row.items.reduce(
+        (n: number, i: { durationMinutes: number }) => n + i.durationMinutes,
+        0
+      );
+      expect(minutes).toBe(105);
+
+      // The batch load must not cross-contaminate: every item row belongs to
+      // exactly one booking, so no id may appear twice across the page.
+      const itemIds = list.body.data.flatMap((b: { items: { id: string }[] }) =>
+        b.items.map((i) => i.id)
+      );
+      expect(new Set(itemIds).size).toBe(itemIds.length);
     });
   });
 });

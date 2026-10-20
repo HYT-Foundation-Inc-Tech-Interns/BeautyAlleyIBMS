@@ -90,7 +90,7 @@ function Redeem() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-alley-900">
+        <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-sidebar">
           <div
             aria-hidden
             className="absolute inset-0 opacity-[0.14]"

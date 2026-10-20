@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   Clock3,
   MapPin,
+  Printer,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -136,7 +137,10 @@ export default function Pass() {
     <PublicShell>
       <div className="container max-w-2xl py-14">
         {fresh && (
-          <div className="mb-7 flex items-start gap-3 rounded-xl border border-alley-200 bg-alley-50 px-5 py-4">
+          <div
+            data-print="hide"
+            className="mb-7 flex items-start gap-3 rounded-xl border border-alley-200 bg-alley-50 px-5 py-4"
+          >
             <Sparkles className="mt-0.5 size-5 shrink-0 text-alley-700" />
             <div>
               <p className="text-[13.5px] font-medium text-alley-700">Your chair is reserved.</p>
@@ -148,7 +152,16 @@ export default function Pass() {
           </div>
         )}
 
-        <div className="rounded-2xl border border-border/80 bg-card p-7 shadow-lift sm:p-9">
+        {/*
+          * `data-print="pass"` is the hook the print stylesheet in `index.css`
+          * keys on: everything else on the page (the public nav, the footer,
+          * the action buttons) is noise on paper, and this card is the thing
+          * worth handing to a guest.
+          */}
+        <div
+          data-print="pass"
+          className="rounded-2xl border border-border/80 bg-card p-7 shadow-lift sm:p-9"
+        >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="eyebrow">Arrival pass</p>
@@ -271,11 +284,20 @@ export default function Pass() {
 
           {cancelError && <ErrorNote error={cancelError} className="mt-6" />}
 
-          <div className="mt-8 flex flex-wrap items-center gap-2 border-t border-border/70 pt-6">
+          <div
+            data-print="hide"
+            className="mt-8 flex flex-wrap items-center gap-2 border-t border-border/70 pt-6"
+          >
             <Button variant="outline" onClick={state.reload}>
               <RefreshCw className="size-4" />
               Refresh pass
             </Button>
+            {!dead && (
+              <Button variant="outline" className="gap-2" onClick={() => window.print()}>
+                <Printer className="size-4" />
+                Print pass
+              </Button>
+            )}
             {canCancel && !confirmCancel && (
               <Button variant="ghost" className="text-clay hover:bg-clay/10" onClick={() => setConfirmCancel(true)}>
                 Cancel this booking

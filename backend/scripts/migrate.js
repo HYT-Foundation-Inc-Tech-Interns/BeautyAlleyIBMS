@@ -11,12 +11,20 @@
  *
  *   node scripts/migrate.js            apply pending migrations
  *   node scripts/migrate.js --status   show what is applied / pending
+ *   node scripts/migrate.js --dry-run  validate and list what WOULD apply
  *   node scripts/migrate.js --reset --yes
  *                                      DROP schema public and reapply everything
  *
  * Each file runs inside its own transaction: a migration either fully applies
  * or leaves no trace. The ledger records a checksum, so editing a migration
  * that has already been applied is detected rather than silently ignored.
+ *
+ * Rollback is forward-only by design. There are no `.down.sql` files, because a
+ * down-migration that has never been run is a guess. The recovery path for a
+ * bad migration is: restore the most recent backup, then fix forward. That is
+ * only a real answer if backups exist - see `docs/runbook.md`.
+ *
+ * A session advisory lock prevents two runners from interleaving.
  */
 
 const fs = require("fs");
@@ -50,8 +58,24 @@ const MODE = argv.includes("--reset")
   ? "reset"
   : argv.includes("--status")
     ? "status"
-    : "migrate";
+    : argv.includes("--dry-run") || argv.includes("--plan")
+      ? "plan"
+      : "migrate";
 const CONFIRMED = argv.includes("--yes");
+
+/**
+ * Advisory lock, so two runners cannot interleave.
+ *
+ * Without it, two `db:migrate` processes (a CI job and a human, say) both read
+ * the ledger, both see migration N as pending, and both apply it. The second
+ * fails on a duplicate object halfway through, leaving the ledger and the
+ * schema disagreeing about what exists. The lock is session-scoped and released
+ * automatically if the process dies.
+ *
+ * The key is arbitrary but must never change, or old and new runners would not
+ * see each other's lock.
+ */
+const LOCK_KEY = 8710035;
 
 function listMigrations() {
   return fs
@@ -193,42 +217,97 @@ async function main() {
     return;
   }
 
-  // --- migrate ------------------------------------------------------------
-  let count = 0;
-  for (const m of migrations) {
-    const row = applied.get(m.version);
+  // --- plan ---------------------------------------------------------------
+  // What `--dry-run` means here: validate everything a real run would validate
+  // (checksums, ordering) and list the files it would execute, without touching
+  // the schema. It is not a SQL-level dry run - Postgres cannot roll back DDL
+  // that was never run - so it answers "is it safe to press the button", not
+  // "will every statement succeed".
+  if (MODE === "plan") {
+    const pending = [];
+    for (const m of migrations) {
+      const row = applied.get(m.version);
+      if (row) {
+        if (row.checksum !== m.checksum) {
+          await client.end();
+          throw new Error(
+            `${m.file} has changed since it was applied ` +
+              `(ledger ${row.checksum}, file ${m.checksum}).\n` +
+              `A real run would refuse to proceed. Add a new migration instead.`
+          );
+        }
+        continue;
+      }
+      pending.push(m);
+    }
 
-    if (row) {
-      if (row.checksum !== m.checksum) {
-        throw new Error(
-          `${m.file} has changed since it was applied ` +
-            `(ledger ${row.checksum}, file ${m.checksum}).\n` +
-            `Migrations are immutable once applied. Add a new migration instead, ` +
-            `or run --reset --yes to rebuild from scratch.`
+    process.stdout.write(`${c.bold}Dry run - nothing will be applied${c.reset}\n`);
+    if (pending.length === 0) {
+      process.stdout.write(`  ${c.green}no pending migrations${c.reset}\n`);
+    } else {
+      for (const m of pending) {
+        process.stdout.write(
+          `  ${c.yellow}would apply${c.reset}  ${m.file}  ${c.dim}${m.bytes} bytes${c.reset}\n`
         );
       }
-      continue;
     }
+    process.stdout.write(
+      `\n${pending.length} pending, ${applied.size} already applied, ${migrations.length} total\n`
+    );
+    await client.end();
+    return;
+  }
 
-    process.stdout.write(`  ${c.cyan}applying${c.reset} ${m.file} ... `);
-    try {
-      const ms = await applyOne(client, m);
-      process.stdout.write(`${c.green}ok${c.reset} ${c.dim}${ms}ms${c.reset}\n`);
-      count++;
-    } catch (err) {
-      process.stdout.write(`${c.red}FAILED${c.reset}\n\n`);
-      process.stdout.write(`${c.red}${err.message}${c.reset}\n`);
-      if (err.detail) process.stdout.write(`${c.dim}${err.detail}${c.reset}\n`);
-      if (err.hint) process.stdout.write(`${c.dim}hint: ${err.hint}${c.reset}\n`);
-      if (err.position) {
-        const upto = m.sql.slice(0, Number(err.position));
-        const line = upto.split("\n").length;
-        process.stdout.write(`${c.dim}at line ${line} of ${m.file}${c.reset}\n`);
+  // --- migrate ------------------------------------------------------------
+  await client.query("select pg_advisory_lock($1)", [LOCK_KEY]);
+
+  let count = 0;
+  let failure = null;
+  try {
+    for (const m of migrations) {
+      const row = applied.get(m.version);
+
+      if (row) {
+        if (row.checksum !== m.checksum) {
+          throw new Error(
+            `${m.file} has changed since it was applied ` +
+              `(ledger ${row.checksum}, file ${m.checksum}).\n` +
+              `Migrations are immutable once applied. Add a new migration instead, ` +
+              `or run --reset --yes to rebuild from scratch.`
+          );
+        }
+        continue;
       }
-      await client.end();
-      process.exitCode = 1;
-      return;
+
+      process.stdout.write(`  ${c.cyan}applying${c.reset} ${m.file} ... `);
+      try {
+        const ms = await applyOne(client, m);
+        process.stdout.write(`${c.green}ok${c.reset} ${c.dim}${ms}ms${c.reset}\n`);
+        count++;
+      } catch (err) {
+        process.stdout.write(`${c.red}FAILED${c.reset}\n\n`);
+        process.stdout.write(`${c.red}${err.message}${c.reset}\n`);
+        if (err.detail) process.stdout.write(`${c.dim}${err.detail}${c.reset}\n`);
+        if (err.hint) process.stdout.write(`${c.dim}hint: ${err.hint}${c.reset}\n`);
+        if (err.position) {
+          const upto = m.sql.slice(0, Number(err.position));
+          const line = upto.split("\n").length;
+          process.stdout.write(`${c.dim}at line ${line} of ${m.file}${c.reset}\n`);
+        }
+        failure = err;
+        break;
+      }
     }
+  } finally {
+    // Released before the client closes. If the process died instead, Postgres
+    // drops the session and the lock with it.
+    await client.query("select pg_advisory_unlock($1)", [LOCK_KEY]).catch(() => {});
+  }
+
+  if (failure) {
+    await client.end();
+    process.exitCode = 1;
+    return;
   }
 
   process.stdout.write(

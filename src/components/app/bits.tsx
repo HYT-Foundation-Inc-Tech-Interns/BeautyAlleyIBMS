@@ -35,7 +35,8 @@ export function Delta({
     <span
       className={cn(
         "inline-flex items-center gap-1 text-[12.5px] font-medium tabular-nums",
-        good ? "text-alley-600" : "text-clay",
+        // Semantic, not brand: a rise that is *good* is green in either palette.
+        good ? "text-success" : "text-destructive",
         className,
       )}
     >
@@ -53,13 +54,17 @@ export function Delta({
  * Avatars — initials on a deterministic brand tint. No stock photos.
  * ------------------------------------------------------------------ */
 
+/*
+ * Tints are tokens, not brand literals, so an avatar is emerald on the public
+ * site and rosewood/champagne inside the console without a second list.
+ */
 const TINTS = [
-  "bg-alley-700 text-primary-foreground",
-  "bg-alley-500 text-primary-foreground",
-  "bg-champagne-400 text-accent-foreground",
-  "bg-alley-800 text-primary-foreground",
-  "bg-sand-400 text-alley-900",
-  "bg-alley-300 text-alley-900",
+  "bg-primary text-primary-foreground",
+  "bg-primary/75 text-primary-foreground",
+  "bg-accent text-accent-foreground",
+  "bg-secondary text-secondary-foreground",
+  "bg-muted-foreground text-background",
+  "bg-accent/60 text-accent-foreground",
 ];
 
 function tintFor(name: string) {

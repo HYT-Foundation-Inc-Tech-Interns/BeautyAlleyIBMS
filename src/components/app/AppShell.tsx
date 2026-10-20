@@ -15,11 +15,15 @@ import * as React from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   CalendarDays,
+  ClipboardList,
+  Clock,
   ExternalLink,
   LayoutDashboard,
   LayoutGrid,
+  ListChecks,
   LogOut,
   QrCode,
+  ScanLine,
   Scissors,
   Tag,
   Ticket,
@@ -27,7 +31,6 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -65,7 +68,24 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { area: "overview", to: "/app", label: "Overview", icon: LayoutDashboard },
       { area: "bookings", to: "/app/bookings", label: "Bookings", icon: CalendarDays },
+      { area: "scan-arrivals", to: "/app/scan-arrivals", label: "Scan arrival pass", icon: ScanLine },
       { area: "check-in", to: "/app/check-in", label: "QR Check-in", icon: QrCode },
+    ],
+  },
+  {
+    /*
+     * The work and the clock.
+     *
+     * `tasks` (assigning work) and `my-tasks` (doing it) are two nav entries
+     * over **one** set of records — the desk writes, the floor reads, and both
+     * dashboards show the same row. They are separate items because they are
+     * genuinely different jobs, and `SCOPE` keeps them apart per role.
+     */
+    label: "Work",
+    items: [
+      { area: "tasks", to: "/app/tasks", label: "Task board", icon: ClipboardList },
+      { area: "my-tasks", to: "/app/my-tasks", label: "My tasks", icon: ListChecks },
+      { area: "attendance", to: "/app/attendance", label: "Attendance", icon: Clock },
     ],
   },
   {
@@ -93,6 +113,10 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/app/promos": { title: "Promo codes", sub: "Discounts, caps and redemptions" },
   "/app/team": { title: "Employees", sub: "The floor and what they are qualified for" },
   "/app/check-in": { title: "QR Check-in", sub: "Redeem an arrival pass" },
+  "/app/scan-arrivals": { title: "Scan arrival pass", sub: "Confirm a guest has arrived" },
+  "/app/tasks": { title: "Task board", sub: "Assign work and follow it through" },
+  "/app/my-tasks": { title: "My tasks", sub: "What has been assigned to you" },
+  "/app/attendance": { title: "Attendance", sub: "Time in, time out and hours worked" },
   "/app/board": { title: "Monitoring Board", sub: "Drag to arrange your own view" },
   "/app/my-bookings": { title: "My bookings", sub: "Your appointments and passes" },
 };
@@ -286,6 +310,23 @@ export function AppShell() {
       sub: role ? ROLE_LABEL[role] : "",
     };
 
+  /*
+   * Put the console palette on `document.body` while a dashboard is mounted.
+   *
+   * Body, not a wrapper div, because Radix portals the mobile sidebar sheet
+   * into `document.body` — a wrapper-scoped class would leave that sheet in the
+   * public site's emerald. Mounting it here also means the whole `/app` tree
+   * inherits the blush/champagne tokens from a single line, which is the point:
+   * no dashboard component hard-codes a colour or a font.
+   *
+   * The cleanup matters for the public site: `/` and `/book` must go back to
+   * emerald + serif when you navigate away.
+   */
+  React.useEffect(() => {
+    document.body.classList.add("console");
+    return () => document.body.classList.remove("console");
+  }, []);
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -300,10 +341,15 @@ export function AppShell() {
             <p className="truncate text-[11.5px] text-muted-foreground">{heading.sub}</p>
           </div>
 
+          {/*
+            * There used to be a "New booking" button here, duplicating the
+            * Booking entry in the sidebar. Two doors to one room is clutter,
+            * and on the client dashboard it was the *only* door — the sidebar
+            * item sat right beside it doing the same job. The header is now
+            * just the page identity and the account menu; booking lives where
+            * every other destination lives.
+            */}
           <div className="ml-auto flex items-center gap-2">
-            <Button asChild variant="outline" size="sm" className="hidden h-9 rounded-full md:inline-flex">
-              <Link to="/book">New booking</Link>
-            </Button>
             <UserMenu />
           </div>
         </header>

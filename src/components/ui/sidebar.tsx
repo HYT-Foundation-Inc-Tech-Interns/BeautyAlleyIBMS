@@ -166,7 +166,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] border-r-0 bg-alley-900 p-0 text-primary-foreground [&>button]:hidden"
+            className="w-[--sidebar-width] border-r-0 bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
             style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
             side={side}
           >
@@ -209,7 +209,7 @@ const Sidebar = React.forwardRef<
         >
           <div
             data-sidebar="sidebar"
-            className="flex h-full w-full flex-col bg-alley-900 text-primary-foreground"
+            className="flex h-full w-full flex-col bg-sidebar text-sidebar-foreground"
           >
             {children}
           </div>
@@ -400,7 +400,7 @@ const SidebarMenuButton = React.forwardRef<
           side="right"
           align="center"
           hidden={state !== "collapsed" || isMobile}
-          className="border-alley-700 bg-alley-800 text-primary-foreground"
+          className="border-sidebar-ring/25 bg-sidebar text-sidebar-foreground"
         >
           {tooltip}
         </TooltipContent>

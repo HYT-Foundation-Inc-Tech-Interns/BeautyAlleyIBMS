@@ -33,7 +33,7 @@ export const roomsController = {
   },
 
   async remove(req: Request, res: Response) {
-    const result = await roomsService.deactivate(req.params.id);
+    const result = await roomsService.deactivate(req.params.id, req.actor?.id ?? null);
     res.status(200).json({ data: result });
   },
 };

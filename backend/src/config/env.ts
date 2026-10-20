@@ -34,6 +34,24 @@ const schema = z.object({
   BRANCH_TIMEZONE: z.string().default("Asia/Manila"),
   CANCELLATION_WINDOW_HOURS: z.coerce.number().int().nonnegative().default(2),
 
+  // Comma-separated browser origins allowed to call the API with cookies.
+  // Empty keeps the development behaviour (reflect any origin); set it the
+  // moment the API is reachable from the public internet - a Vercel deployment,
+  // or a container behind a proxy.
+  ALLOWED_ORIGINS: z.string().optional().default(""),
+
+  // Serve the built frontend from this process as well, so one origin carries
+  // both the app and the API. That is what the self-hosted container turns on:
+  // a single public URL, no CORS, and no `VITE_API_URL` to keep in sync.
+  // Leave it off on Vercel, where the frontend is its own service.
+  //
+  // Deliberately NOT `z.coerce.boolean()`: that runs `Boolean(value)`, and
+  // `Boolean("false")` is `true` - so `SERVE_APP=false` would switch it ON.
+  SERVE_APP: z
+    .enum(["true", "false", "1", "0"])
+    .default("false")
+    .transform((v) => v === "true" || v === "1"),
+
   QR_SIGNING_SECRET: z
     .string()
     .min(32, "QR_SIGNING_SECRET must be at least 32 chars"),
@@ -65,6 +83,32 @@ if (!parsed.success) {
   );
 }
 
+/**
+ * A public API must never reflect an arbitrary origin while allowing
+ * credentials. In development that behaviour is a convenience; in production
+ * it is a hole. Two configurations are safe:
+ *
+ *   - an explicit ALLOWED_ORIGINS allow-list, or
+ *   - SERVE_APP, where the app and the API share one origin and CORS is not
+ *     involved at all.
+ *
+ * Anything else fails at boot, because a boot failure is a five-second fix and
+ * a silently permissive production API is not.
+ */
+if (
+  parsed.data.NODE_ENV === "production" &&
+  parsed.data.ALLOWED_ORIGINS.trim() === "" &&
+  parsed.data.SERVE_APP !== true
+) {
+  throw new Error(
+    "Invalid environment configuration:\n" +
+      "  - ALLOWED_ORIGINS is empty in production, so the API would reflect any\n" +
+      "    origin with credentials.\n\n" +
+      "Set ALLOWED_ORIGINS to the deployed frontend origin(s), or set\n" +
+      "SERVE_APP=true to serve the app from this same origin."
+  );
+}
+
 export const env = {
   nodeEnv: parsed.data.NODE_ENV,
   isProduction: parsed.data.NODE_ENV === "production",
@@ -79,6 +123,12 @@ export const env = {
 
   branchTimezone: parsed.data.BRANCH_TIMEZONE,
   cancellationWindowHours: parsed.data.CANCELLATION_WINDOW_HOURS,
+
+  allowedOrigins: parsed.data.ALLOWED_ORIGINS.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+
+  serveApp: parsed.data.SERVE_APP,
 
   qrSigningSecret: parsed.data.QR_SIGNING_SECRET,
   qrCheckinWindowMinutes: parsed.data.QR_CHECKIN_WINDOW_MINUTES,

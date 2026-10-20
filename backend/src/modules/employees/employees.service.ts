@@ -77,11 +77,11 @@ export const employeesService = {
     };
   },
 
-  async create(input: CreateEmployeeInput) {
-    const row = await employeesRepository.create(input);
-    if (input.serviceIds.length > 0) {
-      await employeesRepository.setServices(row.id, input.serviceIds);
-    }
+  async create(input: CreateEmployeeInput, actorId: string | null = null) {
+    // The qualifications are created with the employee, in one statement - see
+    // migration 35. The old shape created the row, then called setServices,
+    // which validated second and failed after the first had committed.
+    const row = await employeesRepository.create(input, actorId);
     return this.getById(row.id);
   },
 

@@ -146,8 +146,12 @@ export const roomsService = {
    * Refused while the room is still booked: deactivating it would leave the
    * desk with a schedule that names a room they can no longer open, and no
    * warning at the time it happens.
+   *
+   * The count below is for the message only. The authoritative check is inside
+   * `deactivate_room()` (migration 34), because a count-then-update here let a
+   * booking created in between land in a room that had just been closed.
    */
-  async deactivate(id: string) {
+  async deactivate(id: string, actorId: string | null = null) {
     const room = await this.getById(id);
     if (!room.isActive) return room;
 
@@ -159,6 +163,8 @@ export const roomsService = {
           `Move them to another room before decommissioning it.`
       );
     }
-    return this.update(id, { isActive: false });
+
+    await roomsRepository.deactivate(id, actorId);
+    return this.getById(id);
   },
 };

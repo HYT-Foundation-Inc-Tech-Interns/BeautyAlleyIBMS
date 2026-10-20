@@ -32,6 +32,12 @@ export type BookingStatus =
 export type PromoType = "PERCENT" | "FIXED";
 /** Migration 17. `required_room_type` on a service is NULL when no room is needed. */
 export type RoomType = "MASSAGE" | "FACIAL" | "NAIL" | "WAXING" | "SAUNA" | "VIP" | "OTHER";
+/** Migration 29. PRESENT is the default on clock-in; the rest are set by a human. */
+export type AttendanceStatus = "PRESENT" | "HALF_DAY" | "LEAVE" | "ABSENT";
+/** Migration 30. Order is meaningful: LOW < MEDIUM < HIGH < URGENT. */
+export type TaskPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+/** Migration 30. Transitions are enforced by `enforce_task_status_transition`. */
+export type TaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
 export interface Database {
   public: {
@@ -143,6 +149,22 @@ export interface Database {
           required_room_type: RoomType | null;
           /** Migration 17. Second catalogue level. */
           subcategory_id: string | null;
+          /** Migration 22. Does a completed visit count toward loyalty? */
+          loyalty_eligible: boolean;
+          /**
+           * Migration 22. The formulation, as a display string — "Glutathione,
+           * Vitamin C". NULL when the salon has not confirmed it, which is a
+           * different thing from "it has no ingredients", and `ingredients_verified`
+           * is what distinguishes the two.
+           */
+          ingredients: string | null;
+          /**
+           * Migration 23. False means the ingredients are unknown and must NOT
+           * be invented — the catalogue shows a "being confirmed" note instead.
+           */
+          ingredients_verified: boolean;
+          /** Migration 23. True when the price is still a placeholder. */
+          needs_pricing: boolean;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -156,6 +178,10 @@ export interface Database {
           duration_minutes: number;
           required_room_type?: RoomType | null;
           subcategory_id?: string | null;
+          loyalty_eligible?: boolean;
+          ingredients?: string | null;
+          ingredients_verified?: boolean;
+          needs_pricing?: boolean;
           is_active?: boolean;
         };
         Update: {
@@ -166,9 +192,31 @@ export interface Database {
           duration_minutes?: number;
           required_room_type?: RoomType | null;
           subcategory_id?: string | null;
+          loyalty_eligible?: boolean;
+          ingredients?: string | null;
+          ingredients_verified?: boolean;
+          needs_pricing?: boolean;
           is_active?: boolean;
         };
-        Relationships: [];
+        /*
+         * Declared, not decorative.
+         *
+         * supabase-js resolves an embedded select (`subcategory:service_subcategories(...)`)
+         * through these entries. With `Relationships: []` it cannot find the
+         * relation at all and every row types as
+         * `SelectQueryError<"could not find the relation …">` — which is what
+         * broke `servicesRepository.list` the first time the embed was added.
+         * The name must match the constraint in the database exactly.
+         */
+        Relationships: [
+          {
+            foreignKeyName: "services_subcategory_id_fkey";
+            columns: ["subcategory_id"];
+            isOneToOne: false;
+            referencedRelation: "service_subcategories";
+            referencedColumns: ["id"];
+          },
+        ];
       };
 
       employee_services: {
@@ -540,6 +588,85 @@ export interface Database {
         Update: { succeeded?: boolean };
         Relationships: [];
       };
+
+      /** Migration 29. One row per employee per branch-local work day. */
+      attendance: {
+        Row: {
+          id: string;
+          employee_id: string;
+          /** A branch-local calendar day, not an instant. */
+          work_date: string;
+          time_in: string;
+          time_out: string | null;
+          status: AttendanceStatus;
+          remarks: string | null;
+          recorded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          employee_id: string;
+          work_date?: string;
+          time_in?: string;
+          time_out?: string | null;
+          status?: AttendanceStatus;
+          remarks?: string | null;
+          recorded_by?: string | null;
+        };
+        Update: {
+          time_out?: string | null;
+          status?: AttendanceStatus;
+          remarks?: string | null;
+          time_in?: string;
+          recorded_by?: string | null;
+        };
+        Relationships: [];
+      };
+
+      /** Migration 30. Tasks a concierge assigns to an employee. */
+      tasks: {
+        Row: {
+          id: string;
+          /** The small human-readable id, shown as "Task ID". */
+          number: number;
+          title: string;
+          description: string | null;
+          employee_id: string;
+          created_by: string | null;
+          priority: TaskPriority;
+          status: TaskStatus;
+          due_at: string | null;
+          instructions: string | null;
+          completion_notes: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          employee_id: string;
+          created_by?: string | null;
+          priority?: TaskPriority;
+          status?: TaskStatus;
+          due_at?: string | null;
+          instructions?: string | null;
+          completion_notes?: string | null;
+        };
+        Update: {
+          title?: string;
+          description?: string | null;
+          employee_id?: string;
+          priority?: TaskPriority;
+          status?: TaskStatus;
+          due_at?: string | null;
+          instructions?: string | null;
+          completion_notes?: string | null;
+        };
+        Relationships: [];
+      };
     };
 
     Views: {
@@ -568,6 +695,8 @@ export interface Database {
           room_name: string | null;
           room_type: RoomType | null;
           member_discount_percent: number | null;
+          /** Migration 32. Never null: the view coalesces to an empty array. */
+          service_ids: string[];
         };
         Relationships: [];
       };
@@ -625,6 +754,56 @@ export interface Database {
           discount_percent: number;
           completed_visits: number;
           eligible_for_membership: boolean;
+        };
+        Relationships: [];
+      };
+      /**
+       * Migration 29. Attendance joined to the employee and that weekday's
+       * shift, with the hours worked and minutes late derived in SQL so both
+       * the employee's page and the admin report agree.
+       */
+      v_attendance_detail: {
+        Row: {
+          id: string;
+          employee_id: string;
+          employee_name: string;
+          work_date: string;
+          time_in: string;
+          time_out: string | null;
+          status: AttendanceStatus;
+          remarks: string | null;
+          recorded_by: string | null;
+          scheduled_start: string | null;
+          scheduled_end: string | null;
+          /** NULL until the session is closed. */
+          minutes_worked: number | null;
+          /** NULL when no shift is configured for that weekday. */
+          minutes_late: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Relationships: [];
+      };
+      /** Migration 30. Tasks joined to the assignee and the assigner. */
+      v_task_detail: {
+        Row: {
+          id: string;
+          number: number;
+          title: string;
+          description: string | null;
+          employee_id: string;
+          employee_name: string;
+          created_by: string | null;
+          created_by_name: string | null;
+          priority: TaskPriority;
+          status: TaskStatus;
+          due_at: string | null;
+          instructions: string | null;
+          completion_notes: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+          is_overdue: boolean;
         };
         Relationships: [];
       };
@@ -716,6 +895,48 @@ export interface Database {
           threshold: number;
         };
       };
+      /** Migration 33. Audited status change; refuses CANCELLED. */
+      set_booking_status: {
+        Args: { p_booking_id: string; p_status: string; p_actor?: string | null };
+        Returns: { bookingId: string; from: string; to: string };
+      };
+      // --- migration 34: atomicity for read-then-write sequences ------------
+      /** Replace-all. Returns the ids it was given, not the ones it stored. */
+      replace_employee_services: {
+        Args: { p_employee_id: string; p_service_ids: string[] };
+        Returns: string[];
+      };
+      /** Replace-all. Validates every shift before deleting anything. */
+      replace_working_hours: {
+        Args: {
+          p_employee_id: string;
+          p_hours: { weekday: number; start_time: string; end_time: string }[];
+        };
+        Returns: number;
+      };
+      /** Refuses with ROOM_STILL_BOOKED while the room has unfinished bookings. */
+      deactivate_room: {
+        Args: { p_room_id: string; p_actor?: string | null };
+        Returns: number;
+      };
+      /** Get-or-create, so a double-submit cannot raise a unique violation. */
+      ensure_client_for_profile: {
+        Args: { p_profile_id: string; p_email?: string | null };
+        Returns: string;
+      };
+      /** Migration 35. Employee + qualifications in one statement. */
+      create_employee: {
+        Args: {
+          p_full_name: string;
+          p_title?: string | null;
+          p_bio?: string | null;
+          p_profile_id?: string | null;
+          p_is_active?: boolean;
+          p_service_ids: string[];
+          p_actor?: string | null;
+        };
+        Returns: string;
+      };
       revoke_membership: {
         Args: { p_client_id: string; p_actor?: string | null };
         Returns: { clientId: string; memberSince: null; discountPercent: number };
@@ -723,6 +944,11 @@ export interface Database {
       set_booking_room: {
         Args: { p_booking_id: string; p_room_id: string | null; p_actor?: string | null };
         Returns: { bookingId: string; roomId: string | null; roomType: RoomType | null };
+      };
+      /** Migration 39. The desk moving a booking to another stylist. */
+      reassign_booking_employee: {
+        Args: { p_booking_id: string; p_employee_id: string; p_actor?: string | null };
+        Returns: { bookingId: string; employeeId: string };
       };
       cancel_booking: {
         Args: {
@@ -775,6 +1001,27 @@ export interface Database {
           p_timezone?: string | null;
         };
         Returns: Json;
+      };
+      /**
+       * Migration 36. Attendance totals and per-day breakdown for a filter,
+       * aggregated in SQL. Shape is `AttendanceSummary` in the repository.
+       */
+      attendance_summary: {
+        Args: {
+          p_employee_id?: string | null;
+          p_status?: string | null;
+          p_from?: string | null;
+          p_to?: string | null;
+        };
+        Returns: Json;
+      };
+      /**
+       * Migration 37. Closes an open session, stamping time_out on the database
+       * clock. Returns the row id, or NULL when nothing was open.
+       */
+      clock_out_attendance: {
+        Args: { p_employee_id: string; p_day: string; p_remarks?: string | null };
+        Returns: string | null;
       };
     };
 
