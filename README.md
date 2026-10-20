@@ -235,7 +235,7 @@ rather than a wrapper so Radix portals (the mobile sidebar sheet) inherit it too
 
 ```bash
 cd backend
-npm test               # Jest + Supertest — 393 tests, 17 suites
+npm test               # Jest + Supertest — 398 tests, 18 suites
 npm run test:unit      # the five suites that need no database
 npm run smoke          # 47 end-to-end checks over real HTTP (needs a running server)
 npm run db:verify      # 51 behavioural checks in a rolled-back transaction

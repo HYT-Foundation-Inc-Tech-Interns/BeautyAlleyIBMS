@@ -77,6 +77,21 @@ The API **refuses to boot** in production with an empty `ALLOWED_ORIGINS` and
 `SERVE_APP` off. That is intentional: the alternative is reflecting any origin
 with credentials.
 
+### When every API path answers 500
+
+The site is two services, so `/` can render perfectly while `/health` and
+`/api/*` both fail. That is always the API service, never the build. Two
+failures look alike in a browser and mean different things:
+
+| Response body | Meaning | Fix |
+|---|---|---|
+| `{"error":{"code":"BACKEND_INIT_FAILED","message":"…"}}` | the function started, refused the configuration, and named the variable | set it in the Vercel project — Production **and** Preview — then redeploy |
+| plain text `FUNCTION_INVOCATION_FAILED`, `x-vercel-error` header | the function died before it could answer: a module-scope throw or a missing file | Runtime Logs; the first stack frame names the module |
+
+`npx vercel env ls production` lists what the project actually has, which is
+the fastest way to spot a key that was added to `.env` locally but never to
+Vercel.
+
 ---
 
 ## Health

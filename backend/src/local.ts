@@ -6,8 +6,14 @@
  * only invites the preset to guess at what it should do.
  */
 import app from "./index";
-import { env, hasServiceRoleKey } from "./config/env";
+import { env, envError, hasServiceRoleKey } from "./config/env";
 import { logger } from "./lib/logger";
+
+// The Vercel entry catches a bad configuration and answers every request with a
+// JSON 500. A real listener has no such luxury, and must not pretend to be up:
+// `index.ts` has already logged which variable is wrong, so just refuse to
+// start.
+if (envError) process.exit(1);
 
 const listener = app.listen(env.port, () => {
   logger.info("server.started", { port: env.port, env: env.nodeEnv });

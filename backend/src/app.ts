@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import express, { type Request, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { env, hasServiceRoleKey } from "./config/env";
+import { env, assertEnv, hasServiceRoleKey } from "./config/env";
 import { apiRouter } from "./routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { apiLimiter } from "./middleware/rateLimit";
@@ -78,6 +78,13 @@ async function checkAuthService(): Promise<{ ok: boolean; detail: string }> {
 }
 
 export function createApp() {
+  // Refuse to build an app on a broken configuration. This is a no-op when the
+  // environment parsed, and the throw is caught by the Vercel entry (which
+  // turns it into a JSON 500 naming the variable) or crashes `local.ts` on
+  // purpose. See the note on `FALLBACK` in config/env.ts for why the check
+  // lives here rather than at module scope.
+  assertEnv();
+
   const app = express();
 
   // Behind a load balancer, `req.ip` is the proxy's address unless Express is

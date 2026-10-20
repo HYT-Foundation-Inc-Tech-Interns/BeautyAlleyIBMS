@@ -69,75 +69,125 @@ const schema = z.object({
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
 });
 
-const parsed = schema.safeParse(process.env);
-
-if (!parsed.success) {
-  const lines = parsed.error.issues.map(
-    (i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`
-  );
-  // Fail loudly at boot rather than throwing a confusing undefined deep inside
-  // a request handler later on.
-  throw new Error(
-    `Invalid environment configuration:\n${lines.join("\n")}\n\n` +
-      `Copy .env.example to .env and fill it in.`
-  );
-}
+type EnvShape = z.infer<typeof schema>;
 
 /**
- * A public API must never reflect an arbitrary origin while allowing
- * credentials. In development that behaviour is a convenience; in production
- * it is a hole. Two configurations are safe:
+ * Values used when the environment is invalid, so that *importing* this module
+ * never throws.
  *
- *   - an explicit ALLOWED_ORIGINS allow-list, or
- *   - SERVE_APP, where the app and the API share one origin and CORS is not
- *     involved at all.
+ * That matters on a serverless platform. The entry point wraps `createApp()` in
+ * a try/catch precisely so a misconfigured deployment answers with a 500 that
+ * names the missing variable. But a bundler is free to hoist this module's
+ * top-level code into the bundle's prologue - outside that try/catch - and then
+ * the same misconfiguration surfaces as Vercel's opaque
+ * `FUNCTION_INVOCATION_FAILED` with no hint of the cause.
  *
- * Anything else fails at boot, because a boot failure is a five-second fix and
- * a silently permissive production API is not.
+ * So the failure is *recorded* here and *raised* by `assertEnv()`, which every
+ * real boot path calls: `createApp()` on Vercel, `local.ts` on a container or a
+ * laptop. The loud failure is preserved, just moved to where it can be caught
+ * and reported. Nothing serves a request with these values - `assertEnv()`
+ * throws first - they only keep `createClient()` from throwing at import.
  */
-if (
-  parsed.data.NODE_ENV === "production" &&
-  parsed.data.ALLOWED_ORIGINS.trim() === "" &&
-  parsed.data.SERVE_APP !== true
-) {
-  throw new Error(
-    "Invalid environment configuration:\n" +
-      "  - ALLOWED_ORIGINS is empty in production, so the API would reflect any\n" +
-      "    origin with credentials.\n\n" +
-      "Set ALLOWED_ORIGINS to the deployed frontend origin(s), or set\n" +
-      "SERVE_APP=true to serve the app from this same origin."
-  );
+const FALLBACK: EnvShape = {
+  NODE_ENV: process.env.NODE_ENV === "production" ? "production" : "development",
+  PORT: 4000,
+  SUPABASE_URL: "http://localhost:54321",
+  SUPABASE_ANON_KEY: "unconfigured-anon-key-placeholder",
+  SUPABASE_SERVICE_ROLE_KEY: "",
+  DATABASE_URL: undefined,
+  BRANCH_TIMEZONE: "Asia/Manila",
+  CANCELLATION_WINDOW_HOURS: 2,
+  ALLOWED_ORIGINS: "",
+  SERVE_APP: false,
+  QR_SIGNING_SECRET: "unconfigured-qr-signing-secret-placeholder",
+  QR_CHECKIN_WINDOW_MINUTES: 60,
+  QR_CHECKIN_URL: "https://beautyalley.app/check-in",
+  BRANCH_ID: "beautyalley-main",
+  QR_ENTER_URL: "https://beautyalley.app/welcome",
+  LOGIN_MAX_ATTEMPTS: 5,
+  LOGIN_LOCKOUT_MINUTES: 15,
+};
+
+const parsed = schema.safeParse(process.env);
+
+/**
+ * Why the process must not serve traffic, or `null` when the configuration is
+ * usable. Built once, thrown by `assertEnv()`.
+ */
+export const envError: Error | null = (() => {
+  if (!parsed.success) {
+    const lines = parsed.error.issues.map(
+      (i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`
+    );
+    return new Error(
+      `Invalid environment configuration:\n${lines.join("\n")}\n\n` +
+        `Copy .env.example to .env and fill it in.`
+    );
+  }
+
+  // A public API must never reflect an arbitrary origin while allowing
+  // credentials. In development that behaviour is a convenience; in production
+  // it is a hole. Two configurations are safe:
+  //
+  //   - an explicit ALLOWED_ORIGINS allow-list, or
+  //   - SERVE_APP, where the app and the API share one origin and CORS is not
+  //     involved at all.
+  //
+  // Anything else stops the boot, because a boot failure is a five-second fix
+  // and a silently permissive production API is not.
+  if (
+    parsed.data.NODE_ENV === "production" &&
+    parsed.data.ALLOWED_ORIGINS.trim() === "" &&
+    parsed.data.SERVE_APP !== true
+  ) {
+    return new Error(
+      "Invalid environment configuration:\n" +
+        "  - ALLOWED_ORIGINS is empty in production, so the API would reflect any\n" +
+        "    origin with credentials.\n\n" +
+        "Set ALLOWED_ORIGINS to the deployed frontend origin(s), or set\n" +
+        "SERVE_APP=true to serve the app from this same origin."
+    );
+  }
+
+  return null;
+})();
+
+/** Throws `envError` if the environment is unusable. Call before serving. */
+export function assertEnv(): void {
+  if (envError) throw envError;
 }
 
+const data: EnvShape = parsed.success ? parsed.data : FALLBACK;
+
 export const env = {
-  nodeEnv: parsed.data.NODE_ENV,
-  isProduction: parsed.data.NODE_ENV === "production",
-  isTest: parsed.data.NODE_ENV === "test",
-  port: parsed.data.PORT,
+  nodeEnv: data.NODE_ENV,
+  isProduction: data.NODE_ENV === "production",
+  isTest: data.NODE_ENV === "test",
+  port: data.PORT,
 
-  supabaseUrl: parsed.data.SUPABASE_URL,
-  supabaseAnonKey: parsed.data.SUPABASE_ANON_KEY,
-  supabaseServiceRoleKey: parsed.data.SUPABASE_SERVICE_ROLE_KEY || "",
+  supabaseUrl: data.SUPABASE_URL,
+  supabaseAnonKey: data.SUPABASE_ANON_KEY,
+  supabaseServiceRoleKey: data.SUPABASE_SERVICE_ROLE_KEY || "",
 
-  databaseUrl: parsed.data.DATABASE_URL || "",
+  databaseUrl: data.DATABASE_URL || "",
 
-  branchTimezone: parsed.data.BRANCH_TIMEZONE,
-  cancellationWindowHours: parsed.data.CANCELLATION_WINDOW_HOURS,
+  branchTimezone: data.BRANCH_TIMEZONE,
+  cancellationWindowHours: data.CANCELLATION_WINDOW_HOURS,
 
-  allowedOrigins: parsed.data.ALLOWED_ORIGINS.split(",")
+  allowedOrigins: data.ALLOWED_ORIGINS.split(",")
     .map((s) => s.trim())
     .filter(Boolean),
 
-  serveApp: parsed.data.SERVE_APP,
+  serveApp: data.SERVE_APP,
 
-  qrSigningSecret: parsed.data.QR_SIGNING_SECRET,
-  qrCheckinWindowMinutes: parsed.data.QR_CHECKIN_WINDOW_MINUTES,
-  qrCheckInUrl: parsed.data.QR_CHECKIN_URL,
-  branchId: parsed.data.BRANCH_ID,
-  qrEnterUrl: parsed.data.QR_ENTER_URL,
+  qrSigningSecret: data.QR_SIGNING_SECRET,
+  qrCheckinWindowMinutes: data.QR_CHECKIN_WINDOW_MINUTES,
+  qrCheckInUrl: data.QR_CHECKIN_URL,
+  branchId: data.BRANCH_ID,
+  qrEnterUrl: data.QR_ENTER_URL,
 
-  loginMaxAttempts: parsed.data.LOGIN_MAX_ATTEMPTS,
-  loginLockoutMinutes: parsed.data.LOGIN_LOCKOUT_MINUTES,
+  loginMaxAttempts: data.LOGIN_MAX_ATTEMPTS,
+  loginLockoutMinutes: data.LOGIN_LOCKOUT_MINUTES,
 };
 
 export const hasServiceRoleKey = env.supabaseServiceRoleKey.length > 0;
