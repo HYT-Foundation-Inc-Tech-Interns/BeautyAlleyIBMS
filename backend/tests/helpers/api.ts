@@ -1,7 +1,7 @@
 import request from "supertest";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Express } from "express";
-import { createApp } from "../../src/app";
+import { createApp } from "../../src/createApp";
 import { db } from "./db";
 
 /**
