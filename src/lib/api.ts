@@ -35,6 +35,7 @@ import type {
   BranchQr,
   CheckInResult,
   ClientDetail,
+  ClientHit,
   ClientRecord,
   CreateBookingInput,
   Dashboard,
@@ -554,6 +555,11 @@ export const api = {
 
     /** A soft cancel — the row survives so the history is not erased. */
     cancel: (id: string) => request<Task>("POST", `/api/v1/tasks/${id}/cancel`),
+  },
+
+  clients: {
+    /** Up to eight matches for the booking form; needs two characters. */
+    search: (q: string) => request<ClientHit[]>("GET", "/api/v1/clients/search", { query: { q } }),
   },
 
   promos: {

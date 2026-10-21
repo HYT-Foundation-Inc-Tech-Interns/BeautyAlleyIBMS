@@ -12,6 +12,7 @@ import { loyaltyRouter } from "./modules/loyalty/loyalty.routes";
 import { attendanceRouter } from "./modules/attendance/attendance.routes";
 import { tasksRouter } from "./modules/tasks/tasks.routes";
 import { adminRouter } from "./modules/admin/admin.routes";
+import { clientsRouter } from "./modules/clients/clients.routes";
 import { buildApiIndex } from "./lib/apiIndex";
 
 /**
@@ -41,5 +42,6 @@ apiRouter.use("/service-subcategories", subcategoriesRouter);
 apiRouter.use("/loyalty", loyaltyRouter);
 apiRouter.use("/attendance", attendanceRouter);
 apiRouter.use("/tasks", tasksRouter);
+apiRouter.use("/clients", clientsRouter);
 apiRouter.use("/admin", adminRouter);
 apiRouter.use("/admin", adminAuthRouter);

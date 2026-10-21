@@ -31,6 +31,7 @@ import {
   Sparkles,
   Tag,
   UserRound,
+  X,
 } from "lucide-react";
 
 import {
@@ -45,7 +46,7 @@ import {
 } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import type { Booking, PromoValidation, Service } from "@/lib/api-types";
+import type { Booking, ClientHit, PromoValidation, Service } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Panel, SectionHeading } from "@/components/app/bits";
@@ -71,6 +72,19 @@ export default function NewBooking() {
   const [startTime, setStartTime] = React.useState("");
   const [employeeId, setEmployeeId] = React.useState("");
   const [term, setTerm] = React.useState("");
+
+  /*
+   * Who the booking is for.
+   *
+   * A client picked from the book is attached by id — the API links the booking
+   * to their record, which is what puts it in their history and their own
+   * "my bookings" screen. Leaving the picker empty books a guest, exactly as
+   * the public page does.
+   */
+  const [client, setClient] = React.useState<ClientHit | null>(null);
+  const [clientQuery, setClientQuery] = React.useState("");
+  const [clientHits, setClientHits] = React.useState<ClientHit[]>([]);
+  const [clientSearching, setClientSearching] = React.useState(false);
 
   const [guestName, setGuestName] = React.useState("");
   const [guestPhone, setGuestPhone] = React.useState("");
@@ -140,6 +154,37 @@ export default function NewBooking() {
     setStartTime("");
   }, [serviceId, date, employeeId]);
 
+  /*
+   * Debounced lookup. The cleanup cancels the in-flight answer as well as the
+   * timer, so a slow reply for "ad" cannot land on top of the results for
+   * "ada" — a classic way for a picker to show the wrong person.
+   */
+  React.useEffect(() => {
+    const term = clientQuery.trim();
+    if (client || term.length < 2) {
+      setClientHits([]);
+      return;
+    }
+
+    let live = true;
+    const timer = setTimeout(async () => {
+      setClientSearching(true);
+      try {
+        const hits = await api.clients.search(term);
+        if (live) setClientHits(hits);
+      } catch {
+        if (live) setClientHits([]);
+      } finally {
+        if (live) setClientSearching(false);
+      }
+    }, 250);
+
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [clientQuery, client]);
+
   const subtotalCents = service?.priceCents ?? 0;
   const discountCents = promo?.valid ? promo.discountCents : 0;
   const totalCents = Math.max(0, subtotalCents - discountCents);
@@ -171,9 +216,11 @@ export default function NewBooking() {
 
     const next: Record<string, string> = {};
     if (!startTime) next.startTime = "Choose a time";
-    if (!guestName.trim()) next.guestName = "A name for the booking";
-    if (!PHONE_RE.test(guestPhone.trim())) {
-      next.guestPhone = "A phone number, in case anything changes";
+    if (!client) {
+      if (!guestName.trim()) next.guestName = "A name for the booking";
+      if (!PHONE_RE.test(guestPhone.trim())) {
+        next.guestPhone = "A phone number, in case anything changes";
+      }
     }
     setLocalErrors(next);
     if (Object.keys(next).length) return;
@@ -185,7 +232,10 @@ export default function NewBooking() {
         serviceIds: [service.id],
         startTime,
         ...(employeeId ? { employeeId } : {}),
-        guest: { name: guestName.trim(), phone: guestPhone.trim() },
+        // A picked client is attached by id; otherwise the booking is a guest's.
+        ...(client
+          ? { clientId: client.id }
+          : { guest: { name: guestName.trim(), phone: guestPhone.trim() } }),
         ...(promo?.valid && promo.code ? { promoCode: promo.code } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       });
@@ -203,6 +253,9 @@ export default function NewBooking() {
     setServiceId("");
     setStartTime("");
     setEmployeeId("");
+    setClient(null);
+    setClientQuery("");
+    setClientHits([]);
     setGuestName("");
     setGuestPhone("");
     setNotes("");
@@ -362,24 +415,109 @@ export default function NewBooking() {
           {/* 3 — who */}
           <Panel className="p-5">
             <h2 className="font-display text-[17px] font-semibold tracking-tight">3. Who</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <TextField
-                label="Guest name"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Ada Cruz"
-                error={localErrors.guestName}
-              />
-              <TextField
-                label="Phone"
-                type="tel"
-                value={guestPhone}
-                onChange={(e) => setGuestPhone(e.target.value)}
-                placeholder="+63 917 000 0000"
-                error={localErrors.guestPhone}
-                autoComplete="tel"
-              />
-            </div>
+
+            {/* An existing client, or a guest — never both. */}
+            {client ? (
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/[0.05] px-3.5 py-3">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+                  {client.fullName.slice(0, 1).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium">{client.fullName}</p>
+                  <p className="truncate text-[11.5px] text-muted-foreground">
+                    {[client.phone, client.email].filter(Boolean).join(" · ") || "Client record"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setClient(null);
+                    setClientQuery("");
+                  }}
+                >
+                  <X className="size-3.5" />
+                  Change
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <label className="block">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    Existing client
+                  </span>
+                  <div className="relative mt-1.5">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/70" />
+                    <input
+                      value={clientQuery}
+                      onChange={(e) => setClientQuery(e.target.value)}
+                      placeholder="Search the client book by name, phone or email…"
+                      className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-[13px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    />
+                    {clientSearching && (
+                      <Loader2 className="absolute right-3 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                </label>
+
+                {clientHits.length > 0 && (
+                  <ul className="mt-2 divide-y divide-border/60 overflow-hidden rounded-lg border border-border bg-card">
+                    {clientHits.map((hit) => (
+                      <li key={hit.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClient(hit);
+                            setClientHits([]);
+                            setClientQuery("");
+                            setLocalErrors({});
+                          }}
+                          className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-primary/[0.04]"
+                        >
+                          <UserRound className="size-3.5 shrink-0 text-primary/70" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[12.5px] font-medium">
+                              {hit.fullName}
+                            </span>
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {[hit.phone, hit.email].filter(Boolean).join(" · ") || "No contact details"}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {clientQuery.trim().length >= 2 && !clientSearching && clientHits.length === 0 && (
+                  <p className="mt-2 text-[11.5px] text-muted-foreground">
+                    No client matches that — leave it blank to book them as a guest.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!client && (
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <TextField
+                  label="Guest name"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Ada Cruz"
+                  error={localErrors.guestName}
+                />
+                <TextField
+                  label="Phone"
+                  type="tel"
+                  value={guestPhone}
+                  onChange={(e) => setGuestPhone(e.target.value)}
+                  placeholder="+63 917 000 0000"
+                  error={localErrors.guestPhone}
+                  autoComplete="tel"
+                />
+              </div>
+            )}
 
             <label className="mt-4 block">
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -416,6 +554,7 @@ export default function NewBooking() {
                 value={employeeId ? employeeNameMap.get(employeeId) ?? "Chosen" : "First free"}
               />
               <Row label="Duration" value={service ? minutesToLabel(service.durationMinutes) : "—"} />
+              <Row label="For" value={client?.fullName ?? (guestName.trim() || "—")} />
             </dl>
 
             <div className="mt-5 border-t border-border/70 pt-4">

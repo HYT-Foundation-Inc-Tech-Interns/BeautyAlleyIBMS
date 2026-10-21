@@ -371,6 +371,19 @@ export interface ClientRecord {
   lastVisitAt: string | null;
 }
 
+/**
+ * One row of the desk's client lookup (`GET /clients/search`).
+ *
+ * Deliberately smaller than `ClientRecord`: enough to recognise the person at
+ * the counter, nothing that belongs to the client record.
+ */
+export interface ClientHit {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+}
+
 export interface ClientDetail extends ClientRecord {
   recentBookings: {
     id: string;
