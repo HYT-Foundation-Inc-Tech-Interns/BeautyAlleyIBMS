@@ -17,7 +17,6 @@ import {
   CalendarDays,
   ClipboardList,
   Clock,
-  ExternalLink,
   LayoutDashboard,
   LayoutGrid,
   ListChecks,
@@ -285,13 +284,6 @@ function AppSidebar() {
             {role ? ROLE_LABEL[role] : "—"} · permissions come from your account
           </p>
         </div>
-        <Link
-          to="/"
-          className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-[12.5px] text-primary-foreground/60 transition-colors hover:bg-white/[0.07] hover:text-primary-foreground group-data-[collapsible=icon]:justify-center"
-        >
-          <ExternalLink className="size-[17px] shrink-0" />
-          <span className="group-data-[collapsible=icon]:hidden">Back to public site</span>
-        </Link>
       </SidebarFooter>
     </Sidebar>
   );

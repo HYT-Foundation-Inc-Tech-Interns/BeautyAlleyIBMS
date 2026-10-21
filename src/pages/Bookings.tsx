@@ -35,6 +35,7 @@ import {
 
 import { branchDay, branchTime, branchToday, cn, peso, shiftDayKey } from "@/lib/utils";
 import { api, ApiError, NEXT_STATUS, STATUS_LABEL } from "@/lib/api";
+import { useAuth } from "@/auth/AuthProvider";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,13 @@ function useDebounced<T>(value: T, ms = 300) {
 }
 
 export default function Bookings() {
+  /*
+   * The administrator's copy of this page is a record: read it, and change a
+   * booking's state or room. Creating one is the desk's job — the person at the
+   * counter with the guest — so the button is not offered here.
+   */
+  const { role } = useAuth();
+  const canCreate = role === "CONCIERGE";
   /*
    * Seeded from the URL once, on mount, so another page can hand this one a
    * question instead of a bare page: `/app/bookings?range=all&q=BA-1A2B` opens
@@ -159,12 +167,14 @@ export default function Bookings() {
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={list.reload}>
               <RefreshCw className="size-4" />
             </Button>
-            <Button asChild>
-              <Link to="/app/bookings/new">
-                <Plus className="size-4" />
-                New booking
-              </Link>
-            </Button>
+            {canCreate && (
+              <Button asChild>
+                <Link to="/app/bookings/new">
+                  <Plus className="size-4" />
+                  New booking
+                </Link>
+              </Button>
+            )}
           </div>
         }
       />

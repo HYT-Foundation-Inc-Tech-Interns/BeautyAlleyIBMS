@@ -17,7 +17,7 @@
  */
 
 import * as React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowLeft,
@@ -45,6 +45,7 @@ import {
   shiftDayKey,
 } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { useAuth } from "@/auth/AuthProvider";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, ClientHit, PromoValidation, Service } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
@@ -66,6 +67,7 @@ function chipDay(key: string) {
 
 export default function NewBooking() {
   const navigate = useNavigate();
+  const { role } = useAuth();
 
   const [serviceId, setServiceId] = React.useState("");
   const [date, setDate] = React.useState(() => branchToday());
@@ -265,6 +267,13 @@ export default function NewBooking() {
     setError(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
+
+  /*
+   * The administrator monitors and edits; the desk creates. Checked here, after
+   * every hook has run, so a role that resolves after mount cannot change the
+   * number of hooks this component calls.
+   */
+  if (role === "ADMIN") return <Navigate to="/app/bookings" replace />;
 
   if (created) {
     return <CreatedPass booking={created} onAnother={another} />;
