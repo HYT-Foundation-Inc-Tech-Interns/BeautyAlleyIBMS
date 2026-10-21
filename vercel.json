@@ -14,7 +14,7 @@
     "backend": {
       "root": "backend",
       "framework": "express",
-      "buildCommand": "npm run build"
+      "entrypoint": "src/index.ts"
     }
   },
   "rewrites": [
