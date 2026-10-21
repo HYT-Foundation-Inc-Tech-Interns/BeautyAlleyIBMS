@@ -6,6 +6,7 @@ import type { Actor } from "../../types/actor";
 import type {
   CreatePromoInput,
   ListPromosQuery,
+  ReviewPromoInput,
   UpdatePromoInput,
   ValidatePromoInput,
 } from "./promos.schemas";
@@ -25,6 +26,10 @@ export function toPromoDto(row: PromoRow, liveRedemptions?: number) {
     minSpendCents: row.min_spend_cents,
     applicableServiceIds: row.applicable_service_ids,
     isActive: row.is_active,
+    status: row.status,
+    requestedBy: row.requested_by,
+    reviewedAt: isoOrNull(row.reviewed_at),
+    reviewNote: row.review_note,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     ...(liveRedemptions !== undefined ? { liveRedemptions } : {}),
@@ -77,8 +82,14 @@ export const promosService = {
     };
   },
 
-  async list(query: ListPromosQuery) {
-    const { rows, total } = await promosRepository.list(query);
+  /**
+   * The catalogue. The administrator sees every code; the desk sees only the
+   * ones it proposed, scoped here rather than trusted from the query string.
+   */
+  async list(query: ListPromosQuery, actor: Actor) {
+    const scope =
+      actor.role === "ADMIN" ? undefined : { requestedBy: actor.id };
+    const { rows, total } = await promosRepository.list(query, scope);
     return paginated(rows.map((r) => toPromoDto(r)), total, query.page, query.limit);
   },
 
@@ -89,9 +100,40 @@ export const promosService = {
     return toPromoDto(row, live);
   },
 
-  async create(input: CreatePromoInput) {
-    const row = await promosRepository.create(input);
+  /**
+   * Creating a code means different things to the two roles.
+   *
+   * The administrator is the approver, so a code they create is approved and
+   * live on the spot — routing it through their own queue would be theatre.
+   * The desk proposes: the row lands as PENDING and inert, and only the
+   * administrator's verdict can make it redeemable.
+   */
+  async create(input: CreatePromoInput, actor: Actor) {
+    const approved = actor.role === "ADMIN";
+    const row = await promosRepository.create(input, {
+      status: approved ? "APPROVED" : "PENDING",
+      requestedBy: approved ? null : actor.id,
+    });
     return toPromoDto(row, 0);
+  },
+
+  /** The administrator's verdict on a proposed code. */
+  async review(id: string, input: ReviewPromoInput, actor: Actor) {
+    const existing = await this.getById(id);
+    if (existing.status !== "PENDING") {
+      throw AppError.conflict(
+        CODES.CONFLICT,
+        `That code is already ${existing.status.toLowerCase()} — only a pending proposal can be reviewed`,
+      );
+    }
+
+    const row = await promosRepository.review(id, {
+      status: input.decision,
+      reviewedBy: actor.id,
+      note: input.note ?? null,
+    });
+    if (!row) throw AppError.notFound(CODES.NOT_FOUND, "No such promo code");
+    return toPromoDto(row, await promosRepository.redemptionCount(id));
   },
 
   async update(id: string, patch: UpdatePromoInput) {

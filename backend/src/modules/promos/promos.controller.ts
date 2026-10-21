@@ -8,7 +8,7 @@ export const promosController = {
   },
 
   async list(req: Request, res: Response) {
-    const result = await promosService.list(req.query as never);
+    const result = await promosService.list(req.query as never, req.actor!);
     res.status(200).json(result);
   },
 
@@ -18,8 +18,13 @@ export const promosController = {
   },
 
   async create(req: Request, res: Response) {
-    const result = await promosService.create(req.body);
+    const result = await promosService.create(req.body, req.actor!);
     res.status(201).json({ data: result });
+  },
+
+  async review(req: Request, res: Response) {
+    const result = await promosService.review(req.params.id, req.body, req.actor!);
+    res.status(200).json({ data: result });
   },
 
   async update(req: Request, res: Response) {

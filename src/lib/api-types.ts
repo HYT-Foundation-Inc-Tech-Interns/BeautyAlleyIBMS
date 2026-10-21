@@ -297,6 +297,9 @@ export interface BranchQr {
  * Promos
  * ------------------------------------------------------------------ */
 
+/** Where a code is in the desk → administrator approval flow. */
+export type PromoStatus = "PENDING" | "APPROVED" | "REJECTED";
+
 export interface Promo {
   id: string;
   code: string;
@@ -310,6 +313,13 @@ export interface Promo {
   minSpendCents: number;
   applicableServiceIds: string[] | null;
   isActive: boolean;
+  /** Only APPROVED codes can be redeemed. */
+  status: PromoStatus;
+  /** The profile that proposed it; null when an administrator created it. */
+  requestedBy: string | null;
+  reviewedAt: string | null;
+  /** The administrator's reason, on a rejection in particular. */
+  reviewNote: string | null;
   createdAt: string;
   updatedAt: string;
   liveRedemptions?: number;

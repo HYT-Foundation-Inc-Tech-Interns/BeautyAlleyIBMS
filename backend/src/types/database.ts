@@ -380,6 +380,12 @@ export interface Database {
           min_spend_cents: number;
           applicable_service_ids: string[] | null;
           is_active: boolean;
+          /** PENDING proposals are inert; only APPROVED codes are redeemable. */
+          status: "PENDING" | "APPROVED" | "REJECTED";
+          requested_by: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          review_note: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -395,6 +401,11 @@ export interface Database {
           min_spend_cents?: number;
           applicable_service_ids?: string[] | null;
           is_active?: boolean;
+          status?: "PENDING" | "APPROVED" | "REJECTED";
+          requested_by?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          review_note?: string | null;
         };
         Update: {
           type?: PromoType;
@@ -406,6 +417,11 @@ export interface Database {
           min_spend_cents?: number;
           applicable_service_ids?: string[] | null;
           is_active?: boolean;
+          status?: "PENDING" | "APPROVED" | "REJECTED";
+          requested_by?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          review_note?: string | null;
         };
         Relationships: [];
       };

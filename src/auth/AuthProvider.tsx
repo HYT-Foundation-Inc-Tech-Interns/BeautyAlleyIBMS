@@ -90,10 +90,13 @@ export const SCOPE: Record<Role, Area[]> = {
   ],
   /*
    * The desk owns the front of house: the run sheet, the door, the arrival
-   * scanner, and the task board it writes work onto. It also reads the whole
-   * floor's attendance — reception is who notices a stylist has not clocked in.
+   * scanner, and the task board it writes work onto. It proposes promo codes
+   * for the administrator to approve.
+   *
+   * It does not get attendance any more: a clock is a person's own record, so
+   * only the employee and the administrator (monitoring) see that screen.
    */
-  CONCIERGE: ["overview", "bookings", "check-in", "scan-arrivals", "tasks", "attendance"],
+  CONCIERGE: ["overview", "bookings", "promos", "check-in", "scan-arrivals", "tasks"],
   /*
    * The floor gets its own two screens — the work assigned to it and its own
    * clock — plus the run sheet and the door. It deliberately does NOT get the

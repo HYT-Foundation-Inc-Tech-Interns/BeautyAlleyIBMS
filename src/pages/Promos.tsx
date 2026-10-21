@@ -1,29 +1,32 @@
 "use client";
 
 /**
- * Promo codes — the record, for administrators.
+ * Promo codes — proposed by the desk, approved by the administrator.
  *
- * Two things about this page are shaped by how the API behaves rather than by
- * how a CRUD screen usually looks.
+ * The flow is the point of this page, so it is visible rather than implied:
  *
- * **Delete is deactivate.** `DELETE /promos/:id` sets `is_active = false`; it
- * does not remove the row. That is deliberate on the API's side: a hard delete
- * would cascade `promo_redemptions` away and take the revenue history with it.
- * So the button says "Retire", not "Delete", and retired codes stay visible
- * under the filter — they are history, not garbage.
+ *   PENDING   the concierge proposed a code; it is inert and cannot be redeemed
+ *   APPROVED  the administrator accepted it; it is live (until retired)
+ *   REJECTED  the administrator refused it, with the reason on the row
  *
- * **Redemption counts are live, not a column.** The count is computed per
- * request. A code with `maxRedemptions` shows `used / cap`, and the cap is
- * global across every client.
+ * The administrator's page leads with the queue of proposals, because that is
+ * the only thing on this page that needs a decision. The concierge's page leads
+ * with the proposal form, and its list is scoped server-side to the codes that
+ * desk proposed — the API refuses to show it anyone else's.
+ *
+ * Two behaviours are the API's, not this page's: **delete is deactivate**
+ * (`DELETE /promos/:id` sets `is_active = false`, so redemption history
+ * survives), and redemption counts are computed per request rather than stored.
  */
 
 import * as React from "react";
-import { Loader2, Plus, Tag, Ticket, X } from "lucide-react";
+import { Check, Loader2, Plus, Tag, Ticket, X } from "lucide-react";
 
 import { branchDay, cn, peso } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import type { Promo, PromoType } from "@/lib/api-types";
+import { useAuth } from "@/auth/AuthProvider";
+import type { Promo, PromoStatus, PromoType } from "@/lib/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/app/bits";
@@ -40,12 +43,43 @@ function windowLabel(promo: Promo) {
   return `${from} → ${to}`;
 }
 
-function PromoRow({ promo, onChanged }: { promo: Promo; onChanged: () => void }) {
-  const [busy, setBusy] = React.useState(false);
+function StatusPill({ status }: { status: PromoStatus }) {
+  if (status === "PENDING") return <Badge variant="warning">Awaiting approval</Badge>;
+  if (status === "REJECTED") return <Badge variant="destructive">Rejected</Badge>;
+  return <Badge variant="success">Approved</Badge>;
+}
+
+/* ------------------------------------------------------------------ *
+ * One row
+ * ------------------------------------------------------------------ */
+
+function PromoRow({
+  promo,
+  isAdmin,
+  onChanged,
+}: {
+  promo: Promo;
+  isAdmin: boolean;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = React.useState<"review" | "retire" | null>(null);
   const [error, setError] = React.useState<ApiError | null>(null);
 
+  async function decide(decision: "APPROVED" | "REJECTED") {
+    setBusy("review");
+    setError(null);
+    try {
+      await api.promos.review(promo.id, { decision });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not review that code"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function retire() {
-    setBusy(true);
+    setBusy("retire");
     setError(null);
     try {
       await api.promos.deactivate(promo.id);
@@ -53,7 +87,7 @@ function PromoRow({ promo, onChanged }: { promo: Promo; onChanged: () => void })
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not retire that code"));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -110,24 +144,53 @@ function PromoRow({ promo, onChanged }: { promo: Promo; onChanged: () => void })
       </td>
 
       <td className="px-3 py-3.5">
-        <Badge variant={promo.isActive ? "success" : "secondary"}>
-          {promo.isActive ? "Live" : "Retired"}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusPill status={promo.status} />
+          {promo.status === "APPROVED" && (
+            <Badge variant={promo.isActive ? "success" : "secondary"}>
+              {promo.isActive ? "Live" : "Retired"}
+            </Badge>
+          )}
+        </div>
+        {promo.reviewNote && (
+          <p className="mt-1 max-w-[220px] text-[11px] leading-snug text-muted-foreground">
+            “{promo.reviewNote}”
+          </p>
+        )}
       </td>
 
       <td className="py-3.5 pl-3 pr-5 text-right">
-        {promo.isActive ? (
+        {promo.status === "PENDING" && isAdmin ? (
+          <div className="flex items-center justify-end gap-1.5">
+            <Button size="sm" onClick={() => decide("APPROVED")} disabled={busy !== null}>
+              {busy === "review" ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+              Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-clay hover:bg-clay/10"
+              onClick={() => decide("REJECTED")}
+              disabled={busy !== null}
+            >
+              <X className="size-3.5" />
+              Reject
+            </Button>
+          </div>
+        ) : promo.status === "APPROVED" && promo.isActive && isAdmin ? (
           <Button
             variant="ghost"
             size="sm"
             className="text-clay hover:bg-clay/10"
             onClick={retire}
-            disabled={busy}
+            disabled={busy !== null}
           >
-            {busy ? <Loader2 className="size-3.5 animate-spin" /> : "Retire"}
+            {busy === "retire" ? <Loader2 className="size-3.5 animate-spin" /> : "Retire"}
           </Button>
         ) : (
-          <span className="text-[11.5px] text-muted-foreground">—</span>
+          <span className="text-[11.5px] text-muted-foreground">
+            {promo.status === "PENDING" ? "With the administrator" : "—"}
+          </span>
         )}
         {error && <p className="mt-1 text-[11px] text-clay">{error.message}</p>}
       </td>
@@ -135,7 +198,14 @@ function PromoRow({ promo, onChanged }: { promo: Promo; onChanged: () => void })
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * Page
+ * ------------------------------------------------------------------ */
+
 export default function Promos() {
+  const { role } = useAuth();
+  const isAdmin = role === "ADMIN";
+
   const [includeInactive, setIncludeInactive] = React.useState(true);
   const [term, setTerm] = React.useState("");
   const [creating, setCreating] = React.useState(false);
@@ -150,30 +220,53 @@ export default function Promos() {
     return needle ? all.filter((p) => p.code.toLowerCase().includes(needle)) : all;
   }, [list.data, term]);
 
-  const liveCount = (list.data ?? []).filter((p) => p.isActive).length;
+  const pending = rows.filter((p) => p.status === "PENDING");
+  const settled = rows.filter((p) => p.status !== "PENDING");
+  const liveCount = (list.data ?? []).filter((p) => p.isActive && p.status === "APPROVED").length;
 
   return (
     <div className="mx-auto w-full max-w-[1200px] space-y-7">
       <SectionHeading
-        eyebrow="Records"
+        eyebrow={isAdmin ? "Records" : "Front desk"}
         title="Promo codes"
-        description="Every code the salon has issued, with how much of each has been spent. Retiring a code keeps its redemption history — it does not delete it."
+        description={
+          isAdmin
+            ? "Approve what the desk proposes, and keep the record of every code the salon has issued. Retiring a code keeps its redemption history — it does not delete it."
+            : "Propose a code for the administrator to approve. Nothing is redeemable until it is approved, and the list below is only your own proposals."
+        }
         action={
           <Button onClick={() => setCreating((v) => !v)} variant={creating ? "secondary" : "default"}>
             {creating ? <X className="size-4" /> : <Plus className="size-4" />}
-            {creating ? "Cancel" : "New code"}
+            {creating ? "Cancel" : isAdmin ? "New code" : "Propose a code"}
           </Button>
         }
       />
 
       {creating && (
         <NewPromoForm
+          isAdmin={isAdmin}
           onCreated={() => {
             setCreating(false);
             list.reload();
           }}
           onCancel={() => setCreating(false)}
         />
+      )}
+
+      {/* The queue first: it is the only thing on this page that needs a verdict. */}
+      {isAdmin && pending.length > 0 && (
+        <section className="rounded-xl border border-champagne-300/70 bg-champagne-300/[0.12] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-[17px] font-semibold tracking-tight">
+                {pending.length} code{pending.length === 1 ? "" : "s"} waiting on you
+              </h2>
+              <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                Proposed by the desk. Approving makes the code redeemable immediately.
+              </p>
+            </div>
+          </div>
+        </section>
       )}
 
       <div className="flex flex-wrap items-center gap-3">
@@ -214,56 +307,84 @@ export default function Promos() {
       ) : rows.length === 0 ? (
         <EmptyNote
           icon={Ticket}
-          title={term ? "No code matches that" : "No promo codes yet"}
+          title={term ? "No code matches that" : isAdmin ? "No promo codes yet" : "You have not proposed a code yet"}
           description={
             term
               ? "Try a shorter prefix — codes are matched anywhere in the string."
-              : "Issue a code and it becomes usable at the booking desk immediately."
+              : isAdmin
+                ? "Create a code, or wait for the desk to propose one."
+                : "Propose one and the administrator will approve or refuse it."
           }
           action={
-            !term ? <Button onClick={() => setCreating(true)}>Create the first one</Button> : undefined
+            !term ? (
+              <Button onClick={() => setCreating(true)}>
+                {isAdmin ? "Create the first one" : "Propose the first one"}
+              </Button>
+            ) : undefined
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-soft">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-border/70 bg-sand-50">
-                  {["Code", "Value", "Redeemed", "Per client", "Min spend", "State", ""].map(
-                    (heading, i) => (
-                      <th
-                        key={heading || `col-${i}`}
-                        className={cn(
-                          "px-3 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground",
-                          i === 0 && "pl-5",
-                          i === 6 && "pr-5 text-right",
-                        )}
-                      >
-                        {heading}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((promo) => (
-                  <PromoRow key={promo.id} promo={promo} onChanged={list.reload} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <PromoTable rows={[...pending, ...settled]} isAdmin={isAdmin} onChanged={list.reload} />
       )}
     </div>
   );
 }
 
+function PromoTable({
+  rows,
+  isAdmin,
+  onChanged,
+}: {
+  rows: Promo[];
+  isAdmin: boolean;
+  onChanged: () => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-soft">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[820px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-border/70 bg-sand-50">
+              {["Code", "Value", "Redeemed", "Per client", "Min spend", "State", ""].map(
+                (heading, i) => (
+                  <th
+                    key={heading || `col-${i}`}
+                    className={cn(
+                      "px-3 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground",
+                      i === 0 && "pl-5",
+                      i === 6 && "pr-5 text-right",
+                    )}
+                  >
+                    {heading}
+                  </th>
+                ),
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((promo) => (
+              <PromoRow key={promo.id} promo={promo} isAdmin={isAdmin} onChanged={onChanged} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ *
- * Create
+ * Create / propose
  * ------------------------------------------------------------------ */
 
-function NewPromoForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+function NewPromoForm({
+  isAdmin,
+  onCreated,
+  onCancel,
+}: {
+  isAdmin: boolean;
+  onCreated: () => void;
+  onCancel: () => void;
+}) {
   const [code, setCode] = React.useState("");
   const [type, setType] = React.useState<PromoType>("PERCENT");
   const [value, setValue] = React.useState("10");
@@ -317,19 +438,22 @@ function NewPromoForm({ onCreated, onCancel }: { onCreated: () => void; onCancel
       noValidate
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 className="font-display text-[19px] font-semibold tracking-tight">Issue a new code</h2>
+        <h2 className="font-display text-[19px] font-semibold tracking-tight">
+          {isAdmin ? "Issue a new code" : "Propose a new code"}
+        </h2>
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           <X className="size-4" />
           Close
         </Button>
       </div>
 
-      {error && (
-        <ErrorNote
-          error={error}
-          className="mt-4"
-        />
-      )}
+      <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+        {isAdmin
+          ? "A code you create is approved and live immediately."
+          : "The administrator approves it before it can be redeemed. You can see its state in the list."}
+      </p>
+
+      {error && <ErrorNote error={error} className="mt-4" />}
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <TextField
@@ -409,12 +533,12 @@ function NewPromoForm({ onCreated, onCancel }: { onCreated: () => void; onCancel
           {busy ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              Issuing…
+              {isAdmin ? "Issuing…" : "Proposing…"}
             </>
           ) : (
             <>
               <Plus className="size-4" />
-              Issue code
+              {isAdmin ? "Issue code" : "Send for approval"}
             </>
           )}
         </Button>

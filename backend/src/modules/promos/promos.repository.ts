@@ -15,12 +15,16 @@ export interface PromoRow {
   min_spend_cents: number;
   applicable_service_ids: string[] | null;
   is_active: boolean;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  requested_by: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
   created_at: string;
   updated_at: string;
 }
 
 const SELECT =
-  "id, code, type, value, starts_at, ends_at, max_redemptions, per_client_limit, min_spend_cents, applicable_service_ids, is_active, created_at, updated_at" as const;
+  "id, code, type, value, starts_at, ends_at, max_redemptions, per_client_limit, min_spend_cents, applicable_service_ids, is_active, status, requested_by, reviewed_at, review_note, created_at, updated_at" as const;
 
 type PromoUpdate = Database["public"]["Tables"]["promo_codes"]["Update"];
 
@@ -51,12 +55,18 @@ export const promosRepository = {
     return data;
   },
 
-  async list(query: ListPromosQuery): Promise<{ rows: PromoRow[]; total: number }> {
+  async list(
+    query: ListPromosQuery,
+    scope?: { requestedBy?: string },
+  ): Promise<{ rows: PromoRow[]; total: number }> {
     const db = requireServiceRole();
     const { from, to } = toRange(query);
 
     let q = db.from("promo_codes").select(SELECT, { count: "exact" });
     if (query.activeOnly) q = q.eq("is_active", true);
+    if (query.status) q = q.eq("status", query.status);
+    // The desk only ever sees what it proposed; the administrator sees all.
+    if (scope?.requestedBy) q = q.eq("requested_by", scope.requestedBy);
     if (query.q) {
       const safe = query.q.replace(/[%_\\]/g, (m) => `\\${m}`);
       q = q.ilike("code", `%${safe}%`);
@@ -76,7 +86,10 @@ export const promosRepository = {
     return (data as PromoRow) ?? null;
   },
 
-  async create(input: CreatePromoInput): Promise<PromoRow> {
+  async create(
+    input: CreatePromoInput,
+    state: { status: "PENDING" | "APPROVED"; requestedBy: string | null },
+  ): Promise<PromoRow> {
     const db = requireServiceRole();
     const { data, error } = await db
       .from("promo_codes")
@@ -92,7 +105,11 @@ export const promosRepository = {
         per_client_limit: input.perClientLimit ?? null,
         min_spend_cents: input.minSpendCents,
         applicable_service_ids: input.applicableServiceIds ?? null,
-        is_active: input.isActive,
+        // A proposal is inert until the administrator approves it, whatever the
+        // client sent.
+        is_active: state.status === "APPROVED" ? input.isActive : false,
+        status: state.status,
+        requested_by: state.requestedBy,
       })
       .select(SELECT)
       .single();
@@ -116,6 +133,31 @@ export const promosRepository = {
     if (Object.keys(row).length === 0) return this.getById(id);
 
     const { data, error } = await db.from("promo_codes").update(row).eq("id", id).select(SELECT).maybeSingle();
+    if (error) throw error;
+    return (data as PromoRow) ?? null;
+  },
+
+  /**
+   * The administrator's verdict. Approving activates the code in the same
+   * statement, so "approved" and "live" cannot drift apart.
+   */
+  async review(
+    id: string,
+    verdict: { status: "APPROVED" | "REJECTED"; reviewedBy: string; note: string | null },
+  ): Promise<PromoRow | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("promo_codes")
+      .update({
+        status: verdict.status,
+        is_active: verdict.status === "APPROVED",
+        reviewed_by: verdict.reviewedBy,
+        reviewed_at: new Date().toISOString(),
+        review_note: verdict.note,
+      })
+      .eq("id", id)
+      .select(SELECT)
+      .maybeSingle();
     if (error) throw error;
     return (data as PromoRow) ?? null;
   },

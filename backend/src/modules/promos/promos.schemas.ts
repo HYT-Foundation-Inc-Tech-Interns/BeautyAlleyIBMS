@@ -55,12 +55,27 @@ export const listPromosQuerySchema = paginationSchema.extend({
   sort: z.enum(PROMO_SORT_COLUMNS).default("created_at"),
   order: z.enum(["asc", "desc"]).default("desc"),
   activeOnly: z.coerce.boolean().default(false),
+  /** The approval queue: PENDING for the administrator, "mine" for the desk. */
+  status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
   q: z.string().trim().max(64).optional(),
+});
+
+/**
+ * The administrator's verdict on a proposed code.
+ *
+ * Approving is what makes a code live: the service sets `is_active` from the
+ * decision, so a second field saying "and also activate it" would be a second
+ * way to express the same fact.
+ */
+export const reviewPromoSchema = z.object({
+  decision: z.enum(["APPROVED", "REJECTED"]),
+  note: z.string().trim().max(500).optional(),
 });
 
 export const idParamSchema = z.object({ id: z.string().uuid("Not a valid promo id") });
 
 export type CreatePromoInput = z.infer<typeof createPromoSchema>;
+export type ReviewPromoInput = z.infer<typeof reviewPromoSchema>;
 export type UpdatePromoInput = z.infer<typeof updatePromoSchema>;
 export type ValidatePromoInput = z.infer<typeof validatePromoSchema>;
 export type ListPromosQuery = z.infer<typeof listPromosQuerySchema>;

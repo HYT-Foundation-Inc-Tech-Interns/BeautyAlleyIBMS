@@ -44,6 +44,7 @@ import type {
   Me,
   Paginated,
   Promo,
+  PromoStatus,
   PromoType,
   PromoValidation,
   QrState,
@@ -564,7 +565,7 @@ export const api = {
       guestPhone?: string;
     }) => request<PromoValidation>("POST", "/api/v1/promos/validate", { body }),
 
-    list: (query: ListQuery & { activeOnly?: boolean } = {}) =>
+    list: (query: ListQuery & { activeOnly?: boolean; status?: PromoStatus } = {}) =>
       request<Paginated<Promo>>("GET", "/api/v1/promos", { query }),
 
     create: (body: {
@@ -579,6 +580,13 @@ export const api = {
       applicableServiceIds?: string[];
       isActive?: boolean;
     }) => request<Promo>("POST", "/api/v1/promos", { body }),
+
+    /**
+     * The administrator's verdict on a proposed code. Approving is what makes
+     * the code live, so there is no separate "activate" call.
+     */
+    review: (id: string, body: { decision: "APPROVED" | "REJECTED"; note?: string }) =>
+      request<Promo>("POST", `/api/v1/promos/${id}/review`, { body }),
 
     update: (id: string, body: Partial<Omit<Promo, "id" | "createdAt" | "updatedAt">>) =>
       request<Promo>("PATCH", `/api/v1/promos/${id}`, { body }),
