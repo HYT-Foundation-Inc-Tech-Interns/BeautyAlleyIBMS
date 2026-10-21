@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryBoolean } from "../../lib/query";
 import { paginationSchema } from "../../lib/pagination";
 
 export const promoteClientSchema = z.object({
@@ -32,8 +33,8 @@ export const listLoyaltyQuerySchema = paginationSchema.extend({
   sort: z.enum(LOYALTY_SORT_COLUMNS).default("full_name"),
   order: z.enum(["asc", "desc"]).default("asc"),
   /** Only clients who have earned the promotion and not yet received it. */
-  eligibleOnly: z.coerce.boolean().default(false),
-  memberOnly: z.coerce.boolean().default(false),
+  eligibleOnly: queryBoolean().default(false),
+  memberOnly: queryBoolean().default(false),
   q: z.string().trim().max(80).optional(),
 });
 

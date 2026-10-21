@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryBoolean } from "../../lib/query";
 import { paginationSchema } from "../../lib/pagination";
 
 export const PROMO_SORT_COLUMNS = ["code", "created_at", "starts_at", "ends_at"] as const;
@@ -54,7 +55,7 @@ export const updatePromoSchema = z.object({
 export const listPromosQuerySchema = paginationSchema.extend({
   sort: z.enum(PROMO_SORT_COLUMNS).default("created_at"),
   order: z.enum(["asc", "desc"]).default("desc"),
-  activeOnly: z.coerce.boolean().default(false),
+  activeOnly: queryBoolean().default(false),
   /** The approval queue: PENDING for the administrator, "mine" for the desk. */
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
   q: z.string().trim().max(64).optional(),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryBoolean } from "../../lib/query";
 
 export const SUBCATEGORY_SORT_COLUMNS = ["name", "sort_order", "created_at"] as const;
 
@@ -41,7 +42,7 @@ export const updateSubcategorySchema = z
 export const listSubcategoriesQuerySchema = z.object({
   category: category.optional(),
   /** The booking page only ever wants live ones; the admin table asks for all. */
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean().default(false),
 });
 
 export const idParamSchema = z.object({ id: z.string().uuid("Not a valid subcategory id") });

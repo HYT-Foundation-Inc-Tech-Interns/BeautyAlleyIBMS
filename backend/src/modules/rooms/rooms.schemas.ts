@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryBoolean } from "../../lib/query";
 import { paginationSchema } from "../../lib/pagination";
 
 export const ROOM_TYPES = [
@@ -47,7 +48,7 @@ export const listRoomsQuerySchema = paginationSchema.extend({
    * auto-assigner, and "show me everything" is the rare case that should be
    * asked for explicitly.
    */
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean().default(false),
 });
 
 /**

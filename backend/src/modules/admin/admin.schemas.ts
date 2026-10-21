@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryBoolean } from "../../lib/query";
 import { paginationSchema } from "../../lib/pagination";
 
 export const dashboardQuerySchema = z.object({
@@ -21,7 +22,7 @@ export const listClientsQuerySchema = paginationSchema.extend({
   sort: z.enum(CLIENT_SORT_COLUMNS).default("last_visit_at"),
   order: z.enum(["asc", "desc"]).default("desc"),
   q: z.string().trim().max(100).optional(),
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean().default(false),
 });
 
 export const updateClientSchema = z

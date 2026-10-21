@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryBoolean } from "../../lib/query";
 import { paginationSchema } from "../../lib/pagination";
 
 export const bookingStatus = z.enum([
@@ -121,7 +122,7 @@ export const assignEmployeeSchema = z.object({
 
 export const myBookingsQuerySchema = paginationSchema.extend({
   status: bookingStatus.optional(),
-  upcoming: z.coerce.boolean().default(false),
+  upcoming: queryBoolean().default(false),
 });
 
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;

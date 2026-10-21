@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryBoolean } from "../../lib/query";
 import { paginationSchema } from "../../lib/pagination";
 
 export const serviceCategory = z.enum(["SPA", "SALON", "WELLNESS"]);
@@ -32,7 +33,7 @@ export const listServicesSchema = paginationSchema.extend({
   category: serviceCategory.optional(),
   // Defaults to true so the public catalogue never advertises retired
   // services; admin passes includeInactive=true to see everything.
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean().default(false),
 });
 
 export const searchServicesSchema = z.object({

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { queryBoolean } from "../../lib/query";
 import { paginationSchema } from "../../lib/pagination";
 
 export const EMPLOYEE_SORT_COLUMNS = ["full_name", "title", "created_at"] as const;
@@ -6,7 +7,7 @@ export const EMPLOYEE_SORT_COLUMNS = ["full_name", "title", "created_at"] as con
 export const listEmployeesSchema = paginationSchema.extend({
   sort: z.enum(EMPLOYEE_SORT_COLUMNS).default("full_name"),
   order: z.enum(["asc", "desc"]).default("asc"),
-  includeInactive: z.coerce.boolean().default(false),
+  includeInactive: queryBoolean().default(false),
   /** Only employees qualified for this service. */
   serviceId: z.string().uuid().optional(),
 });
