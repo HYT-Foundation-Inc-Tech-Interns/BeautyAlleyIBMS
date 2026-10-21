@@ -149,9 +149,12 @@
     --input: 28 26% 86%;
     --ring: 343 33% 42%;
 
-    --sidebar: 340 20% 16%; /* deep plum-charcoal, not emerald */
-    --sidebar-foreground: 30 42% 96%;
-    --sidebar-ring: 38 46% 62%;
+    /* The rail keeps the public site's emerald: it is the one surface that is
+     * furniture rather than content, and a second dark colour beside the ivory
+     * body read as a different product bolted onto the salon's own site. */
+    --sidebar: 162 55% 15%;
+    --sidebar-foreground: 44 38% 95%;
+    --sidebar-ring: 152 40% 62%;
 
     --radius: 0.85rem;
   }
@@ -185,9 +188,9 @@
     --input: 340 10% 23%;
     --ring: 343 40% 58%;
 
-    --sidebar: 340 16% 10%;
-    --sidebar-foreground: 30 30% 94%;
-    --sidebar-ring: 38 46% 58%;
+    --sidebar: 162 30% 8%;
+    --sidebar-foreground: 42 30% 94%;
+    --sidebar-ring: 152 40% 55%;
 
     --shadow-color: 0 0 0;
   }
