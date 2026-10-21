@@ -62,40 +62,31 @@ export type AttendanceDto = ReturnType<typeof toAttendanceDto>;
 /**
  * Resolve whose attendance a request is about.
  *
- * An employee may only ever act on their own record - any `employeeId` they
- * send is ignored, and a mismatched one is refused rather than silently
- * dropped, so a client bug surfaces instead of writing to the wrong person.
- * The front desk may name anyone, which is what lets reception clock in a
- * stylist whose hands are busy.
+ * A time-in is the person's own record. Nobody clocks anybody else — not the
+ * desk, not the administrator — so the target is always the caller's own
+ * employee row, and a mismatched `employeeId` is refused rather than silently
+ * ignored so a client bug surfaces instead of writing to the wrong person.
+ *
+ * The administrator still *reads* the floor's records; the separation is
+ * between writing your own clock and monitoring everyone else's.
  */
 async function resolveTarget(actor: Actor, requestedId?: string): Promise<string> {
-  if (actor.role === "EMPLOYEE") {
-    if (!actor.employeeId) {
-      throw AppError.forbidden(
-        CODES.FORBIDDEN,
-        "This account is not linked to an employee record, so it has no attendance to record",
-      );
-    }
-    if (requestedId && requestedId !== actor.employeeId) {
-      throw AppError.forbidden(CODES.FORBIDDEN, "You can only record your own attendance");
-    }
-    return actor.employeeId;
-  }
-
-  const target = requestedId ?? actor.employeeId;
-  if (!target) {
-    throw AppError.badRequest(
-      CODES.VALIDATION_FAILED,
-      "Provide an employeeId - this account is not linked to an employee record of its own",
+  if (!actor.employeeId) {
+    throw AppError.forbidden(
+      CODES.FORBIDDEN,
+      "This account is not linked to an employee record, so it has no attendance to record",
     );
   }
+  if (requestedId && requestedId !== actor.employeeId) {
+    throw AppError.forbidden(CODES.FORBIDDEN, "You can only record your own attendance");
+  }
 
-  const employee = await employeesRepository.getById(target);
+  const employee = await employeesRepository.getById(actor.employeeId);
   if (!employee) throw AppError.notFound(CODES.EMPLOYEE_NOT_FOUND, "No such employee");
   if (!employee.is_active) {
     throw AppError.conflict(CODES.CONFLICT, "That employee is not active, so attendance cannot be recorded");
   }
-  return target;
+  return actor.employeeId;
 }
 
 /**

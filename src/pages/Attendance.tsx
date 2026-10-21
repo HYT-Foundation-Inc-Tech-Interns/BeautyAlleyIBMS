@@ -220,100 +220,19 @@ function ClockCard({ onChanged }: { onChanged: () => void }) {
  * The desk's clock-in
  * ------------------------------------------------------------------ */
 
-function DeskClock({
-  employees,
-  onChanged,
-}: {
-  employees: Employee[];
-  onChanged: () => void;
-}) {
-  const [employeeId, setEmployeeId] = React.useState("");
-  const [busy, setBusy] = React.useState<"in" | "out" | null>(null);
-  const [note, setNote] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  async function punch(which: "in" | "out") {
-    if (!employeeId) return;
-    setBusy(which);
-    setError(null);
-    setNote(null);
-    try {
-      const record =
-        which === "in"
-          ? await api.attendance.clockIn({ employeeId })
-          : await api.attendance.clockOut({ employeeId });
-      setNote(
-        which === "in"
-          ? `${record.employeeName} timed in at ${branchTime(record.timeIn)}.`
-          : `${record.employeeName} timed out — ${minutesToLabel(record.minutesWorked ?? 0)} on the clock.`,
-      );
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  return (
-    <Panel className="px-5 py-4">
-      <p className="eyebrow">Desk</p>
-      <p className="mt-1 text-[13.5px] font-semibold">Clock someone in or out</p>
-      <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-        For a stylist whose hands are busy. The time recorded is now, on the branch clock.
-      </p>
-
-      <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-        <select
-          value={employeeId}
-          onChange={(e) => setEmployeeId(e.target.value)}
-          className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-[13.5px] outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-        >
-          <option value="">Choose an employee…</option>
-          {employees.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.fullName}
-            </option>
-          ))}
-        </select>
-        <div className="flex gap-2">
-          <Button disabled={!employeeId || busy !== null} onClick={() => void punch("in")} className="gap-2">
-            <LogIn className="size-4" />
-            {busy === "in" ? "…" : "Time in"}
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!employeeId || busy !== null}
-            onClick={() => void punch("out")}
-            className="gap-2"
-          >
-            <LogOut className="size-4" />
-            {busy === "out" ? "…" : "Time out"}
-          </Button>
-        </div>
-      </div>
-
-      {note && (
-        <p className="mt-3.5 rounded-lg border border-success/25 bg-success/[0.06] px-3.5 py-2.5 text-[12.5px] text-success">
-          {note}
-        </p>
-      )}
-      {error && (
-        <p className="mt-3.5 rounded-lg border border-destructive/25 bg-destructive/[0.06] px-3.5 py-2.5 text-[12.5px] text-destructive">
-          {error}
-        </p>
-      )}
-    </Panel>
-  );
-}
-
 /* ------------------------------------------------------------------ *
  * Page
  * ------------------------------------------------------------------ */
 
 export default function Attendance() {
   const { role, me } = useAuth();
-  const isDesk = role === "ADMIN" || role === "CONCIERGE";
+  /**
+   * Only the administrator sees the floor's records, and only to read them.
+   * Clocking is the employee's own act: the desk no longer punches anyone in,
+   * and the administrator does not punch anyone either.
+   */
+  const isAdmin = role === "ADMIN";
+  const isEmployee = role === "EMPLOYEE";
 
   const [from, setFrom] = React.useState(() => shiftDayKey(branchToday(), -13));
   const [to, setTo] = React.useState(() => branchToday());
@@ -356,12 +275,19 @@ export default function Attendance() {
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* An employee sees their own clock. The desk sees the same card only
-            if their own account happens to be linked to an employee row. */}
-        {!isDesk || me?.employeeId ? <ClockCard onChanged={refresh} /> : null}
+        {/* Your own clock, on your own page. There is no second card here for
+            someone else's: a time-in is the person's own record. */}
+        {isEmployee || me?.employeeId ? <ClockCard onChanged={refresh} /> : null}
 
-        {isDesk && (
-          <DeskClock employees={employees.data?.data ?? []} onChanged={refresh} />
+        {isAdmin && (
+          <Panel className="px-5 py-5">
+            <h2 className="font-display text-[17px] font-semibold tracking-tight">Monitoring only</h2>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+              Attendance is written by the employee at their own clock. This page
+              shows you the floor's record — days present, hours worked, and who
+              is still on the clock. Corrections are made on a record below.
+            </p>
+          </Panel>
         )}
       </div>
 
@@ -433,7 +359,7 @@ export default function Attendance() {
               ))}
             </select>
           </label>
-          {isDesk && (
+          {isAdmin && (
             <label className="min-w-0">
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Employee
@@ -498,7 +424,7 @@ export default function Attendance() {
                       {branchDay(`${r.date}T00:00:00+08:00`)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-[13px]">
-                      {isDesk ? r.employeeName : "You"}
+                      {isAdmin ? r.employeeName : "You"}
                     </td>
                     <td className="tnum whitespace-nowrap px-4 py-3 text-[13px]">{branchTime(r.timeIn)}</td>
                     <td className="tnum whitespace-nowrap px-4 py-3 text-[13px]">
@@ -534,7 +460,7 @@ export default function Attendance() {
 
       <p className="flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground">
         <Users className="mt-0.5 size-3.5 shrink-0" />
-        {isDesk
+        {isAdmin
           ? "You are seeing the whole floor. An employee opening this page sees only their own rows — the API pins that scope to their token, not to a filter this page sends."
           : "This is your own record. Days you did not clock in are left empty rather than marked absent, because absence is a business decision, not a fact the clock can know."}
       </p>
