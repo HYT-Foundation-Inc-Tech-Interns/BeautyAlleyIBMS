@@ -84,13 +84,32 @@ long-standing path and does not depend on a beta feature or a framework preset.
    `https://<project>.vercel.app`.
 3. Deploy — the dashboard, or `vercel --prod` from a terminal.
 
+### Console on its own origin
+
+The public site is the booking site — no "open console" link, no staff sign-in
+in the nav or the footer. The console is published on its own origin instead:
+
+1. Add a second domain to the same project (**Settings → Domains**), e.g.
+   `beautyalley-console.vercel.app`.
+2. Set `VITE_CONSOLE_URL` to that origin (no trailing slash) and redeploy.
+   The build is shared, so one deployment serves both hosts.
+3. Add the console origin to `ALLOWED_ORIGINS` as well, comma-separated:
+   `https://<public>,https://<console>`. The allow-list is exact-match, and
+   the console calls `/api` from its own origin.
+
+With `VITE_CONSOLE_URL` set, `/app/*` on the public origin is forwarded to the
+console origin before React mounts ([`src/main.tsx`](./src/main.tsx)), and the
+signed-in header links to the console absolutely. Leave the variable unset for
+local development and single-origin previews — everything then behaves as one
+site.
+
 ### What lives where
 
 | URL | Serves | Notes |
 |---|---|---|
-| `/` | public home | the landing page; the console is not here |
-| `/login` | staff sign-in | its own link, with `next` remembering where you were headed |
-| `/app/*` | console | guarded by `RequireAuth`, then `RequireArea` |
+| `/` | public home | booking only; no console entry |
+| `/login` | client sign-in | also the staff sign-in *on the console origin* |
+| `/app/*` | console | forwarded to `VITE_CONSOLE_URL` when set; else `RequireAuth` → `RequireArea` |
 | `/api/v1/*` | JSON API | role-gated server-side |
 | `/health` · `/health/live` | health | readiness vs liveness |
 

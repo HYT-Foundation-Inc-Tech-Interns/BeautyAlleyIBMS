@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { AlleyMark, AlleySprig } from "@/components/brand/Logo";
 import { PublicMobileNav, PublicNavLinks } from "@/components/app/PublicNav";
 import { homeFor, ROLE_LABEL, useAuth } from "@/auth/AuthProvider";
+import { CONSOLE_ORIGIN, consoleHref } from "@/lib/console";
 
 export function PublicShell({
   children,
@@ -69,10 +70,28 @@ export function PublicShell({
                   </span>
                 </span>
                 <Button asChild size="sm" variant="champagne" className="h-9">
-                  <Link to={role ? homeFor(role) : "/app"}>
-                    <LayoutDashboard className="size-4" />
-                    Console
-                  </Link>
+                  {/*
+                    A client's "console" is their own bookings, on this site.
+                    Staff belong on the console's own origin — an absolute
+                    link when `VITE_CONSOLE_URL` is set, a router link when
+                    the two still share an origin.
+                  */}
+                  {role === "CLIENT" ? (
+                    <Link to={homeFor(role)}>
+                      <LayoutDashboard className="size-4" />
+                      My bookings
+                    </Link>
+                  ) : CONSOLE_ORIGIN ? (
+                    <a href={consoleHref(role ? homeFor(role) : "/app")}>
+                      <LayoutDashboard className="size-4" />
+                      Console
+                    </a>
+                  ) : (
+                    <Link to={role ? homeFor(role) : "/app"}>
+                      <LayoutDashboard className="size-4" />
+                      Console
+                    </Link>
+                  )}
                 </Button>
                 <Button
                   size="icon-sm"
@@ -140,14 +159,9 @@ export function PublicShell({
 
           <div>
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              For the team
+              Your account
             </h3>
             <ul className="mt-4 space-y-2.5 text-[13px]">
-              <li>
-                <Link to="/login" className="text-foreground/75 transition-colors hover:text-primary">
-                  Staff sign in
-                </Link>
-              </li>
               <li>
                 <Link to="/register" className="text-foreground/75 transition-colors hover:text-primary">
                   Create a client account

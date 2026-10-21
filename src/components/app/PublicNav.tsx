@@ -4,16 +4,9 @@
  * The public navigation, defined once and shared by both public headers.
  *
  * The visitor-facing menu is exactly three destinations — Home, Scan & Check In
- * and Services. Staff sign-in is deliberately *not* one of them: the public
- * site should not offer a door it does not want a visitor to open. It is still
- * reachable as its own link — in the header beside "Book now", and at the
- * bottom of the mobile sheet — because a stylist who cannot find the login on a
- * phone has to be told the URL.
- *
- * Home and login are separate links on purpose. `/` is the public site and
- * `/login` is the staff entrance; pointing a signed-out visitor at `/app` would
- * only bounce them through the auth guard to the same page with a `next`
- * parameter attached.
+ * and Services. Staff sign-in is not one of them, and not anywhere else on the
+ * public site either: the console is published on its own origin (see
+ * `lib/console.ts`), so this site has no staff door to offer.
  *
  * Both headers are dark (the Landing header is transparent over its hero and
  * turns to `alley-900` on scroll; `PublicShell` is `alley-900` throughout), so
@@ -22,7 +15,7 @@
 
 import * as React from "react";
 import { NavLink } from "react-router-dom";
-import { Menu, Scissors } from "lucide-react";
+import { Menu } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -122,19 +115,6 @@ export function PublicMobileNav({ triggerClassName }: { triggerClassName?: strin
             </SheetClose>
           ))}
         </nav>
-
-        {/* The staff entrance, kept apart from the visitor menu above. */}
-        <div className="mt-auto border-t border-border/70 pt-4">
-          <SheetClose asChild>
-            <NavLink
-              to="/login"
-              className="flex items-center gap-2 rounded-lg px-4 py-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Scissors className="size-3.5" />
-              Staff sign in
-            </NavLink>
-          </SheetClose>
-        </div>
       </SheetContent>
     </Sheet>
   );

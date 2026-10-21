@@ -42,7 +42,6 @@ import { AlleyBadge, AlleySprig, AlleyMark } from "@/components/brand/Logo";
 import { CategoryBadge, ErrorNote, Loading } from "@/components/app/api-bits";
 import { PublicMobileNav, PublicNavLinks } from "@/components/app/PublicNav";
 import { Reveal } from "@/components/app/reveal";
-import { useAuth } from "@/auth/AuthProvider";
 
 /* ------------------------------------------------------------------ *
  * Copy local to the marketing page
@@ -72,7 +71,6 @@ const STEPS = [
 
 export default function Landing() {
   const [scrolled, setScrolled] = React.useState(false);
-  const { status } = useAuth();
 
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -85,8 +83,6 @@ export default function Landing() {
   const menu = useAsync("landing:services", async () =>
     (await api.services.list({ limit: 6, sort: "price_cents", order: "asc" })).data,
   );
-
-  const signedIn = status === "authenticated";
 
   return (
     <div className="min-h-screen bg-background">
@@ -117,35 +113,11 @@ export default function Landing() {
 
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
             {/*
-             * Two different doors, and they stay two different links.
-             *
-             * The home page is the public site; the console is a staff tool.
-             * Sending a signed-out visitor to `/app` only bounces them through
-             * the auth guard to `/login?next=/app`, which is the same page by a
-             * longer route - and it leaves a `next` parameter behind that makes
-             * the login look like a detour rather than the entrance. When
-             * signed in there is nothing to log into, so the link becomes the
-             * console instead.
+             * The home page is the booking site and nothing else. The console
+             * is published on its own origin (see `lib/console.ts`), so there
+             * is no staff door here to advertise — a visitor's only move is to
+             * book.
              */}
-            {signedIn ? (
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="hidden text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground sm:inline-flex"
-              >
-                <Link to="/app">Open console</Link>
-              </Button>
-            ) : (
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="hidden text-primary-foreground/80 hover:bg-white/10 hover:text-primary-foreground sm:inline-flex"
-              >
-                <Link to="/login">Staff sign in</Link>
-              </Button>
-            )}
             <Button asChild size="sm" variant="champagne" className="h-9 px-5">
               <Link to="/book">
                 Book now
@@ -441,9 +413,7 @@ export default function Landing() {
               variant="outline"
               className="h-12 border-white/20 text-primary-foreground hover:border-white/40 hover:bg-white/10"
             >
-              <Link to={signedIn ? "/app" : "/services"}>
-                {signedIn ? "Enter the console" : "Explore services"}
-              </Link>
+              <Link to="/services">Explore services</Link>
             </Button>
           </div>
         </div>
