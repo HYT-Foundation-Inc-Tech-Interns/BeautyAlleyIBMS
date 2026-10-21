@@ -25,18 +25,24 @@
  * otherwise surface as another opaque `FUNCTION_INVOCATION_FAILED`. Catching it
  * turns a configuration mistake into a 500 that names the problem.
  *
- * `require` rather than `import` so the load is synchronous and catchable here;
- * this package is CommonJS. There is deliberately no `listen` call - Vercel
- * owns the server, and `src/local.ts` is the entry for running one locally.
+ * A static import of the factory rather than `require()` inside the try: a
+ * `require()` in a module the platform compiles to ESM is turned into a
+ * "Dynamic require ... is not supported" throw during module initialisation,
+ * which is exactly the pre-handler crash this file is trying to avoid. The only
+ * module-scope work left is `express` and `logger`, neither of which touches
+ * the environment.
+ *
+ * There is deliberately no `listen` call - Vercel owns the server, and
+ * `src/local.ts` is the entry for running one locally.
  */
 import express, { type Express } from "express";
 import { logger } from "./lib/logger";
+import { createApp } from "./createApp";
 
 let app: Express;
 
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  app = (require("./createApp") as typeof import("./createApp")).createApp();
+  app = createApp();
 } catch (e) {
   const error = e instanceof Error ? e : new Error(String(e));
   logger.error("backend.init.failed", { message: error.message });

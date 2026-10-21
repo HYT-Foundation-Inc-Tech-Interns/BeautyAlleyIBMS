@@ -2,6 +2,24 @@ import path from "path";
 import dotenv from "dotenv";
 import { z } from "zod";
 
+/**
+ * Where this module's directory is, when the runtime tells us.
+ *
+ * `__dirname` exists in CommonJS and does not exist at all in an ES module -
+ * referring to it there is a ReferenceError, thrown while the module is being
+ * initialised, i.e. before any of the request handling below can catch it. A
+ * platform that compiles this entry to ESM (Vercel's Express preset does) would
+ * therefore kill the function on every request with an error that names
+ * nothing. `typeof` is safe on an undeclared identifier, so the guard costs
+ * one comparison and removes the whole failure mode.
+ *
+ * When it is unavailable there is nothing to load: a bundled function is
+ * configured by the platform's environment variables, not by a file next to
+ * the bundle. `process.cwd()` is the honest stand-in for "somewhere a .env may
+ * sit" without pretending to know the bundle layout.
+ */
+const HERE = typeof __dirname === "string" ? __dirname : process.cwd();
+
 // Resolved from the compiled location (dist/config) or the source location
 // (src/config) - both sit two levels below the project root.
 //
@@ -11,8 +29,8 @@ import { z } from "zod";
 // running against someone else's project.
 dotenv.config({
   path: [
-    path.join(__dirname, "..", "..", ".env.local"),
-    path.join(__dirname, "..", "..", ".env"),
+    path.join(HERE, "..", "..", ".env.local"),
+    path.join(HERE, "..", "..", ".env"),
   ],
 });
 

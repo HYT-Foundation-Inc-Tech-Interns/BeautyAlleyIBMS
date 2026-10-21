@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Beauty Alley booking system - Express + TypeScript API over Supabase (Postgres, Auth, RLS).",
+  "type": "commonjs",
   "main": "dist/index.js",
   "engines": {
     "node": ">=20"

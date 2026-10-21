@@ -19,7 +19,12 @@ import { buildApiIndex } from "./lib/apiIndex";
  * `backend/src` under ts-jest - both sit one level below `backend`, so `..`
  * twice lands on the repo root either way.
  */
-const FRONTEND_DIST = path.join(__dirname, "..", "..", "dist");
+// `__dirname` is absent when the entry is compiled as an ES module, and a
+// ReferenceError here is a module-initialisation crash, not a request error.
+// Nothing serves static files in that shape (SERVE_APP is off on Vercel), so
+// falling back to the working directory is enough to keep the module loadable.
+const HERE = typeof __dirname === "string" ? __dirname : process.cwd();
+const FRONTEND_DIST = path.join(HERE, "..", "..", "dist");
 
 /**
  * The version reported by `/health`.
@@ -33,7 +38,7 @@ const FRONTEND_DIST = path.join(__dirname, "..", "..", "dist");
 const VERSION: string = (() => {
   if (process.env.APP_VERSION) return process.env.APP_VERSION;
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
+    const pkg = JSON.parse(fs.readFileSync(path.join(HERE, "..", "package.json"), "utf8"));
     return typeof pkg.version === "string" ? pkg.version : "unknown";
   } catch {
     return "unknown";
