@@ -21,16 +21,24 @@ not optional.
 
 ## Deploying
 
-One Vercel project, two services. [`vercel.json`](../vercel.json) declares the
-Vite frontend at the repository root and the Express API in `backend/`, and
-rewrites `/api/*` and both health endpoints to the API. The browser sees one
-origin, so `VITE_API_URL` is never set and CORS never fires in the browser.
+One Vercel project. [`vercel.json`](../vercel.json) keeps the Vite frontend at
+the repository root and exposes the Express API as one function,
+[`api/index.js`](../api/index.js), which loads the app compiled to
+`backend/dist`; `/api/*` and both health endpoints are rewritten to it. The
+browser sees one origin, so `VITE_API_URL` is never set and CORS never fires in
+the browser.
+
+The API is not built by a framework preset: the project's build command compiles
+both halves (`npm run build && cd backend && npm ci && npm run build`). It was
+two **services** in this project until every `/api/*` request started answering
+a bare `FUNCTION_INVOCATION_FAILED` — the service built, but never produced an
+invocable function, whatever the entry exported.
 
 Two variables decide which shape you are running:
 
 | Variable | Vercel | Single container |
 |---|---|---|
-| `SERVE_APP` | **unset** — the frontend is the other service | `true` |
+| `SERVE_APP` | **unset** — the frontend is served by the same project | `true` |
 | `ALLOWED_ORIGINS` | **required** — the production boot guard | optional |
 
 The API refuses to boot in production with neither, so on Vercel
@@ -79,24 +87,27 @@ with credentials.
 
 ### When every API path answers 500
 
-The site is two services, so `/` can render perfectly while `/health` and
-`/api/*` both fail. That is always the API service, never the build. Two
-failures look alike in a browser and mean different things:
+`/` can render perfectly while `/health` and `/api/*` both fail: the frontend
+is static files, the API is a function, and only the function can be broken.
+Two failures look alike in a browser and mean different things:
 
 | Response body | Meaning | Fix |
 |---|---|---|
-| `{"error":{"code":"BACKEND_INIT_FAILED","message":"…"}}` | the function started, refused the configuration, and named the variable | set it in the Vercel project — Production **and** Preview — then redeploy |
-| plain text `FUNCTION_INVOCATION_FAILED`, `x-vercel-error` header | the function died before it could answer: a module-scope throw or a missing file | Runtime Logs; the first stack frame names the module |
-| the same 500 on **every** path, and no `x-request-id` response header | the Express preset never found the app to invoke — this is not the app failing, it never ran | keep exactly one express-importing entry (`backend/src/index.ts`) and export it with `export = app`, which compiles to `module.exports = app`; `export default` is invisible to the CommonJS preset |
+| `{"error":{"code":"BACKEND_INIT_FAILED","message":"…"}}` | the function started and named the problem — a missing variable, or `api/index.js` could not load the compiled app | read the message; it names the variable or the missing file |
+| plain text `FUNCTION_INVOCATION_FAILED`, `x-vercel-error` header | the function died before it could answer: a module-scope throw, or no invocable function at all | Runtime Logs; the first stack frame names the module |
 
-The last row is worth reading twice, because it is the one failure whose body
-looks identical to a crash. The preset finds the entry by filename (`app`,
-`index` or `server`, at the root or under `src/`) and then by module shape:
-in a CommonJS package it wants `module.exports = app`. `export default app`
-compiles to `exports.default = app`, so the function deploys with nothing to
-invoke and Vercel answers every request with its own 500 — no route, no log
-line from this process, and no `x-request-id` header. That header is the
-tell: this app sets it before any route runs.
+The `x-request-id` response header is the tell between the two: the app sets it
+before any route runs, so its absence means the app never started. If the body
+is the platform's own 500 *and* that header is missing on every path, the
+function is not running this code at all — check that the deployment's build
+command finished (a failed build keeps the previous, equally broken deployment
+live), then the Runtime Logs.
+
+This deployment spent a day in exactly that state while the API was declared as
+a second **service**: the service built, the entry exported the app correctly,
+and every request still answered the platform's 500. Moving the API to a plain
+function at `api/index.js` — which loads `backend/dist` and reports why if it
+cannot — is what made the API reachable.
 
 `npx vercel env ls production` lists what the project actually has, which is
 the fastest way to spot a key that was added to `.env` locally but never to

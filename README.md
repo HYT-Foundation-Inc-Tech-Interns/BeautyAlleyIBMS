@@ -54,19 +54,33 @@ npm run demo:accounts  # create/repair the four demo logins below
 
 ## Deploying
 
-One Vercel project serves both apps. [`vercel.json`](./vercel.json) declares two
-**services** in that project — the Vite frontend at the repository root and the
-Express API in `backend/` — and rewrites `/api/*` and both health endpoints to
-the API. The browser only ever talks to the project's own origin, so there is no
+One Vercel project serves both apps. [`vercel.json`](./vercel.json) keeps the
+Vite frontend at the repository root and exposes the Express API as a single
+function, [`api/index.js`](./api/index.js), which loads the app compiled to
+`backend/dist`. `/api/*` and both health endpoints are rewritten to it. The
+browser only ever talks to the project's own origin, so there is no
 `VITE_API_URL` to keep in sync.
 
-1. Import the repository in Vercel. The services and rewrites come from
-   `vercel.json`; leave the root directory at the repository root.
+The project's build command compiles both halves, which is why the API is not
+built by a framework preset:
+
+```bash
+npm run build && cd backend && npm ci --no-audit --no-fund && npm run build
+```
+
+It used to be two **services** in the same project. That model built the frontend
+correctly but never produced an invocable API function — every `/api/*` and
+`/health` request answered the platform's bare `FUNCTION_INVOCATION_FAILED`,
+whatever the entry file exported. A function in `api/` is the platform's plain,
+long-standing path and does not depend on a beta feature or a framework preset.
+
+1. Import the repository in Vercel. Leave the root directory at the repository
+   root; the build command and rewrites come from `vercel.json`.
 2. Add the [environment variables](./docs/runbook.md#required-environment-variables)
    under **Settings → Environment Variables**. `ALLOWED_ORIGINS` is **required**
    on Vercel: the API refuses to boot in production without it or
-   `SERVE_APP=true`, and `SERVE_APP` stays off here because the frontend is the
-   other service. Set it to the production origin,
+   `SERVE_APP=true`, and `SERVE_APP` stays off here because the frontend is
+   served by the same project. Set it to the production origin,
    `https://<project>.vercel.app`.
 3. Deploy — the dashboard, or `vercel --prod` from a terminal.
 
