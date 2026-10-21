@@ -35,6 +35,7 @@ import {
 
 import { branchDay, branchTime, branchToday, cn, peso, shiftDayKey } from "@/lib/utils";
 import { api, ApiError, NEXT_STATUS, STATUS_LABEL } from "@/lib/api";
+import { useAuth } from "@/auth/AuthProvider";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,15 @@ function useDebounced<T>(value: T, ms = 300) {
 }
 
 export default function Bookings() {
+  /*
+   * The administrator reads this record; the desk writes to it. Creating a
+   * booking is a front-desk act — the person at the counter with the guest —
+   * so the administrator's page has no "New booking" button. The API still
+   * allows it (an administrator may need to cover a shift), but the screen
+   * does not offer a job that belongs to someone else.
+   */
+  const { role } = useAuth();
+  const canCreate = role === "CONCIERGE";
   /*
    * Seeded from the URL once, on mount, so another page can hand this one a
    * question instead of a bare page: `/app/bookings?range=all&q=BA-1A2B` opens
@@ -159,12 +169,14 @@ export default function Bookings() {
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={list.reload}>
               <RefreshCw className="size-4" />
             </Button>
-            <Button asChild>
-              <Link to="/book">
-                <Plus className="size-4" />
-                New booking
-              </Link>
-            </Button>
+            {canCreate && (
+              <Button asChild>
+                <Link to="/book">
+                  <Plus className="size-4" />
+                  New booking
+                </Link>
+              </Button>
+            )}
           </div>
         }
       />
