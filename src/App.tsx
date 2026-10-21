@@ -32,6 +32,7 @@ import Register from "@/pages/Register";
 
 import Overview from "@/pages/Overview";
 import Bookings from "@/pages/Bookings";
+import NewBooking from "@/pages/NewBooking";
 import Clients from "@/pages/Clients";
 import Promos from "@/pages/Promos";
 import CheckIn from "@/pages/CheckIn";
@@ -86,6 +87,15 @@ export default function App() {
             element={
               <RequireArea area="bookings">
                 <Bookings />
+              </RequireArea>
+            }
+          />
+          {/* The desk books here, in the console — not on the public page. */}
+          <Route
+            path="bookings/new"
+            element={
+              <RequireArea area="bookings">
+                <NewBooking />
               </RequireArea>
             }
           />

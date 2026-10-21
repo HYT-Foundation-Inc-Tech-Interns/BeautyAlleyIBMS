@@ -84,7 +84,6 @@ export const SCOPE: Record<Role, Area[]> = {
     "employees",
     "check-in",
     "scan-arrivals",
-    "tasks",
     "attendance",
     "board",
   ],

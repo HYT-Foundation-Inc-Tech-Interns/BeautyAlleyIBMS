@@ -32,8 +32,7 @@
  */
 
 import * as React from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { QRCodeSVG } from "qrcode.react";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowRight,
   BadgeCheck,
@@ -42,35 +41,22 @@ import {
   CheckCircle2,
   Clock3,
   Loader2,
-  Printer,
   Sparkles,
   Tag,
   UserRound,
   X,
 } from "lucide-react";
 
-import {
-  branchDay,
-  branchLongDay,
-  branchTime,
-  branchToday,
-  cn,
-  minutesToLabel,
-  peso,
-  relativeToNow,
-  shiftDayKey,
-} from "@/lib/utils";
+import { branchDay, branchTime, branchToday, cn, minutesToLabel, peso, shiftDayKey } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import type { Booking, PromoValidation, Service } from "@/lib/api-types";
+import type { PromoValidation, Service } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
 import {
   EmptyNote,
   ErrorNote,
   FieldError,
   Loading,
-  PersonAvatar,
-  StatusBadge,
   TextField,
 } from "@/components/app/api-bits";
 import { PageHead, PublicShell } from "@/components/app/PublicShell";
@@ -165,22 +151,17 @@ export default function Book() {
   const [error, setError] = React.useState<ApiError | null>(null);
   const [localErrors, setLocalErrors] = React.useState<Record<string, string>>({});
 
-  /**
-   * The booking the desk just made, held here so the pass can be shown on this
-   * page instead of sending the concierge off to /pass/:id. A staff member is
-   * at the counter with the guest in front of them; making them follow a link
-   * (and keep it) is a detour around a screen they already have open.
-   */
-  const [created, setCreated] = React.useState<Booking | null>(null);
-
   const signedInClient = status === "authenticated" && me?.role === "CLIENT";
 
-  /**
-   * Only staff get the in-place pass. A guest on the public site still needs
-   * the /pass URL — it is the capability that lets them reopen the booking on
-   * their own phone — so their flow is unchanged.
+  /*
+   * Staff do not book here. The console has its own screen — the same
+   * availability, plus the stylist and the pass at the counter — so sending a
+   * signed-in member of staff to the public page is a detour through a
+   * marketing frame they have no use for.
    */
   const bookingAtDesk = status === "authenticated" && me?.role !== "CLIENT";
+
+  if (bookingAtDesk) return <Navigate to="/app/bookings/new" replace />;
 
   const catalogue = useAsync("book:services", async () =>
     (await api.services.list({ limit: 100 })).data,
@@ -323,15 +304,6 @@ export default function Book() {
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       });
 
-      if (bookingAtDesk) {
-        // The create response already carries the freshly signed pass, so the
-        // confirmation needs no second round trip — and no URL to keep.
-        setCreated(booking);
-        setSubmitting(false);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        return;
-      }
-
       // The booking id is the capability for a guest — it is what the pass URL
       // carries, and it is the only thing that proves the booking is theirs.
       navigate(`/pass/${booking.id}`, { replace: true, state: { fresh: true } });
@@ -344,25 +316,6 @@ export default function Book() {
   }
 
   const dayHasSlots = (slots.data?.totalSlots ?? 0) > 0;
-
-  /** Back to an empty form, for the next guest in the queue. */
-  function startAnother() {
-    setCreated(null);
-    setServiceId("");
-    setStartTime("");
-    setGuestName("");
-    setGuestPhone("");
-    setNotes("");
-    setPromoInput("");
-    setPromo(null);
-    setLocalErrors({});
-    setError(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  if (created) {
-    return <DeskPass booking={created} onAnother={startAnother} />;
-  }
 
   return (
     <PublicShell>
@@ -812,189 +765,5 @@ export default function Book() {
         </aside>
       </form>
     </PublicShell>
-  );
-}
-
-
-/**
- * The arrival pass, rendered where the booking was made.
- *
- * The public flow hands a guest the /pass URL because that link *is* their
- * capability — a guest has no account, so the URL is the only way back to the
- * booking. The desk has no such problem: the concierge is standing at the
- * screen with the guest, and the pass they need to hand over is already in the
- * create response (`booking.qr`). Sending them to another page to fetch it
- * makes them keep a link they never needed. So the same card the pass page
- * draws is drawn here, inline, and "New booking" clears it for the next guest.
- *
- * The row is the Overview row: sand time block, avatar, display name, icon
- * meta, status badge. Same card, same palette — only the QR and the details
- * below are new.
- */
-function DeskPass({ booking, onAnother }: { booking: Booking; onAnother: () => void }) {
-  const guest = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
-  const duration = booking.items.reduce((total, item) => total + item.durationMinutes, 0);
-  const qr = booking.qr;
-
-  return (
-    <PublicShell>
-      <PageHead
-        eyebrow={`Booked · ${booking.reference}`}
-        title={
-          <>
-            The chair is
-            <span className="italic text-champagne-300"> held.</span>
-          </>
-        }
-        lede="The pass is right here — print it, or show the code at reception. There is no link to wait for."
-      />
-
-      <div className="container max-w-2xl pb-16 pt-12">
-        <div
-          data-print="pass"
-          className="rounded-2xl border border-border/80 bg-card p-6 shadow-lift sm:p-8"
-        >
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="flex min-w-[70px] flex-col rounded-lg bg-sand-50 px-3 py-2 text-center">
-              <span className="font-display text-[16px] font-semibold leading-none tabular-nums">
-                {branchTime(booking.startTime)}
-              </span>
-              <span className="mt-1 text-[10px] text-muted-foreground">
-                {relativeToNow(booking.startTime)}
-              </span>
-            </span>
-
-            <PersonAvatar name={guest} className="size-10 shrink-0" />
-
-            <div className="min-w-[170px] flex-1">
-              <p className="font-display text-[18px] font-semibold leading-tight tracking-tight">
-                {guest}
-              </p>
-              <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <Sparkles className="size-3" />
-                  {booking.items.map((item) => item.name).join(", ") || "—"}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <UserRound className="size-3" />
-                  {booking.employee.fullName}
-                </span>
-                {duration > 0 && (
-                  <span className="inline-flex items-center gap-1">
-                    <Clock3 className="size-3" />
-                    {minutesToLabel(duration)}
-                  </span>
-                )}
-              </p>
-            </div>
-
-            <StatusBadge status={booking.status} />
-          </div>
-
-          <div className="mt-7 flex flex-col items-center border-t border-border/70 pt-7">
-            {qr?.url ? (
-              <>
-                <div className="rounded-2xl bg-white p-4 ring-1 ring-border">
-                  <QRCodeSVG
-                    value={qr.url}
-                    size={188}
-                    bgColor="#ffffff"
-                    fgColor="#1B4D3E"
-                    level="M"
-                  />
-                </div>
-                <p className="mt-3 max-w-sm text-center text-[12px] leading-relaxed text-muted-foreground">
-                  Scanned once at reception. Valid until {branchDay(qr.expiresAt)} ·{" "}
-                  {branchTime(qr.expiresAt)}.
-                </p>
-              </>
-            ) : (
-              <p className="rounded-xl border border-dashed border-border px-6 py-8 text-center text-[12.5px] text-muted-foreground">
-                This booking has no live pass — the code is issued closer to the
-                appointment, and re-issued if the booking is moved.
-              </p>
-            )}
-          </div>
-
-          <dl className="mt-7 grid gap-x-8 gap-y-5 border-t border-border/70 pt-6 sm:grid-cols-2">
-            <Fact icon={CalendarDays} label="When">
-              {branchLongDay(booking.startTime)}
-              <br />
-              {branchTime(booking.startTime)} – {branchTime(booking.endTime)}
-            </Fact>
-            <Fact icon={UserRound} label="Stylist">
-              {booking.employee.fullName}
-            </Fact>
-            <Fact icon={Sparkles} label="Treatment">
-              {booking.items.map((item) => item.name).join(", ") || "—"}
-            </Fact>
-            <Fact icon={BadgeCheck} label="Reference">
-              {booking.reference}
-            </Fact>
-            <Fact icon={Clock3} label="Booked by">
-              {booking.client ? (
-                booking.client.fullName
-              ) : booking.guest ? (
-                <>
-                  {booking.guest.name}
-                  <span className="block text-[11.5px] text-muted-foreground">
-                    Guest booking · {booking.guest.phone}
-                  </span>
-                </>
-              ) : (
-                "Guest"
-              )}
-            </Fact>
-            <Fact icon={Tag} label="Total">
-              <span className="font-display text-[19px] font-semibold text-primary">
-                {peso(booking.totalCents)}
-              </span>
-              {booking.discountCents > 0 && (
-                <span className="ml-2 text-[12px] text-alley-600">
-                  {peso(booking.discountCents)} off
-                </span>
-              )}
-            </Fact>
-          </dl>
-        </div>
-
-        <div data-print="hide" className="mt-6 flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => window.print()}>
-            <Printer className="size-4" />
-            Print pass
-          </Button>
-          <Button onClick={onAnother}>
-            <CalendarDays className="size-4" />
-            New booking
-          </Button>
-          <span className="ml-auto text-[12px] text-muted-foreground">
-            Ref {booking.reference}
-          </span>
-        </div>
-      </div>
-    </PublicShell>
-  );
-}
-
-/** One labelled fact in the pass, matching the pass page's detail grid. */
-function Fact({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex gap-3">
-      <Icon className="mt-0.5 size-4 shrink-0 text-primary/70" />
-      <div className="min-w-0">
-        <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          {label}
-        </dt>
-        <dd className="mt-1 text-[13.5px] leading-relaxed text-foreground">{children}</dd>
-      </div>
-    </div>
   );
 }
