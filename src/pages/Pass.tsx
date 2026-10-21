@@ -106,10 +106,7 @@ export default function Pass() {
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
               <Button asChild>
-                <Link to="/scan">Find a booking</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/book">Book instead</Link>
+                <Link to="/book">Book an appointment</Link>
               </Button>
             </div>
           </div>

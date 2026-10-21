@@ -6,7 +6,7 @@
  * Two things changed from the fixture version. The CTAs used to point into the
  * console (`/app/bookings`), which was wrong on two counts: a stranger landing
  * here has no account, and the console is now behind a login. They point at the
- * public flow instead — `/services`, `/book`, `/scan`.
+ * public flow instead — `/services` and `/book`.
  *
  * The header menu is the shared public navigation (Home, Scan & Check In,
  * Services). Sign In is no longer offered here: the public site should not
@@ -21,13 +21,11 @@
 
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowRight,
   CalendarCheck,
   Clock3,
   MapPin,
-  QrCode,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -36,7 +34,6 @@ import { cn, minutesToLabel, peso } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { serviceImage } from "@/lib/service-images";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlleyBadge, AlleySprig, AlleyMark } from "@/components/brand/Logo";
 import { CategoryBadge, ErrorNote, Loading } from "@/components/app/api-bits";
@@ -47,23 +44,6 @@ import { Reveal } from "@/components/app/reveal";
  * Copy local to the marketing page
  * ------------------------------------------------------------------ */
 
-const STEPS = [
-  {
-    icon: CalendarCheck,
-    title: "Book in seconds",
-    body: "Pick a treatment, a day and a stylist. You'll get a confirmation and an arrival pass instantly — no account required.",
-  },
-  {
-    icon: QrCode,
-    title: "Scan at the door",
-    body: "Show your pass at reception. The desk checks you in and the floor knows you've arrived.",
-  },
-  {
-    icon: Sparkles,
-    title: "Sit back",
-    body: "Your stylist already has the details. Rebook before you leave — same chair, same time.",
-  },
-];
 
 /* ------------------------------------------------------------------ *
  * Page
@@ -296,96 +276,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------ checkin */}
-      <section id="checkin" className="container scroll-mt-24 py-24">
-        <div className="grid items-center gap-16 lg:grid-cols-[0.95fr_1.05fr]">
-          <Reveal>
-            <p className="eyebrow">Check-in</p>
-            <h2 className="mt-3 font-display text-[clamp(2rem,4.4vw,3.1rem)] font-medium leading-[1.05] tracking-tight text-balance">
-              Arrive, scan, and you're expected.
-            </h2>
-            <p className="mt-5 text-[14.5px] leading-relaxed text-muted-foreground text-pretty">
-              No clipboard, no queue at the desk. Your appointment carries its own
-              pass — the floor knows the moment you walk in.
-            </p>
-
-            <ol className="mt-10 space-y-7">
-              {STEPS.map((s, i) => (
-                <li key={s.title} className="flex gap-5">
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border/80 bg-card text-primary shadow-soft">
-                    <s.icon className="size-5" />
-                  </span>
-                  <div className="pt-0.5">
-                    <h3 className="font-display text-[19px] font-semibold tracking-tight">
-                      {i + 1}. {s.title}
-                    </h3>
-                    <p className="mt-1.5 max-w-md text-[13.5px] leading-relaxed text-muted-foreground">
-                      {s.body}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-
-            <div className="mt-9 flex flex-wrap gap-3">
-              <Button asChild>
-                <Link to="/scan">
-                  <QrCode className="size-4" />
-                  Walk in & scan
-                </Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/scan">I already have a pass</Link>
-              </Button>
-            </div>
-          </Reveal>
-
-          {/* Illustrative pass — the real one is issued per booking at /book. */}
-          <Reveal delay={120} className="flex justify-center lg:justify-end">
-            <div className="relative w-full max-w-[400px]">
-              <div className="rounded-2xl border border-border/80 bg-card p-7 shadow-lift">
-                <div className="flex items-center justify-between">
-                  <span className="eyebrow">Arrival pass</span>
-                  <Badge variant="secondary">Example</Badge>
-                </div>
-
-                <div className="mt-6 flex flex-col items-center">
-                  <div className="rounded-xl bg-white p-4 ring-1 ring-border">
-                    <QRCodeSVG
-                      value="https://thebeauty-alley.app/scan"
-                      size={168}
-                      bgColor="#ffffff"
-                      fgColor="#1B4D3E"
-                      level="M"
-                    />
-                  </div>
-                  <p className="mt-4 text-center text-[12px] text-muted-foreground">
-                    Every booking gets its own pass. This one is a sample.
-                  </p>
-                </div>
-
-                <dl className="mt-7 space-y-3.5 border-t border-border/70 pt-6 text-[13px]">
-                  {[
-                    ["Where", "118 Alameda Row, Suite 4"],
-                    ["Book at", "/book"],
-                    ["Bring", "This pass, on your phone"],
-                  ].map(([k, v]) => (
-                    <div key={k} className="flex items-center justify-between gap-4">
-                      <dt className="text-muted-foreground">{k}</dt>
-                      <dd className="font-medium text-foreground">{v}</dd>
-                    </div>
-                  ))}
-                </dl>
-
-                <div className="mt-7 flex items-center gap-2.5 rounded-lg bg-alley-50 px-3.5 py-3 text-[12px] text-alley-700">
-                  <ShieldCheck className="size-4 shrink-0" />
-                  Passes are signed, single-use, and redeemed by the desk only.
-                </div>
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
 
       {/* --------------------------------------------------- closing band */}
       <section className="relative overflow-hidden bg-alley-900 text-primary-foreground">
@@ -452,11 +342,6 @@ export default function Landing() {
               <li>
                 <Link to="/services" className="text-foreground/75 transition-colors hover:text-primary">
                   Services & pricing
-                </Link>
-              </li>
-              <li>
-                <Link to="/scan" className="text-foreground/75 transition-colors hover:text-primary">
-                  QR check-in
                 </Link>
               </li>
             </ul>

@@ -171,11 +171,8 @@ export default function MyBookings() {
 
       <div className="rounded-xl border border-border/80 bg-sand-50 px-5 py-4">
         <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-          Cancelling is free up to two hours before your appointment.{" "}
-          <Link to="/scan" className="font-medium text-primary hover:underline">
-            Lost your pass? Look it up here
-          </Link>
-          .
+          Cancelling is free up to two hours before your appointment. Your pass
+          lives on the booking's own page — open it from here when you need it.
         </p>
       </div>
 

@@ -3,10 +3,10 @@
 /**
  * The public navigation, defined once and shared by both public headers.
  *
- * The visitor-facing menu is exactly three destinations — Home, Scan & Check In
- * and Services. Staff sign-in is not one of them, and not anywhere else on the
- * public site either: the console is published on its own origin (see
- * `lib/console.ts`), so this site has no staff door to offer.
+ * The visitor-facing menu is exactly two destinations — Home and Services. The
+ * public site is the booking site: a guest books, gets a pass, and nothing else
+ * is asked of them. Staff sign-in is not here either; the console is reached by
+ * its own link.
  *
  * Both headers are dark (the Landing header is transparent over its hero and
  * turns to `alley-900` on scroll; `PublicShell` is `alley-900` throughout), so
@@ -37,7 +37,6 @@ export interface PublicNavItem {
 /** The three sections of the public site, in order. */
 export const PUBLIC_NAV: PublicNavItem[] = [
   { to: "/", label: "Home", end: true },
-  { to: "/scan", label: "Scan & Check In" },
   { to: "/services", label: "Services" },
 ];
 

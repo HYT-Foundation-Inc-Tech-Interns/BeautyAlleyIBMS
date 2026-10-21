@@ -149,11 +149,6 @@ export function PublicShell({
                   <Sparkles className="size-3.5" /> Book an appointment
                 </Link>
               </li>
-              <li>
-                <Link to="/scan" className="inline-flex items-center gap-1.5 text-foreground/75 transition-colors hover:text-primary">
-                  <QrCode className="size-3.5" /> Arrive & scan
-                </Link>
-              </li>
             </ul>
           </div>
 

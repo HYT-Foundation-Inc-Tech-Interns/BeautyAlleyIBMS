@@ -809,15 +809,6 @@ export default function Book() {
             </p>
           </div>
 
-          {status !== "authenticated" && (
-            <p className="mt-4 text-center text-[12px] text-muted-foreground">
-              <UserRound className="mr-1 inline size-3.5" />
-              Already booked?{" "}
-              <Link to="/scan" className="font-medium text-primary hover:underline">
-                Find your pass
-              </Link>
-            </p>
-          )}
         </aside>
       </form>
     </PublicShell>
