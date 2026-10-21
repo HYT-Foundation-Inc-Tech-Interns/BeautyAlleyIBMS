@@ -158,10 +158,14 @@ async function insertFutureBooking(db, { clientId, employeeId, startDaysAhead = 
 
 async function main() {
   const created = { bookings: [] };
-  const demo = JSON.parse(
-    fs.readFileSync(path.resolve(__dirname, "..", "..", "demo-accounts.json"), "utf8")
+  const accounts = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, "..", "..", "accounts.json"), "utf8")
   );
-  const byRole = Object.fromEntries(demo.accounts.map((a) => [a.role, a]));
+  const byRole = Object.fromEntries(accounts.accounts.map((a) => [a.role, a]));
+  const password = process.env.ACCOUNT_PASSWORD;
+  if (!password) {
+    throw new Error("Set ACCOUNT_PASSWORD — the account passwords are not kept in the repository");
+  }
 
   const db = new Client({
     connectionString: process.env.DATABASE_URL,
@@ -175,7 +179,7 @@ async function main() {
 
     const tokens = {};
     for (const role of ["ADMIN", "CONCIERGE", "EMPLOYEE", "CLIENT"]) {
-      tokens[role] = await signIn(byRole[role].email, demo.password);
+      tokens[role] = await signIn(byRole[role].email, password);
     }
     check("all four demo accounts sign in", Object.values(tokens).every((t) => typeof t === "string"));
 

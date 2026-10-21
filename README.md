@@ -47,7 +47,6 @@ Every API route lives under `/api/v1`; only `/health` and `/` sit at the root.
 cd backend
 npm run db:migrate     # apply the SQL migrations
 npm run db:seed        # deterministic fixtures: services, employees, clients
-npm run demo:accounts  # create/repair the four demo logins below
 ```
 
 ---
@@ -128,39 +127,20 @@ API needs to live on the salon's own host; health checks and backups in the
 
 ---
 
-## Demo credentials
+## Accounts
 
-All four accounts are **fictional**. They exist so the system can be demonstrated
-without real customer data.
-
-| Role | Email | Password | Lands on |
-| --- | --- | --- | --- |
-| Administrator | `admin@beautyalley.ph` | `AlleyDemo2026!` | `/app` — the overview |
-| Concierge | `concierge@beautyalley.ph` | `AlleyDemo2026!` | `/app` — the front desk |
-| Employee | `stylist@beautyalley.ph` | `AlleyDemo2026!` | `/app` — the floor |
-| Client | `client@beautyalley.ph` | `AlleyDemo2026!` | `/app/my-bookings` |
-
-The login page offers one-click quick-fill for each **in development only**. The
-values live in [`demo-accounts.json`](./demo-accounts.json), which is the
-**single source**: both `backend/scripts/demo-accounts.js` (which creates the
-accounts) and the login page (which displays them) read that one file, so the
-password shown can never drift from the password set.
-
-That panel is gated behind `import.meta.env.DEV`, and `src/auth/demo.ts` returns
-empty values in a production build, so `vite build` emits neither the password
-nor the demo emails. Verify with:
+Four logins, one per role, are listed in [`accounts.json`](./accounts.json) by
+email, name and linked employee/client row. **No password lives in this
+repository** — they are set once by the owner and rotated from the Supabase
+dashboard or with the service-role key. Scripts that need to sign in read
+`ACCOUNT_PASSWORD` from the environment:
 
 ```bash
-grep -r "AlleyDemo2026" dist/ || echo "no credential in the build"
+ACCOUNT_PASSWORD='…' node scripts/verify-atomicity.js
 ```
 
-**If a demo login stops working**, run `cd backend && npm run demo:accounts`.
-That script is idempotent — it creates missing accounts, resets existing ones to
-the documented password, and re-links the employee/client rows.
-
-> ⚠️ `demo-accounts.json` is tracked in this repository and contains a plaintext
-> password. It no longer ships to the browser, but it is still in git — rotate or
-> remove these accounts before any real deployment.
+The login page no longer offers demo quick-fill, and `vite build` cannot emit a
+credential it was never given.
 
 ---
 

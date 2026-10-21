@@ -536,10 +536,10 @@ async function seed(client, { quiet = false, confirmed = false } = {}) {
  * Running `npm test` was enough to cause it, since the Jest global setup runs
  * this seed.
  *
- * So the seed now repairs what it broke. It reads the same
- * `demo-accounts.json` the login page reads, so the ids cannot drift, and it is
- * entirely best-effort: if the auth users have never been created (a fresh
- * clone, before `npm run demo:accounts`), it quietly does nothing.
+ * So the seed now repairs what it broke. It reads `accounts.json`, the list of
+ * the four role logins, so the ids cannot drift from the accounts that exist,
+ * and it is entirely best-effort: if the auth users have never been created, it
+ * quietly does nothing.
  *
  * @param {import("pg").Client} client
  * @param {(msg: string) => void} [log]
@@ -547,7 +547,7 @@ async function seed(client, { quiet = false, confirmed = false } = {}) {
 async function relinkDemoProfiles(client, log = () => {}) {
   let demo;
   try {
-    const file = path.resolve(__dirname, "..", "..", "demo-accounts.json");
+    const file = path.resolve(__dirname, "..", "..", "accounts.json");
     demo = JSON.parse(require("fs").readFileSync(file, "utf8"));
   } catch {
     return; // no demo file — nothing to relink, and not an error

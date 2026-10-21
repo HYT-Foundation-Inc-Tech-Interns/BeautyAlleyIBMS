@@ -19,7 +19,6 @@
     "db:verify": "node scripts/verify.js",
     "db:backup": "node scripts/backup.js",
     "db:restore": "node scripts/restore.js",
-    "demo:accounts": "node scripts/demo-accounts.js",
     "demo:bookings": "node scripts/seed-demo-bookings.js",
     "smoke": "node scripts/smoke.js",
     "verify:arrival": "node scripts/verify-arrival-pass.js",

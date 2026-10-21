@@ -24,6 +24,18 @@ const path = require("path");
 require("./_load-env");
 const { Client } = require("pg");
 
+/**
+ * The account passwords are deliberately not in the repository. Export
+ * ACCOUNT_PASSWORD for the run.
+ */
+function requireAccountPassword() {
+  const password = process.env.ACCOUNT_PASSWORD;
+  if (!password) {
+    throw new Error("Set ACCOUNT_PASSWORD before running this script");
+  }
+  return password;
+}
+
 const BASE = process.env.BASE || `http://127.0.0.1:${process.env.PORT || 4000}`;
 const API = `${BASE}/api/v1`;
 const C = { r: "\x1b[0m", dim: "\x1b[2m", red: "\x1b[31m", green: "\x1b[32m", bold: "\x1b[1m" };
@@ -148,7 +160,7 @@ async function main() {
   let timeOffId = null;
 
   try {
-    const admin = await signIn("admin@beautyalley.ph", "AlleyDemo2026!");
+    const admin = await signIn("admin@beautyalley.ph", requireAccountPassword());
 
     const { rows: staff } = await db.query(
       `select es.employee_id, es.service_id

@@ -26,6 +26,18 @@ const path = require("path");
 require("./_load-env");
 const { Client } = require("pg");
 
+/**
+ * The account passwords are deliberately not in the repository. Export
+ * ACCOUNT_PASSWORD for the run.
+ */
+function requireAccountPassword() {
+  const password = process.env.ACCOUNT_PASSWORD;
+  if (!password) {
+    throw new Error("Set ACCOUNT_PASSWORD before running this script");
+  }
+  return password;
+}
+
 const BASE = process.env.BASE || `http://127.0.0.1:${process.env.PORT || 4000}`;
 const API = `${BASE}/api/v1`;
 const C = {
@@ -99,7 +111,7 @@ async function main() {
   });
   await db.connect();
 
-  const admin = await signIn("admin@beautyalley.ph", "AlleyDemo2026!");
+  const admin = await signIn("admin@beautyalley.ph", requireAccountPassword());
 
   // Everything the harness creates, deleted in dependency order.
   const createdEmployees = [];
