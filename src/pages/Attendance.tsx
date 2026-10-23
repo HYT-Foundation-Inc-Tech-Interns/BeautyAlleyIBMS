@@ -23,10 +23,10 @@
  */
 
 import * as React from "react";
-import { CalendarClock, Clock, LogIn, LogOut, Timer, Users } from "lucide-react";
+import { CalendarClock, Clock, LogIn, LogOut, RefreshCw, Timer, Users } from "lucide-react";
 
 import { api } from "@/lib/api";
-import type { AttendanceRecord, AttendanceStatus, Employee } from "@/lib/api-types";
+import type { AttendanceRecord, AttendanceStatus, AttendanceSummary, Employee } from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
 import { useAuth } from "@/auth/AuthProvider";
 import {
@@ -39,7 +39,7 @@ import {
 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Panel, SectionHeading } from "@/components/app/bits";
+import { PageHeader, Panel, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading } from "@/components/app/api-bits";
 
 /* ------------------------------------------------------------------ *
@@ -75,16 +75,6 @@ function StatusChip({ record }: { record: AttendanceRecord }) {
     );
   }
   return <Badge variant={STATUS_TONE[record.status]}>{STATUS_LABEL[record.status]}</Badge>;
-}
-
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <Panel className="px-4 py-3.5">
-      <p className="eyebrow">{label}</p>
-      <p className="tnum mt-1.5 text-[22px] font-semibold leading-none tracking-tight">{value}</p>
-      {hint && <p className="mt-1.5 text-[11.5px] text-muted-foreground">{hint}</p>}
-    </Panel>
-  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -224,6 +214,113 @@ function ClockCard({ onChanged }: { onChanged: () => void }) {
  * Page
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ * The period at a glance
+ * ------------------------------------------------------------------ */
+
+/**
+ * A day with no records draws no bar. That is the same rule the table follows,
+ * so the chart cannot quietly disagree with the rows beneath it.
+ */
+function PeriodRhythm({ summary }: { summary: AttendanceSummary | null }) {
+  /**
+   * The API only returns days that have records. Drawn as-is, a fortnight with
+   * one shift in it is a single bar floating in the middle of the card, which
+   * reads as a rendering fault rather than as a quiet fortnight. So the range is
+   * filled here: a day with nothing recorded draws a flat stub, and the gaps
+   * between shifts become visible instead of invisible.
+   */
+  const days = React.useMemo(() => {
+    if (!summary) return [];
+    const known = new Map(summary.byDay.map((d) => [d.day, d]));
+    const filled: { day: string; records: number; minutes: number; hours: number }[] = [];
+    for (
+      let day = summary.from, i = 0;
+      day <= summary.to;
+      day = shiftDayKey(day, 1), i += 1
+    ) {
+      // Past two months the bars become hairlines; the sparse list reads better.
+      if (i > 62) return summary.byDay;
+      filled.push(known.get(day) ?? { day, records: 0, minutes: 0, hours: 0 });
+    }
+    return filled;
+  }, [summary]);
+
+  const peak = Math.max(1, ...days.map((d) => d.minutes));
+
+  return (
+    <Panel className="flex flex-col px-5 py-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="font-display text-[17px] font-semibold tracking-tight">
+            Hours across the period
+          </h2>
+          <p className="mt-1 text-[12.5px] text-muted-foreground">
+            {summary ? `${summary.from} → ${summary.to}` : "Loading the range…"}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-primary/[0.07] px-2.5 py-1 text-[11px] font-semibold tabular-nums text-primary">
+          {summary ? `${summary.totals.totalHours.toFixed(1)}h` : "—"}
+        </span>
+      </div>
+
+      <div className="mt-5 flex flex-1 flex-col justify-end">
+        {days.length === 0 ? (
+          <div className="flex h-[112px] w-full items-center justify-center rounded-lg border border-dashed border-border/70 text-[11.5px] text-muted-foreground">
+            Nothing recorded in this range
+          </div>
+        ) : (
+          <>
+            <div className="relative">
+              <div aria-hidden className="pointer-events-none absolute inset-0">
+                {[0, 25, 50, 75].map((top) => (
+                  <div
+                    key={top}
+                    className="absolute inset-x-0 border-t border-dashed border-border/45"
+                    style={{ top: `${top}%` }}
+                  />
+                ))}
+              </div>
+              <div className="relative flex items-end gap-[3px] border-b border-border/60">
+                {days.map((d) => (
+                    <div key={d.day} className="group flex h-[96px] min-w-0 flex-1 items-end">
+                      <div
+                        title={`${d.day} · ${d.hours.toFixed(1)}h across ${d.records} record${d.records === 1 ? "" : "s"}`}
+                        className={cn(
+                          "mx-auto w-full max-w-[24px] rounded-t-[3px] transition-opacity duration-200",
+                          d.minutes > 0
+                            ? "bg-gradient-to-t from-primary/30 to-primary/80 group-hover:to-primary"
+                            : "bg-border",
+                        )}
+                        style={{ height: `${d.minutes > 0 ? Math.max(6, (d.minutes / peak) * 100) : 2}%` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            <div className="mt-2 flex gap-[3px]">
+              {days.map((d) => (
+                <span
+                  key={d.day}
+                  className="min-w-0 flex-1 text-center text-[9.5px] tabular-nums text-muted-foreground"
+                >
+                  {d.day.slice(8)}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <p className="mt-4 text-[11.5px] leading-relaxed text-muted-foreground">
+        Attendance is written by each employee at their own clock. A day with no
+        record keeps an empty slot rather than a zero bar — not recorded is not
+        the same as not worked. Corrections are made on a record below.
+      </p>
+    </Panel>
+  );
+}
+
 export default function Attendance() {
   const { role, me } = useAuth();
   /**
@@ -267,51 +364,60 @@ export default function Attendance() {
   const totals = summary.data?.totals;
 
   return (
-    <div className="mx-auto max-w-[1180px] space-y-6">
-      <SectionHeading
+    <div className="mx-auto w-full max-w-[1400px] space-y-6">
+      <PageHeader
         eyebrow="Work"
+        icon={CalendarClock}
         title="Attendance"
         description="Time in and out, and the hours that follow from them. Every timestamp here was written by the server — nothing is estimated, and a day with no record is left empty rather than filled in."
+        actions={
+          <Button variant="outline" onClick={refresh}>
+            <RefreshCw className="size-4" />
+            Refresh
+          </Button>
+        }
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div
+        className={cn(
+          "grid gap-4",
+          (isEmployee || me?.employeeId) && isAdmin && "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]",
+        )}
+      >
         {/* Your own clock, on your own page. There is no second card here for
             someone else's: a time-in is the person's own record. */}
         {isEmployee || me?.employeeId ? <ClockCard onChanged={refresh} /> : null}
 
-        {isAdmin && (
-          <Panel className="px-5 py-5">
-            <h2 className="font-display text-[17px] font-semibold tracking-tight">Monitoring only</h2>
-            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
-              Attendance is written by the employee at their own clock. This page
-              shows you the floor's record — days present, hours worked, and who
-              is still on the clock. Corrections are made on a record below.
-            </p>
-          </Panel>
-        )}
+        {isAdmin && <PeriodRhythm summary={summary.data} />}
       </div>
 
       {/* --- summary ------------------------------------------------- */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
+        <StatTile
           label="Days present"
           value={totals ? String(totals.present) : "—"}
           hint={totals ? `${totals.completedDays} closed session${totals.completedDays === 1 ? "" : "s"}` : undefined}
+          icon={Users}
         />
-        <Stat
+        <StatTile
           label="Hours worked"
           value={totals ? totals.totalHours.toFixed(1) : "—"}
           hint={totals?.averageHours != null ? `${totals.averageHours.toFixed(1)}h average per day` : "No closed sessions yet"}
+          icon={Timer}
+          tone="accent"
         />
-        <Stat
+        <StatTile
           label="Leave"
           value={totals ? String(totals.leave) : "—"}
           hint={totals ? `${totals.halfDay} half day${totals.halfDay === 1 ? "" : "s"}` : undefined}
+          icon={CalendarClock}
         />
-        <Stat
+        <StatTile
           label="Still on the clock"
           value={totals ? String(totals.open) : "—"}
           hint="Sessions with no time-out yet"
+          icon={Clock}
+          tone="success"
         />
       </div>
 

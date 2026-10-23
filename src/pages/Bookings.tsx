@@ -39,7 +39,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
-import { SectionHeading } from "@/components/app/bits";
+import { PageHeader } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
 
 const STATUSES: BookingStatus[] = [
@@ -157,13 +157,14 @@ export default function Bookings() {
   const filtersActive = Boolean(q.trim() || status);
 
   return (
-    <div className="mx-auto w-full max-w-[1300px] space-y-7">
-      <SectionHeading
+    <div className="mx-auto w-full max-w-[1400px] space-y-7">
+      <PageHeader
         eyebrow="Records"
+        icon={CalendarDays}
         title="Bookings"
         description="Every reservation, across every chair. Status changes here are the same ones the database enforces — only legal moves are offered."
-        action={
-          <div className="flex items-center gap-2">
+        actions={
+          <>
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={list.reload}>
               <RefreshCw className="size-4" />
             </Button>
@@ -175,12 +176,12 @@ export default function Bookings() {
                 </Link>
               </Button>
             )}
-          </div>
+          </>
         }
       />
 
       {/* ------------------------------------------------------- filters */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/80 bg-card p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/70 bg-card p-3.5 shadow-soft">
         <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70" />
           <input
@@ -297,7 +298,7 @@ export default function Bookings() {
             return (
               <li
                 key={booking.id}
-                className="flex flex-wrap items-center gap-4 rounded-xl border border-border/80 bg-card p-5 shadow-soft"
+                className="flex flex-wrap items-center gap-4 rounded-xl border border-border/70 bg-card p-5 shadow-soft transition-[border-color,box-shadow,transform] duration-300 ease-out-quart hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lift"
               >
                 <span className="flex min-w-[70px] flex-col rounded-lg bg-sand-50 px-3 py-2 text-center">
                   <span className="font-display text-[16px] font-semibold leading-none tabular-nums">

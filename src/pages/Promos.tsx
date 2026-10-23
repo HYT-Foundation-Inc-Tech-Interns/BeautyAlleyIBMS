@@ -20,7 +20,7 @@
  */
 
 import * as React from "react";
-import { Check, Loader2, Plus, Tag, Ticket, X } from "lucide-react";
+import { Check, Clock3, Loader2, Plus, Tag, Ticket, X } from "lucide-react";
 
 import { branchDay, cn, peso } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
@@ -29,7 +29,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import type { Promo, PromoStatus, PromoType } from "@/lib/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SectionHeading } from "@/components/app/bits";
+import { PageHeader, Panel, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, FieldError, Loading, TextField } from "@/components/app/api-bits";
 
 function promoValue(promo: Promo) {
@@ -206,35 +206,45 @@ export default function Promos() {
   const { role } = useAuth();
   const isAdmin = role === "ADMIN";
 
-  const [includeInactive, setIncludeInactive] = React.useState(true);
+  const [status, setStatus] = React.useState<PromoStatus | "">("");
+  const [availability, setAvailability] = React.useState<"all" | "live" | "retired">("all");
   const [term, setTerm] = React.useState("");
   const [creating, setCreating] = React.useState(false);
 
-  const list = useAsync(`promos:${includeInactive}`, async () =>
-    (await api.promos.list({ limit: 100, activeOnly: !includeInactive })).data,
+  const list = useAsync(`promos:all`, async () =>
+    (await api.promos.list({ limit: 100 })).data,
   );
 
   const rows = React.useMemo(() => {
     const all = list.data ?? [];
     const needle = term.trim().toLowerCase();
-    return needle ? all.filter((p) => p.code.toLowerCase().includes(needle)) : all;
-  }, [list.data, term]);
+    return all.filter((p) => {
+      if (needle && !p.code.toLowerCase().includes(needle)) return false;
+      if (status && p.status !== status) return false;
+      if (availability === "live" && !p.isActive) return false;
+      if (availability === "retired" && p.isActive) return false;
+      return true;
+    });
+  }, [list.data, term, status, availability]);
+
+  const hasFilters = term.trim() !== "" || status !== "" || availability !== "all";
 
   const pending = rows.filter((p) => p.status === "PENDING");
   const settled = rows.filter((p) => p.status !== "PENDING");
   const liveCount = (list.data ?? []).filter((p) => p.isActive && p.status === "APPROVED").length;
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-7">
-      <SectionHeading
+    <div className="mx-auto w-full max-w-[1400px] space-y-7">
+      <PageHeader
         eyebrow={isAdmin ? "Records" : "Front desk"}
+        icon={Tag}
         title="Promo codes"
         description={
           isAdmin
             ? "Approve what the desk proposes, and keep the record of every code the salon has issued. Retiring a code keeps its redemption history — it does not delete it."
             : "Propose a code for the administrator to approve. Nothing is redeemable until it is approved, and the list below is only your own proposals."
         }
-        action={
+        actions={
           <Button onClick={() => setCreating((v) => !v)} variant={creating ? "secondary" : "default"}>
             {creating ? <X className="size-4" /> : <Plus className="size-4" />}
             {creating ? "Cancel" : isAdmin ? "New code" : "Propose a code"}
@@ -253,6 +263,29 @@ export default function Promos() {
         />
       )}
 
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile
+          label="Pending"
+          value={String(pending.length)}
+          hint={isAdmin ? "proposals awaiting a verdict" : "your proposals in review"}
+          icon={Clock3}
+          tone="accent"
+        />
+        <StatTile
+          label="Live codes"
+          value={String(liveCount)}
+          hint="approved and redeemable"
+          icon={Ticket}
+          tone="success"
+        />
+        <StatTile
+          label="On record"
+          value={String(list.data?.length ?? 0)}
+          hint="including retired codes"
+          icon={Tag}
+        />
+      </div>
+
       {/* The queue first: it is the only thing on this page that needs a verdict. */}
       {isAdmin && pending.length > 0 && (
         <section className="rounded-xl border border-champagne-300/70 bg-champagne-300/[0.12] p-5">
@@ -269,36 +302,72 @@ export default function Promos() {
         </section>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-          <input
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="Filter by code…"
-            aria-label="Filter promo codes"
-            className="h-9 w-full rounded-full border border-border bg-card px-4 font-mono text-[12.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-          />
-        </div>
+      <Panel className="px-5 py-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="min-w-0 flex-1 sm:max-w-[260px]">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Code
+            </span>
+            <input
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="Filter by code…"
+              aria-label="Filter promo codes"
+              className="mt-1.5 block h-10 w-full rounded-lg border border-border bg-card px-3 font-mono text-[12.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            />
+          </label>
 
-        <button
-          type="button"
-          onClick={() => setIncludeInactive((v) => !v)}
-          aria-pressed={includeInactive}
-          className={cn(
-            "rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium transition-colors",
-            includeInactive
-              ? "border-primary/30 bg-primary/[0.06] text-primary"
-              : "border-border text-muted-foreground hover:border-primary/30",
+          <label className="min-w-0">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Status
+            </span>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as PromoStatus | "")}
+              className="mt-1.5 block h-10 min-w-[160px] rounded-lg border border-border bg-card px-3 text-[13.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            >
+              <option value="">All statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+            </select>
+          </label>
+
+          <label className="min-w-0">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Availability
+            </span>
+            <select
+              value={availability}
+              onChange={(e) => setAvailability(e.target.value as "all" | "live" | "retired")}
+              className="mt-1.5 block h-10 min-w-[150px] rounded-lg border border-border bg-card px-3 text-[13.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            >
+              <option value="all">All codes</option>
+              <option value="live">Live only</option>
+              <option value="retired">Retired</option>
+            </select>
+          </label>
+
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              className="h-10 gap-1.5"
+              onClick={() => {
+                setTerm("");
+                setStatus("");
+                setAvailability("all");
+              }}
+            >
+              <X className="size-4" />
+              Clear
+            </Button>
           )}
-        >
-          {includeInactive ? "Showing retired" : "Live only"}
-        </button>
 
-        <span className="ml-auto text-[12.5px] text-muted-foreground">
-          {liveCount} live
-          {list.data ? ` · ${list.data.length} total` : ""}
-        </span>
-      </div>
+          <span className="ml-auto pb-2.5 text-[12.5px] text-muted-foreground">
+            {rows.length} of {list.data?.length ?? 0} shown · {liveCount} live
+          </span>
+        </div>
+      </Panel>
 
       {list.error ? (
         <ErrorNote error={list.error} onRetry={list.reload} />
@@ -307,16 +376,16 @@ export default function Promos() {
       ) : rows.length === 0 ? (
         <EmptyNote
           icon={Ticket}
-          title={term ? "No code matches that" : isAdmin ? "No promo codes yet" : "You have not proposed a code yet"}
+          title={hasFilters ? "No code matches those filters" : isAdmin ? "No promo codes yet" : "You have not proposed a code yet"}
           description={
-            term
-              ? "Try a shorter prefix — codes are matched anywhere in the string."
+            hasFilters
+              ? "Codes are matched anywhere in the string. Widen the status or availability to see more."
               : isAdmin
                 ? "Create a code, or wait for the desk to propose one."
                 : "Propose one and the administrator will approve or refuse it."
           }
           action={
-            !term ? (
+            !hasFilters ? (
               <Button onClick={() => setCreating(true)}>
                 {isAdmin ? "Create the first one" : "Propose the first one"}
               </Button>
@@ -340,11 +409,11 @@ function PromoTable({
   onChanged: () => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-soft">
+    <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-soft">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[820px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-border/70 bg-sand-50">
+            <tr className="border-b border-border/70 bg-muted/40">
               {["Code", "Value", "Redeemed", "Per client", "Min spend", "State", ""].map(
                 (heading, i) => (
                   <th

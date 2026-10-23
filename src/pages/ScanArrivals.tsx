@@ -50,7 +50,7 @@ import type { Booking } from "@/lib/api-types";
 import { branchDay, branchTime, peso } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
-import { Panel, SectionHeading } from "@/components/app/bits";
+import { PageHeader, Panel } from "@/components/app/bits";
 
 /* ------------------------------------------------------------------ *
  * Reading the code
@@ -494,12 +494,24 @@ export default function ScanArrivals() {
   const paused = state.kind !== "idle";
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-6">
-      <SectionHeading
+    <div className="mx-auto w-full max-w-[1400px] space-y-6">
+      <PageHeader
         eyebrow="Operate"
+        icon={ScanLine}
         title="Scan arrival pass"
         description="Read a guest's arrival pass and record that they have arrived. Scanning only looks the reservation up — the check-in is a separate, deliberate step."
-      />
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
+            <Camera className="size-3.5" />
+            Camera or reference lookup
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
+            <ShieldAlert className="size-3.5" />
+            Server verifies the pass
+          </span>
+        </div>
+      </PageHeader>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         {/* --- scanner -------------------------------------------------- */}
@@ -547,7 +559,7 @@ export default function ScanArrivals() {
         </div>
 
         {/* --- result --------------------------------------------------- */}
-        <Panel className="px-5 py-5">
+        <Panel className="self-start px-5 py-5 lg:sticky lg:top-6">
           <div className="mb-4 flex items-center gap-2.5">
             <span className="flex size-8 items-center justify-center rounded-full bg-primary/[0.08] text-primary">
               <QrCode className="size-4" />

@@ -26,6 +26,7 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import {
   GripVertical,
+  LayoutGrid,
   Lock,
   RotateCcw,
   Sparkles,
@@ -42,7 +43,7 @@ import {
   DraggableWidgetGrid,
   type WidgetItem,
 } from "@/components/ui/draggable-widget-grid";
-import { SectionHeading } from "@/components/app/bits";
+import { PageHeader } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, PersonAvatar } from "@/components/app/api-bits";
 import { useAuth } from "@/auth/AuthProvider";
 
@@ -215,17 +216,40 @@ function Spark({ data, className, area = false }: { data: number[]; className?: 
   );
 }
 
+/**
+ * Faint guides so a quiet tile still reads as a plot rather than as empty space.
+ * Purely decorative: they carry no scale of their own.
+ */
+function PlotLines() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0">
+      {[0, 33.34, 66.67].map((top) => (
+        <div
+          key={top}
+          className="absolute inset-x-0 border-t border-dashed border-border/50"
+          style={{ top: `${top}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function MiniBars({ data, className }: { data: number[]; className?: string }) {
   const max = Math.max(...data) || 1;
   const last = data.length - 1;
   return (
-    <div className={cn("flex h-10 items-end gap-[3px]", className)} aria-hidden>
+    <div className={cn("relative flex h-10 items-end gap-[3px]", className)} aria-hidden>
+      <PlotLines />
       {data.map((v, i) => (
-        <span
-          key={i}
-          className={cn("flex-1 rounded-[2px]", i === last ? "bg-primary" : "bg-primary/20")}
-          style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
-        />
+        <span key={i} className="relative flex h-full flex-1 items-end justify-center">
+          <span
+            className={cn(
+              "w-full max-w-[16px] rounded-[2px]",
+              i === last ? "bg-primary" : "bg-primary/20",
+            )}
+            style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
+          />
+        </span>
       ))}
     </div>
   );
@@ -264,10 +288,13 @@ function Gauge({ value }: { value: number }) {
 function Shell({
   title,
   meta,
+  spread = false,
   children,
 }: {
   title: string;
   meta?: React.ReactNode;
+  /** Space the body out instead of stacking it, for tiles taller than their content. */
+  spread?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -278,7 +305,9 @@ function Shell({
         </h3>
         {meta && <span className="shrink-0 text-[11.5px] text-muted-foreground">{meta}</span>}
       </header>
-      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <div className={cn("flex min-h-0 flex-1 flex-col", spread && "justify-between")}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -302,7 +331,24 @@ function Big({ children, unit }: { children: React.ReactNode; unit?: string }) {
 
 function WidgetBody({ kind, data }: { kind: Kind; data: BoardData }) {
   const totals = data.summary?.totals;
-  const byDay = data.summary?.byDay ?? [];
+  /**
+   * The API returns only the days that had bookings, so a quiet week arrives as
+   * a single point. Drawn as-is that one point is a bar that fills the whole
+   * tile — a solid slab where a chart should be. The range is filled here, so a
+   * tile always shows the days it claims to cover and a gap looks like a gap.
+   */
+  const byDay = (() => {
+    const summary = data.summary;
+    if (!summary) return [];
+    const known = new Map(summary.byDay.map((d) => [d.day, d]));
+    const filled: Dashboard["byDay"] = [];
+    for (let day = summary.from, i = 0; day <= summary.to; day = shiftDayKey(day, 1), i += 1) {
+      // Past two months the bars are hairlines; the sparse list reads better.
+      if (i > 62) return summary.byDay;
+      filled.push(known.get(day) ?? { day, bookings: 0, revenue_cents: 0 });
+    }
+    return filled;
+  })();
   const bookedSeries = byDay.map((d) => d.bookings);
   const revenueSeries = byDay.map((d) => d.revenue_cents);
 
@@ -311,13 +357,16 @@ function WidgetBody({ kind, data }: { kind: Kind; data: BoardData }) {
       return (
         <Shell title="Revenue" meta="completed only">
           <Big>{peso(totals?.revenueCents ?? 0)}</Big>
-          <div className="mt-4 flex min-h-[70px] flex-1 flex-col justify-end">
-            {revenueSeries.length > 1 ? (
-              <Spark data={revenueSeries} className="text-primary" area />
-            ) : (
-              <div className="h-10 rounded bg-primary/[0.06]" />
-            )}
-            <p className="mt-2.5 text-[11px] text-muted-foreground">
+          <div className="relative mt-4 flex min-h-[70px] flex-1 flex-col justify-end">
+            <PlotLines />
+            <div className="relative min-h-0 flex-1">
+              {revenueSeries.length > 1 ? (
+                <Spark data={revenueSeries} className="text-primary" area />
+              ) : (
+                <div className="h-10 rounded bg-primary/[0.06]" />
+              )}
+            </div>
+            <p className="relative mt-2.5 text-[11px] text-muted-foreground">
               {totals?.completed ?? 0} completed bookings in this period
             </p>
           </div>
@@ -359,9 +408,25 @@ function WidgetBody({ kind, data }: { kind: Kind; data: BoardData }) {
     case "noshow": {
       const rate = totals && totals.bookings > 0 ? (totals.noShow / totals.bookings) * 100 : 0;
       return (
-        <Shell title="No-shows" meta="this period">
+        <Shell title="No-shows" meta="this period" spread>
           <Big>{rate.toFixed(1)}%</Big>
-          <div className="mt-4 flex flex-1 flex-col justify-end gap-2">
+          <div className="mt-5">
+            <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-[width] duration-500",
+                  rate > 10 ? "bg-destructive/70" : "bg-primary/60",
+                )}
+                style={{ width: `${Math.min(100, rate)}%` }}
+              />
+              <span aria-hidden className="absolute inset-y-0 left-[10%] w-px bg-foreground/25" />
+            </div>
+            <div className="mt-1.5 flex justify-between text-[10px] text-muted-foreground">
+              <span>0%</span>
+              <span>10% is the line</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2">
             <p className="text-[11.5px] text-muted-foreground">
               {totals?.noShow ?? 0} of {totals?.bookings ?? 0} bookings
             </p>
@@ -375,11 +440,29 @@ function WidgetBody({ kind, data }: { kind: Kind; data: BoardData }) {
 
     case "checkedin":
       return (
-        <Shell title="Arrived" meta="checked in or beyond">
+        <Shell title="Arrived" meta="checked in or beyond" spread>
           <Big>{totals?.checkedIn ?? 0}</Big>
-          <p className="mt-auto text-[11.5px] text-muted-foreground">
+          <div className="mt-5">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-emerald-500/70 transition-[width] duration-500"
+                style={{
+                  width: `${
+                    totals && totals.bookings > 0
+                      ? Math.min(100, Math.round((totals.checkedIn / totals.bookings) * 100))
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+            <div className="mt-1.5 flex justify-between text-[10px] text-muted-foreground">
+              <span>{totals?.checkedIn ?? 0} of {totals?.bookings ?? 0}</span>
+              <span>reached the chair</span>
+            </div>
+          </div>
+          <p className="text-[11.5px] text-muted-foreground">
             {totals && totals.bookings > 0
-              ? `${Math.round((totals.checkedIn / totals.bookings) * 100)}% of bookings reached the chair`
+              ? `${Math.round((totals.checkedIn / totals.bookings) * 100)}% of bookings`
               : "Nothing booked in this period"}
           </p>
         </Shell>
@@ -387,24 +470,28 @@ function WidgetBody({ kind, data }: { kind: Kind; data: BoardData }) {
 
     case "flow":
       return (
-        <Shell title="Bookings per day" meta={`${byDay.length} days`}>
+        <Shell
+          title="Bookings per day"
+          meta={`${byDay.length} day${byDay.length === 1 ? "" : "s"}`}
+        >
           <div className="flex items-baseline gap-3">
             <Big>{totals?.bookings ?? 0}</Big>
             <span className="text-[11.5px] text-muted-foreground">booked in the period</span>
           </div>
           {byDay.length > 0 ? (
-            <div className="mt-4 flex min-h-[80px] flex-1 items-end gap-1.5">
+            <div className="relative mt-4 flex min-h-[80px] flex-1 items-end gap-1.5">
+              <PlotLines />
               {byDay.map((d) => {
                 const max = Math.max(...bookedSeries) || 1;
                 return (
                   <div
                     key={d.day}
-                    className="flex h-full flex-1 flex-col items-center gap-1.5"
+                    className="relative flex h-full flex-1 flex-col items-center gap-1.5"
                     title={`${d.day} · ${d.bookings} bookings`}
                   >
-                    <div className="flex w-full flex-1 items-end">
+                    <div className="flex w-full flex-1 items-end justify-center">
                       <span
-                        className="w-full rounded-[2px] bg-primary"
+                        className="w-full max-w-[18px] rounded-[2px] bg-primary"
                         style={{ height: `${Math.max(4, (d.bookings / max) * 100)}%` }}
                       />
                     </div>
@@ -673,13 +760,14 @@ export default function Board() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-8">
-      <SectionHeading
+      <PageHeader
         eyebrow="Monitoring board"
+        icon={LayoutGrid}
         title="Arrange the room you think in."
         description={`Every tile is live — ${items.length} panels over the last ${days} days, read from the database. Drag to rearrange and drag a corner to resize; the layout is remembered on this device.`}
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-full border border-border bg-card p-0.5">
+        actions={
+          <>
+            <div className="flex rounded-full border border-white/15 bg-white/[0.08] p-1">
               {[7, 14, 30].map((option) => (
                 <button
                   key={option}
@@ -687,10 +775,10 @@ export default function Board() {
                   onClick={() => setDays(option)}
                   aria-pressed={days === option}
                   className={cn(
-                    "rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-colors",
+                    "rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors",
                     days === option
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground",
+                      ? "bg-primary-foreground text-sidebar shadow-sm"
+                      : "text-primary-foreground/60 hover:text-primary-foreground",
                   )}
                 >
                   {option}d
@@ -708,11 +796,11 @@ export default function Board() {
               <RotateCcw className="size-4" />
               Reset layout
             </Button>
-          </div>
+          </>
         }
       />
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border/70 bg-sand-50 px-5 py-3.5 text-[12.5px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border/70 bg-muted/40 px-5 py-3.5 text-[12.5px] text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <GripVertical className="size-4 text-primary" />
           {editable

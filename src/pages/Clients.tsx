@@ -18,11 +18,13 @@ import * as React from "react";
 import {
   CalendarDays,
   Download,
+  Gem,
   Loader2,
   Mail,
   Phone,
   RefreshCw,
   Search,
+  UserCheck,
   UserRound,
   Users,
   X,
@@ -33,7 +35,7 @@ import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SectionHeading } from "@/components/app/bits";
+import { PageHeader, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
 
 function useDebounced<T>(value: T, ms = 300) {
@@ -87,12 +89,13 @@ export default function Clients() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-7">
-      <SectionHeading
+      <PageHeader
         eyebrow="Records"
+        icon={Users}
         title="Clients"
         description="Everyone with an account, ranked by lifetime value. The figures are computed by a database view, so the CSV and this table always agree."
-        action={
-          <div className="flex items-center gap-2">
+        actions={
+          <>
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={list.reload}>
               <RefreshCw className="size-4" />
             </Button>
@@ -100,11 +103,40 @@ export default function Clients() {
               {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               Export CSV
             </Button>
-          </div>
+          </>
         }
-      />
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
+            <Users className="size-3.5" />
+            {rows.length} clients
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
+            <Gem className="size-3.5" />
+            {peso(totalLtv)} combined lifetime value
+          </span>
+        </div>
+      </PageHeader>
 
       {exportError && <ErrorNote error={exportError} />}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Clients on record" value={String(rows.length)} hint="Accounts, active and retired" icon={Users} />
+        <StatTile
+          label="Active"
+          value={String(rows.filter((c) => c.isActive).length)}
+          hint="Bookable right now"
+          icon={UserCheck}
+          tone="success"
+        />
+        <StatTile label="Combined lifetime value" value={peso(totalLtv)} hint="Completed visits only" icon={Gem} tone="accent" />
+        <StatTile
+          label="Average per client"
+          value={rows.length ? peso(Math.round(totalLtv / rows.length)) : "—"}
+          hint="Across everyone listed"
+          icon={UserRound}
+        />
+      </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
@@ -132,10 +164,6 @@ export default function Clients() {
           {includeInactive ? "Showing deactivated" : "Active only"}
         </button>
 
-        <div className="ml-auto flex items-center gap-2 text-[12.5px] text-muted-foreground">
-          <Badge variant="outline">{rows.length} clients</Badge>
-          <Badge variant="champagne">{peso(totalLtv)} combined</Badge>
-        </div>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
@@ -156,11 +184,11 @@ export default function Clients() {
               }
             />
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border/80 bg-card shadow-soft">
+            <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-soft">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px] border-collapse text-left">
                   <thead>
-                    <tr className="border-b border-border/70 bg-sand-50">
+                    <tr className="border-b border-border/70 bg-muted/40">
                       {["Client", "Visits", "Lifetime", "Last visit", "State"].map((heading, i) => (
                         <th
                           key={heading}

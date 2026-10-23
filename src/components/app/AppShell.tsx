@@ -29,7 +29,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { branchToday, cn, shortDate } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -214,18 +214,25 @@ function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="gap-0 p-3">
         <Link
-          to="/"
-          className="flex items-center gap-3 rounded-lg px-1.5 py-2 transition-colors hover:bg-white/[0.05]"
+          to="/app"
+          className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-white/[0.05] group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
         >
-          <img
-            src="/brand/logo-ivory.png"
-            alt="The Beauty Alley"
-            width={1912}
-            height={1912}
-            className="h-14 w-14 shrink-0 object-contain drop-shadow-[0_2px_12px_rgba(7,25,20,0.45)]"
-          />
-          <span className="min-w-0 truncate font-display text-[19px] font-semibold tracking-tight text-primary-foreground group-data-[collapsible=icon]:hidden">
-            The Beauty Alley
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] ring-1 ring-white/10 group-data-[collapsible=icon]:size-10">
+            <img
+              src="/brand/logo-ivory.png"
+              alt="The Beauty Alley"
+              width={1912}
+              height={1912}
+              className="size-10 object-contain drop-shadow-[0_2px_12px_rgba(7,25,20,0.45)] group-data-[collapsible=icon]:size-8"
+            />
+          </span>
+          <span className="min-w-0 group-data-[collapsible=icon]:hidden">
+            <span className="block truncate font-display text-[16px] font-semibold leading-tight tracking-tight text-primary-foreground">
+              The Beauty Alley
+            </span>
+            <span className="mt-1 block text-[9.5px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">
+              Salon OS
+            </span>
           </span>
         </Link>
       </SidebarHeader>
@@ -248,11 +255,21 @@ function AppSidebar() {
                           to={item.to}
                           end={item.to === "/app"}
                           className={({ isActive }) =>
-                            cn(isActive && "bg-white/[0.12] text-primary-foreground")
+                            cn(
+                              "relative",
+                              isActive &&
+                                "bg-white/[0.13] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+                            )
                           }
                         >
                           {({ isActive }) => (
                             <>
+                              {isActive && (
+                                <span
+                                  aria-hidden
+                                  className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-champagne-400"
+                                />
+                              )}
                               <item.icon
                                 className={cn(
                                   "transition-colors",
@@ -276,12 +293,22 @@ function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="gap-3 p-3">
-        <div className="group-data-[collapsible=icon]:hidden">
-          <p className="truncate px-1 text-[12.5px] font-semibold text-primary-foreground/90">
-            {me?.fullName || me?.email || "Signed in"}
-          </p>
-          <p className="mt-0.5 px-1 text-[10.5px] leading-relaxed text-primary-foreground/45">
-            {role ? ROLE_LABEL[role] : "—"} · permissions come from your account
+        <div className="rounded-xl border border-white/10 bg-white/[0.05] p-3 group-data-[collapsible=icon]:hidden">
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-[10.5px] font-semibold text-primary-foreground ring-1 ring-white/10">
+              {initialsOf(me?.fullName ?? null, me?.email ?? null)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[12px] font-semibold leading-tight text-primary-foreground/90">
+                {me?.fullName || me?.email || "Signed in"}
+              </p>
+              <p className="mt-0.5 truncate text-[10px] text-primary-foreground/45">
+                {role ? ROLE_LABEL[role] : "—"}
+              </p>
+            </div>
+          </div>
+          <p className="mt-2.5 border-t border-white/10 pt-2 text-[10px] leading-relaxed text-primary-foreground/40">
+            Permissions come from your account.
           </p>
         </div>
       </SidebarFooter>
@@ -323,11 +350,16 @@ export function AppShell() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="min-w-0">
-        <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border/70 bg-background/85 px-4 backdrop-blur-md sm:px-6">
-          <SidebarTrigger aria-label="Toggle navigation" />
+        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl sm:px-6">
+          <SidebarTrigger
+            aria-label="Toggle navigation"
+            className="text-muted-foreground hover:text-foreground"
+          />
+
+          <span aria-hidden className="hidden h-6 w-px bg-border/80 sm:block" />
 
           <div className="hidden min-w-0 flex-col sm:flex">
-            <h1 className="truncate font-display text-[19px] font-semibold leading-tight tracking-tight">
+            <h1 className="truncate font-display text-[18px] font-semibold leading-tight tracking-tight">
               {heading.title}
             </h1>
             <p className="truncate text-[11.5px] text-muted-foreground">{heading.sub}</p>
@@ -341,12 +373,17 @@ export function AppShell() {
             * just the page identity and the account menu; booking lives where
             * every other destination lives.
             */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2.5">
+            <span className="hidden items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-[11.5px] font-medium text-muted-foreground shadow-soft md:inline-flex">
+              <CalendarDays className="size-3.5 text-primary/70" />
+              {shortDate(branchToday())}
+            </span>
+            <span aria-hidden className="hidden h-6 w-px bg-border/80 md:block" />
             <UserMenu />
           </div>
         </header>
 
-        <div className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8">
+        <div className="console-wash min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8">
           <Outlet />
         </div>
       </SidebarInset>

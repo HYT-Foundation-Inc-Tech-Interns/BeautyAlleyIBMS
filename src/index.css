@@ -284,6 +284,58 @@
   .ring-focus {
     @apply outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring;
   }
+
+  /* ---------------------------------------------------------------- *
+   * Console surfaces
+   *
+   * The dashboard is mostly large fields of ivory. These three layers keep
+   * that from reading as an empty page: a warm wash behind the content, a
+   * lit rail, and a hero band with enough depth to carry white type.
+   * ---------------------------------------------------------------- */
+
+  /* Fixed wash behind the console content. Warm, not grey — it belongs to
+   * the same palette as the cards sitting on top of it. */
+  .console-wash {
+    background-image:
+      radial-gradient(58rem 26rem at 10% -10%, hsl(var(--primary) / 0.06), transparent 62%),
+      radial-gradient(46rem 24rem at 95% -8%, hsl(var(--accent) / 0.16), transparent 60%);
+    background-repeat: no-repeat;
+  }
+
+  /* The rail: emerald with a champagne glow at the top and a quiet fall to
+   * black at the bottom, so the navigation reads as furniture with a light
+   * source rather than a flat slab. */
+  .sidebar-surface {
+    background-image:
+      radial-gradient(26rem 18rem at 0% 0%, hsl(var(--sidebar-ring) / 0.2), transparent 62%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(0, 0, 0, 0.24) 100%);
+  }
+
+  /* The dashboard hero. Built on the rail's emerald so the two dark surfaces
+   * belong to one another, warmed at the top-right by champagne and lifted at
+   * the bottom-left by a breath of white. */
+  .hero-surface {
+    background-color: hsl(var(--sidebar));
+    background-image:
+      radial-gradient(42rem 24rem at 100% 0%, rgba(214, 178, 120, 0.24), transparent 58%),
+      radial-gradient(36rem 20rem at 0% 110%, rgba(255, 255, 255, 0.12), transparent 62%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(0, 0, 0, 0.12) 55%, rgba(0, 0, 0, 0.32) 100%);
+  }
+
+  /* A fine grid, faded out towards the bottom — texture without noise. */
+  .hero-grid::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.6;
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+    background-size: 46px 46px;
+    -webkit-mask-image: linear-gradient(to bottom, #000, transparent 78%);
+    mask-image: linear-gradient(to bottom, #000, transparent 78%);
+  }
 }
 
 @layer utilities {

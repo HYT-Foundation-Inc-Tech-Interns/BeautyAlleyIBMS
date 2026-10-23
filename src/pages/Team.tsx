@@ -21,7 +21,18 @@
 
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { BadgeCheck, Loader2, RefreshCw, Scissors, Sparkles, UserPlus, X } from "lucide-react";
+import {
+  BadgeCheck,
+  ChevronDown,
+  Loader2,
+  RefreshCw,
+  Scissors,
+  Sparkles,
+  UserCheck,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
@@ -30,7 +41,7 @@ import type { Employee } from "@/lib/api-types";
 import { ROLE_LABEL } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SectionHeading } from "@/components/app/bits";
+import { PageHeader, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, TextField } from "@/components/app/api-bits";
 
 export default function Team() {
@@ -56,13 +67,14 @@ export default function Team() {
   const rows = roster.data?.data ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-7">
-      <SectionHeading
+    <div className="mx-auto w-full max-w-[1400px] space-y-7">
+      <PageHeader
         eyebrow="Records"
+        icon={Scissors}
         title="Team"
         description="Who works the floor, and what each of them is qualified to do. Qualifications are what the booking engine consults before offering a slot."
-        action={
-          <div className="flex items-center gap-2">
+        actions={
+          <>
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={roster.reload}>
               <RefreshCw className="size-4" />
             </Button>
@@ -73,11 +85,34 @@ export default function Team() {
               {inviting ? <X className="size-4" /> : <UserPlus className="size-4" />}
               {inviting ? "Cancel" : "Issue staff login"}
             </Button>
-          </div>
+          </>
         }
       />
 
       {inviting && <InviteStaffForm onDone={() => setInviting(false)} onCancel={() => setInviting(false)} />}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile
+          label="On the roster"
+          value={String(rows.length)}
+          hint="everyone on the record"
+          icon={Users}
+        />
+        <StatTile
+          label="Active"
+          value={String(rows.filter((p) => p.isActive).length)}
+          hint="taking bookings"
+          icon={UserCheck}
+          tone="success"
+        />
+        <StatTile
+          label="With a login"
+          value={String(rows.filter((p) => p.profileId).length)}
+          hint="linked sign-in accounts"
+          icon={BadgeCheck}
+          tone="accent"
+        />
+      </div>
 
       <div className="flex items-center gap-3">
         <button
@@ -93,9 +128,6 @@ export default function Team() {
         >
           {includeInactive ? "Showing deactivated" : "Active only"}
         </button>
-        <span className="ml-auto text-[12.5px] text-muted-foreground">
-          {rows.length} on the roster
-        </span>
       </div>
 
       {roster.error ? (
@@ -142,8 +174,8 @@ function EmployeeCard({
   return (
     <article
       className={cn(
-        "flex flex-col rounded-xl border bg-card p-5 shadow-soft transition-colors",
-        open ? "border-primary/40" : "border-border/80",
+        "flex flex-col overflow-hidden rounded-xl border bg-card p-5 shadow-soft transition-[border-color,box-shadow,transform] duration-300 ease-out-quart hover:-translate-y-0.5 hover:shadow-lift",
+        open ? "border-primary/40 shadow-lift" : "border-border/70",
       )}
     >
       <div className="flex items-start gap-4">
@@ -210,9 +242,17 @@ function EmployeeCard({
         </div>
       )}
 
-      <Button variant="ghost" size="sm" className="mt-4 w-full" onClick={onToggle}>
-        {open ? "Hide details" : "Show qualifications"}
-      </Button>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="-mx-5 -mb-5 mt-5 flex items-center justify-between gap-2 border-t border-border/70 px-5 py-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+      >
+        {open ? "Hide qualifications" : "Show qualifications"}
+        <ChevronDown
+          className={cn("size-3.5 shrink-0 transition-transform duration-200", open && "rotate-180")}
+        />
+      </button>
     </article>
   );
 }

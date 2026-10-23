@@ -164,6 +164,118 @@ export function TierBadge({ tier }: { tier: Tier }) {
  * Section furniture
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ * Console page header
+ *
+ * Every record page opens with the same emerald band: a mark, the page's
+ * name, one sentence about what the page is for, and its actions. The band
+ * is the same surface as the dashboard hero, one size down, so the console
+ * reads as one product rather than eight unrelated tables.
+ * ------------------------------------------------------------------ */
+
+export function PageHeader({
+  eyebrow,
+  title,
+  description,
+  actions,
+  icon: Icon,
+  children,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  actions?: React.ReactNode;
+  icon?: React.ComponentType<{ className?: string }>;
+  children?: React.ReactNode;
+}) {
+  return (
+    <section className="hero-surface hero-grid relative overflow-hidden rounded-2xl px-5 py-6 shadow-lift sm:px-7">
+      <img
+        src="/brand/logo-ivory.png"
+        alt=""
+        aria-hidden
+        className="pointer-events-none absolute -right-8 top-1/2 hidden size-56 -translate-y-1/2 object-contain opacity-[0.06] lg:block"
+      />
+      <div className="relative z-10 flex flex-wrap items-start justify-between gap-5">
+        <div className="flex min-w-0 items-start gap-4">
+          {Icon && (
+            <span className="hidden size-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[0.08] text-primary-foreground sm:flex">
+              <Icon className="size-5" />
+            </span>
+          )}
+          <div className="min-w-0">
+            {eyebrow && <p className="eyebrow text-primary-foreground/55">{eyebrow}</p>}
+            <h1 className="mt-1.5 font-display text-[24px] font-semibold leading-tight tracking-tight text-primary-foreground sm:text-[27px]">
+              {title}
+            </h1>
+            {description && (
+              <p className="mt-1.5 max-w-2xl text-[12.5px] leading-relaxed text-primary-foreground/65 text-pretty">
+                {description}
+              </p>
+            )}
+            {children && <div className="mt-4">{children}</div>}
+          </div>
+        </div>
+
+        {actions && (
+          <div className="flex flex-wrap items-center gap-2 sm:mt-1 [&_[data-variant=default]]:bg-primary-foreground [&_[data-variant=default]]:text-sidebar [&_[data-variant=default]]:hover:bg-white [&_[data-variant=ghost]]:text-primary-foreground/75 [&_[data-variant=ghost]]:hover:bg-white/[0.12] [&_[data-variant=ghost]]:hover:text-primary-foreground [&_[data-variant=outline]]:border-white/15 [&_[data-variant=outline]]:bg-white/[0.08] [&_[data-variant=outline]]:text-primary-foreground [&_[data-variant=outline]]:hover:bg-white/[0.15] [&_[data-variant=secondary]]:bg-white/[0.14] [&_[data-variant=secondary]]:text-primary-foreground [&_[data-variant=secondary]]:hover:bg-white/[0.2]">
+            {actions}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Stat tile — the small number card used under page headers.
+ * ------------------------------------------------------------------ */
+
+const TILE_TONES = {
+  primary: "bg-primary/10 text-primary",
+  accent: "bg-champagne-400/20 text-champagne-600",
+  success: "bg-success/10 text-success",
+  danger: "bg-destructive/10 text-destructive",
+} as const;
+
+export function StatTile({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  tone = "primary",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  tone?: keyof typeof TILE_TONES;
+}) {
+  return (
+    <div className="rounded-xl border border-border/70 bg-card p-4 shadow-soft transition-transform duration-300 ease-out-quart hover:-translate-y-0.5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          {label}
+        </p>
+        {Icon && (
+          <span
+            className={cn(
+              "flex size-7 shrink-0 items-center justify-center rounded-full",
+              TILE_TONES[tone],
+            )}
+          >
+            <Icon className="size-3.5" />
+          </span>
+        )}
+      </div>
+      <p className="mt-2 font-display text-[22px] font-semibold leading-none tracking-tight tabular-nums">
+        {value}
+      </p>
+      {hint && <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
 export function SectionHeading({
   eyebrow,
   title,

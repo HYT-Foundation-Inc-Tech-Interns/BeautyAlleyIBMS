@@ -51,6 +51,7 @@ import {
   StatusBadge,
 } from "@/components/app/api-bits";
 import { Reveal } from "@/components/app/reveal";
+import { PageHeader, Panel, StatTile } from "@/components/app/bits";
 
 /** `YYYY-MM-DD` at the branch -> the UTC instants that bracket it. */
 const ARRIVED: Booking["status"][] = ["CHECKED_IN", "IN_SERVICE", "COMPLETED"];
@@ -82,15 +83,15 @@ function Redeem() {
   }
 
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader>
         <CardTitle className="text-[17px]">Redeem an arrival pass</CardTitle>
         <CardDescription>
           Scan the guest's code, or paste it. Each pass works once.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-sidebar">
+      <CardContent className="flex flex-1 flex-col justify-center gap-4">
+        <div className="relative flex min-h-[280px] max-h-[420px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-sidebar">
           <div
             aria-hidden
             className="absolute inset-0 opacity-[0.14]"
@@ -204,6 +205,38 @@ function WalkInCode() {
 }
 
 /* ------------------------------------------------------------------ *
+ * How a pass works
+ * ------------------------------------------------------------------ */
+
+function PassRules() {
+  return (
+    <Panel className="px-5 py-5">
+      <h2 className="font-display text-[17px] font-semibold tracking-tight">How a pass works</h2>
+      <p className="mt-1 text-[12.5px] text-muted-foreground">
+        Three rules the server enforces, not the screen.
+      </p>
+      <div className="mt-4 space-y-4">
+        {[
+          { icon: QrCode, title: "One code per booking", body: "A pass is bound to a single booking and expires on its own schedule, so a screenshot cannot be reused." },
+          { icon: ScanLine, title: "Signature, then record", body: "The signature proves the salon issued the pass; the stored row decides whether it is still good." },
+          { icon: BadgeCheck, title: "Only the desk arrives you", body: "Checking in is a staff action. A client cannot mark themselves as arrived." },
+        ].map((f) => (
+          <div key={f.title} className="flex gap-3.5">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/[0.07] text-primary">
+              <f.icon className="size-3.5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-medium leading-tight">{f.title}</p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">{f.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+/* ------------------------------------------------------------------ *
  * Today
  * ------------------------------------------------------------------ */
 
@@ -257,26 +290,9 @@ function Today() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((s, i) => (
-          <Reveal key={s.label} delay={i * 60}>
-            <Card>
-              <CardContent className="flex items-start gap-4 p-5">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/[0.07] text-primary">
-                  <s.icon className="size-[18px]" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    {s.label}
-                  </p>
-                  <p className="mt-2 font-display text-[28px] font-semibold leading-none tracking-tight tabular-nums">
-                    {s.value}
-                  </p>
-                  <p className="mt-2 truncate text-[11.5px] text-muted-foreground">{s.hint}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Reveal>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {stats.map((s) => (
+          <StatTile key={s.label} label={s.label} value={s.value} hint={s.hint} icon={s.icon} />
         ))}
       </div>
 
@@ -358,25 +374,6 @@ function Today() {
             </div>
           )}
 
-          <Separator className="my-5" />
-
-          <div className="grid gap-5 sm:grid-cols-3">
-            {[
-              { icon: QrCode, title: "One code per booking", body: "A pass is bound to a single booking and expires on its own schedule, so a screenshot cannot be reused." },
-              { icon: ScanLine, title: "Signature, then record", body: "The signature proves the salon issued the pass; the stored row decides whether it is still good." },
-              { icon: BadgeCheck, title: "Only the desk arrives you", body: "Checking in is a staff action. A client cannot mark themselves as arrived." },
-            ].map((f) => (
-              <div key={f.title} className="flex gap-4">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/[0.07] text-primary">
-                  <f.icon className="size-4" />
-                </span>
-                <div>
-                  <p className="text-[13px] font-medium">{f.title}</p>
-                  <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{f.body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         </CardContent>
       </Card>
     </div>
@@ -390,25 +387,36 @@ function Today() {
 export default function CheckIn() {
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-8">
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-champagne-600">
-          QR check-in
-        </p>
-        <h1 className="mt-2 font-display text-[30px] font-semibold leading-tight tracking-tight">
-          Arrivals, handled.
-        </h1>
-        <p className="mt-2 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
-          Every booking carries its own pass. Scan it and the floor knows who is here,
-          who is next and who is late.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="QR check-in"
+        icon={QrCode}
+        title="Arrivals, handled."
+        description="Every booking carries its own pass. Scan it and the floor knows who is here, who is next and who is late."
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
+            <span aria-hidden className="relative flex size-1.5">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-300/70" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-300" />
+            </span>
+            Live at the door
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
+            <CalendarCheck className="size-3.5" />
+            {branchLongDay(new Date().toISOString())}
+          </span>
+        </div>
+      </PageHeader>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Reveal>
+        <Reveal className="h-full">
           <Redeem />
         </Reveal>
         <Reveal delay={80}>
-          <WalkInCode />
+          <div className="space-y-6">
+            <WalkInCode />
+            <PassRules />
+          </div>
         </Reveal>
       </div>
 
