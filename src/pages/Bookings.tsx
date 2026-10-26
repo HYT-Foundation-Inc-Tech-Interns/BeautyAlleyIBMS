@@ -4,12 +4,12 @@
  * The bookings record.
  *
  * This is the operational heart of the console and it serves every working
- * role from one page, because the API does: `GET /bookings` is `OPERATIONS`,
- * so a therapist, the concierge and the owner all read the same rows. What
- * differs is which of them can act on them, and that is enforced server-side
- * by `PATCH /bookings/:id/status`. Reassigning the room is narrower still —
- * `PATCH /bookings/:id/room` is `DESK`, so only the concierge and the owner
- * see that control.
+ * role from one page — but not with the same rows. `GET /bookings` gives the
+ * desk and the owner the whole branch and gives an employee only their own
+ * chair; the API applies that scope from the token, so this page cannot widen
+ * it by asking. What is left for the screen to decide is the wording ("Your
+ * bookings") and which actions to offer: status changes are `OPERATIONS`,
+ * while reassigning the room is `DESK` and never shown to the floor.
  *
  * The status buttons are generated from `NEXT_STATUS`, which mirrors the
  * database trigger's state machine. Offering only legal transitions means the
@@ -92,6 +92,8 @@ export default function Bookings() {
    * counter with the guest — so the button is not offered here.
    */
   const { role } = useAuth();
+  /* The floor reads its own chair; the API decides that, this only names it. */
+  const isFloor = role === "EMPLOYEE";
   const canCreate = role === "CONCIERGE";
   /* The desk and the owner can open a client login; the floor cannot. */
   const canCreateClient = role === "CONCIERGE" || role === "ADMIN";
@@ -162,10 +164,14 @@ export default function Bookings() {
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-7">
       <PageHeader
-        eyebrow="Records"
+        eyebrow={isFloor ? "Your chair" : "Records"}
         icon={CalendarDays}
-        title="Bookings"
-        description="Every reservation, across every chair. Status changes here are the same ones the database enforces — only legal moves are offered."
+        title={isFloor ? "Your bookings" : "Bookings"}
+        description={
+          isFloor
+            ? "The guests booked with you, in the order you will see them. The desk and the owner read every chair; you read yours."
+            : "Every reservation, across every chair. Status changes here are the same ones the database enforces — only legal moves are offered."
+        }
         actions={
           <>
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={list.reload}>
@@ -268,7 +274,9 @@ export default function Bookings() {
           description={
             filtersActive
               ? "Try a wider date range, or clear the filters."
-              : "Nothing has been booked in this window yet."
+              : isFloor
+                ? "Nothing is on your chair in this window yet."
+                : "Nothing has been booked in this window yet."
           }
           action={
             filtersActive ? (

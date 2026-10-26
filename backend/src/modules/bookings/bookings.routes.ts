@@ -65,9 +65,10 @@ bookingsRouter.post(
 );
 
 // --- the run sheet ---------------------------------------------------------
-// Everyone who works the floor reads it: the desk to answer the phone, the
-// therapist to know what is next. Scoping an employee to only their own rows
-// is a presentation decision the dashboards make, not a gate here.
+// Everyone who works the floor reads it, but not the same rows: the desk and
+// the owner read the branch, and an employee reads their own chair. That scope
+// is applied in the service from the token, not from `?employeeId` - see
+// `scopeEmployee` in bookings.service.ts.
 bookingsRouter.get(
   "/",
   authenticate,

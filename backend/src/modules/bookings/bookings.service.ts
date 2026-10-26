@@ -126,12 +126,45 @@ function toNoteDto(row: BookingNoteRow) {
  * number. Sending a token therefore never *reduces* your rights.
  */
 function canAccessBooking(
-  row: { client_id: string | null },
+  row: { client_id: string | null; employee_id: string },
   actor?: Actor
 ): boolean {
+  /*
+   * The floor reads its own chair, and only its own chair. `isStaff` below
+   * would let an employee open any booking in the branch - that is the desk's
+   * view, not theirs. A stylist has no reason to read a colleague's client and
+   * every reason not to, so the check comes first.
+   */
+  if (actor?.role === "EMPLOYEE") {
+    return Boolean(actor.employeeId) && row.employee_id === actor.employeeId;
+  }
   if (isStaff(actor)) return true;
   if (row.client_id === null) return true; // guest booking - the uuid is the capability
   return !!actor?.clientId && row.client_id === actor.clientId;
+}
+
+/**
+ * The employee filter a caller is allowed to use on the list.
+ *
+ * The desk and the owner read the whole branch; a stylist reads their own
+ * chair. The scope is applied from the token, never trusted from the query
+ * string - `?employeeId=<a colleague>` must not be a one-line way around the
+ * rule - and naming a colleague is refused rather than quietly rewritten, so a
+ * stale id left in a link surfaces as a 403 instead of a page that looks like
+ * "no bookings today".
+ */
+function scopeEmployee(actor: Actor | undefined, requestedId?: string): string | undefined {
+  if (actor?.role !== "EMPLOYEE") return requestedId;
+  if (!actor.employeeId) {
+    throw AppError.forbidden(
+      CODES.FORBIDDEN,
+      "This account is not linked to an employee record, so it has no chair to show"
+    );
+  }
+  if (requestedId && requestedId !== actor.employeeId) {
+    throw AppError.forbidden(CODES.FORBIDDEN, "You can only read your own bookings");
+  }
+  return actor.employeeId;
 }
 
 export const bookingsService = {
@@ -262,8 +295,9 @@ export const bookingsService = {
     return toBookingDto(row, items);
   },
 
-  async list(query: ListBookingsQuery) {
-    const { rows, total } = await bookingsRepository.list(query);
+  async list(query: ListBookingsQuery, actor?: Actor) {
+    const scoped = { ...query, employeeId: scopeEmployee(actor, query.employeeId) };
+    const { rows, total } = await bookingsRepository.list(scoped);
     const items = await bookingsRepository.itemsForMany(rows.map((r) => r.id));
     return paginated(
       rows.map((r) => toBookingDto(r, items.get(r.id) ?? [])),

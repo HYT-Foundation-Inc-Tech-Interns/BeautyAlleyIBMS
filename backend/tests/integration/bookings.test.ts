@@ -1,5 +1,14 @@
 import request from "supertest";
-import { api, as, createTestAdmin, createTestClient, createTestConcierge, deleteTestUsers, type TestUser } from "../helpers/api";
+import {
+  api,
+  as,
+  createTestAdmin,
+  createTestClient,
+  createTestConcierge,
+  createTestStaff,
+  deleteTestUsers,
+  type TestUser,
+} from "../helpers/api";
 import { connectDb, db, disconnectDb } from "../helpers/db";
 import { ISO, SLOT_BANDS, nextWorkingSlot, shiftHours, useSlotBand } from "../helpers/time";
 
@@ -669,6 +678,102 @@ describeBookings("bookings", () => {
       // rather than silently booked against the victim.
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("CLIENT_REQUIRED");
+    });
+  });
+
+  describe("an employee's view", () => {
+    /*
+     * The floor reads its own chair. The list used to be one branch-wide query
+     * for everyone in OPERATIONS, so a stylist could scroll every colleague's
+     * clients - the desk's view, handed to the floor.
+     *
+     * The fixtures are this suite's own employee rows: linking an account to a
+     * seeded employee would race the QR suite, which does exactly that with
+     * EMP_ANA.
+     */
+    let floorA = "";
+    let floorB = "";
+    let bookingA = "";
+    let bookingB = "";
+
+    beforeAll(async () => {
+      const emps = await db().query(
+        `insert into public.employees (full_name, title)
+         values ('__bookings_floor_a', 'Therapist'), ('__bookings_floor_b', 'Therapist')
+         returning id`
+      );
+      floorA = emps.rows[0].id;
+      floorB = emps.rows[1].id;
+    });
+
+    /*
+     * Per test, not once: the suite-wide `afterEach` deletes every row in
+     * `rawBookings`, so a booking made in `beforeAll` exists for exactly one
+     * test and every later one reads an empty list.
+     */
+    beforeEach(async () => {
+      const made = await db().query(
+        `insert into public.bookings
+           (reference, guest_name, guest_phone, employee_id, start_time, end_time, status,
+            subtotal_cents, discount_cents, total_cents)
+         values ($1, 'Floor A Guest', '+639170000031', $2, now() + interval '2 hours',
+                 now() + interval '3 hours', 'CONFIRMED', 0, 0, 0),
+                ($3, 'Floor B Guest', '+639170000032', $4, now() + interval '4 hours',
+                 now() + interval '5 hours', 'CONFIRMED', 0, 0, 0)
+         returning id`,
+        [`BA-FLOOR-A-${Date.now()}`, floorA, `BA-FLOOR-B-${Date.now()}`, floorB]
+      );
+      bookingA = made.rows[0].id;
+      bookingB = made.rows[1].id;
+      rawBookings.push(bookingA, bookingB);
+    });
+
+    afterAll(async () => {
+      await db().query(`delete from public.employees where id = any($1::uuid[])`, [[floorA, floorB]]);
+    });
+
+    it("lists only the bookings assigned to the caller", async () => {
+      const ana = await createTestStaff(floorA);
+      created.push(ana);
+
+      const res = await request(api()).get("/api/v1/bookings?limit=100").set(...as(ana.token));
+      expect(res.status).toBe(200);
+
+      const ids = res.body.data.map((b: { id: string }) => b.id);
+      expect(ids).toContain(bookingA);
+      expect(ids).not.toContain(bookingB);
+      expect(
+        res.body.data.every((b: { employee: { id: string } }) => b.employee.id === floorA)
+      ).toBe(true);
+    });
+
+    it("refuses a colleague's id in the filter rather than quietly showing their own", async () => {
+      const ana = await createTestStaff(floorA);
+      const res = await request(api())
+        .get(`/api/v1/bookings?employeeId=${floorB}`)
+        .set(...as(ana.token));
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("FORBIDDEN");
+    });
+
+    it("404s a colleague's booking by id", async () => {
+      const ana = await createTestStaff(floorA);
+      const res = await request(api()).get(`/api/v1/bookings/${bookingB}`).set(...as(ana.token));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("BOOKING_NOT_FOUND");
+    });
+
+    it("still gives the desk the whole branch", async () => {
+      const desk = await createTestConcierge("Floor Scope Desk");
+      created.push(desk);
+
+      const res = await request(api()).get("/api/v1/bookings?limit=100").set(...as(desk.token));
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((b: { id: string }) => b.id);
+      expect(ids).toContain(bookingA);
+      expect(ids).toContain(bookingB);
     });
   });
 
