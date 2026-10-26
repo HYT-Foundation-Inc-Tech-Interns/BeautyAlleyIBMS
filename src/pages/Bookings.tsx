@@ -173,7 +173,7 @@ export default function Bookings() {
             </Button>
             {/* The desk can make a client login here, without leaving the page
                 it already works on. Staff accounts stay with the administrator. */}
-            {canCreateClient && <ClientAccountDialog onCreated={() => list.reload()} />}
+            {canCreateClient && <ClientAccountDialog onChanged={() => list.reload()} />}
             {canCreate && (
               <Button asChild>
                 <Link to="/app/bookings/new">

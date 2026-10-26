@@ -28,6 +28,9 @@ export const createClientSchema = z.object({
     .optional(),
 });
 
+/** A new password for an existing client login. Same rule as everywhere else. */
+export const resetClientPasswordSchema = z.object({ password });
+
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address"),
   password: z.string().min(1, "Password is required"),
@@ -64,3 +67,4 @@ export const createStaffSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type CreateClientInput = z.infer<typeof createClientSchema>;
+export type ResetClientPasswordInput = z.infer<typeof resetClientPasswordSchema>;

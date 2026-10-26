@@ -224,6 +224,7 @@ export const API_GROUPS: ApiGroup[] = [
     endpoints: [
       { method: "POST", path: "/api/v1/admin/users/staff", auth: "ADMIN", summary: "Create an EMPLOYEE, CONCIERGE or ADMIN account. The retired 'STAFF' label is refused." },
       { method: "POST", path: "/api/v1/admin/users/client", auth: "DESK", summary: "Create a CLIENT login and attach it to the client record. The only account the desk may make." },
+      { method: "POST", path: "/api/v1/admin/users/client/:clientId/password", auth: "DESK", summary: "Set a new password for a CLIENT login. Refuses any target that is not a client." },
       { method: "GET", path: "/api/v1/admin/dashboard", auth: "ADMIN", summary: "Totals for a date range." },
       { method: "GET", path: "/api/v1/admin/clients", auth: "ADMIN", summary: "Client list with lifetime value." },
       { method: "GET", path: "/api/v1/admin/clients/export.csv", auth: "ADMIN", summary: "The client list as a CSV attachment." },

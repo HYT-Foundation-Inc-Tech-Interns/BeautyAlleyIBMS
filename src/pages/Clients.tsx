@@ -100,7 +100,7 @@ export default function Clients() {
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={list.reload}>
               <RefreshCw className="size-4" />
             </Button>
-            <ClientAccountDialog onCreated={() => list.reload()} />
+            <ClientAccountDialog onChanged={() => list.reload()} />
             <Button onClick={exportCsv} disabled={exporting}>
               {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               Export CSV
@@ -384,9 +384,23 @@ function ClientPanel({
 
       {error && <ErrorNote error={error} className="mt-5" />}
 
+      {/*
+       * Re-keying a login belongs next to the record it belongs to: the desk
+       * has the client on screen, so it should not have to search for them
+       * again in another dialog.
+       */}
+      <div className="mt-6">
+        <ClientAccountDialog
+          client={{ id: client.id, fullName: client.fullName, email: client.email }}
+          onChanged={onChanged}
+          variant="outline"
+          label="Reset password"
+        />
+      </div>
+
       <Button
         variant={client.isActive ? "ghost" : "outline"}
-        className={cn("mt-6 w-full", client.isActive && "text-clay hover:bg-clay/10")}
+        className={cn("mt-3 w-full", client.isActive && "text-clay hover:bg-clay/10")}
         onClick={toggleActive}
         disabled={busy}
       >

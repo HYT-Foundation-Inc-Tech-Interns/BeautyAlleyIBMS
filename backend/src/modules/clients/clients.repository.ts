@@ -49,6 +49,27 @@ export const clientsRepository = {
    * that already carries a profile is a conflict, not something to overwrite:
    * two logins must never share one client.
    */
+  /**
+   * The login attached to a client record, if there is one.
+   *
+   * A client row can exist without an account - every guest booking makes one -
+   * so `profileId` being null is a normal answer, not a failure.
+   */
+  async accountOf(clientId: string): Promise<{ profileId: string | null; fullName: string } | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("clients")
+      .select("profile_id, full_name")
+      .eq("id", clientId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      profileId: (data as { profile_id: string | null }).profile_id,
+      fullName: (data as { full_name: string }).full_name,
+    };
+  },
+
   async linkOrCreateForProfile(input: {
     profileId: string;
     fullName: string;

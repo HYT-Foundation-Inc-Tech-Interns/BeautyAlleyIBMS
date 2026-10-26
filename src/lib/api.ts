@@ -655,6 +655,18 @@ export const api = {
     }) => request<CreatedClientAccount>("POST", "/api/v1/admin/users/client", { body }),
 
     /**
+     * Set a new password for a client login, addressed by the client row id —
+     * which is what the desk has on screen. The API refuses anything that is
+     * not a CLIENT account.
+     */
+    resetClientPassword: (clientId: string, password: string) =>
+      request<{ clientId: string; fullName: string }>(
+        "POST",
+        `/api/v1/admin/users/client/${clientId}/password`,
+        { body: { password } },
+      ),
+
+    /**
      * The CSV endpoint is a plain `text/csv` response behind the same bearer
      * token, so a bare `<a href>` cannot reach it. Fetch it with the header and
      * hand the browser a blob instead.

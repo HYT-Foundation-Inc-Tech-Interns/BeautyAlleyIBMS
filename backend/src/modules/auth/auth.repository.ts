@@ -111,6 +111,19 @@ export const authRepository = {
    * an auth user with no client row can log in and see nothing, and the email
    * is then taken for the retry.
    */
+  /**
+   * Set a new password for an existing account.
+   *
+   * Admin API, not a reset mail: the desk hands the new password over in
+   * person, and a recovery link would need a Site URL this deployment cannot
+   * be trusted to have right.
+   */
+  async updatePassword(userId: string, password: string) {
+    const db = requireServiceRole();
+    const { error } = await db.auth.admin.updateUserById(userId, { password });
+    if (error) throw error;
+  },
+
   async deleteUser(id: string) {
     const db = requireServiceRole();
     const { error } = await db.auth.admin.deleteUser(id);

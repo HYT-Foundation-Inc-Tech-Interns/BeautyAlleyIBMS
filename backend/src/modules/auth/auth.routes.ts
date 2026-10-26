@@ -1,6 +1,12 @@
 import { Router } from "express";
 import { authController } from "./auth.controller";
-import { createClientSchema, createStaffSchema, loginSchema, refreshSchema } from "./auth.schemas";
+import {
+  createClientSchema,
+  createStaffSchema,
+  loginSchema,
+  refreshSchema,
+  resetClientPasswordSchema,
+} from "./auth.schemas";
 import { authenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/requireRole";
 import { validate } from "../../middleware/validate";
@@ -50,6 +56,19 @@ adminAuthRouter.post(
   requireRole("ADMIN", "CONCIERGE"),
   validate({ body: createClientSchema }),
   asyncHandler(authController.createClient)
+);
+
+/*
+ * Resetting a client password is the same authority as creating one: the desk
+ * is who the guest talks to. The service refuses any target that is not a
+ * CLIENT, so this cannot be turned into "reset the administrator".
+ */
+adminAuthRouter.post(
+  "/users/client/:clientId/password",
+  authenticate,
+  requireRole("ADMIN", "CONCIERGE"),
+  validate({ body: resetClientPasswordSchema }),
+  asyncHandler(authController.resetClientPassword)
 );
 
 adminAuthRouter.post(

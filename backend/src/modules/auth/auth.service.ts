@@ -2,7 +2,12 @@ import { env } from "../../config/env";
 import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { authRepository } from "./auth.repository";
-import type { CreateClientInput, CreateStaffInput, LoginInput } from "./auth.schemas";
+import type {
+  CreateClientInput,
+  CreateStaffInput,
+  LoginInput,
+  ResetClientPasswordInput,
+} from "./auth.schemas";
 import { clientsRepository } from "../clients/clients.repository";
 import type { Actor } from "../../types/actor";
 
@@ -145,6 +150,47 @@ export const authService = {
 
     logger.info("auth.client_created", { userId, clientId, by: actor.id });
     return { id: userId, clientId, email: input.email, role: "CLIENT" as const, fullName: input.fullName };
+  },
+
+  /**
+   * Set a new password for a client login.
+   *
+   * Addressed by *client* id, not profile id, because that is what the desk has
+   * in front of it. The role is checked here rather than trusted from the
+   * caller: a concierge may reset a client password and nothing else, so the
+   * target must resolve to a CLIENT profile or the request is refused.
+   */
+  async resetClientPassword(
+    clientId: string,
+    input: ResetClientPasswordInput,
+    actor: Actor
+  ) {
+    const client = await clientsRepository.accountOf(clientId);
+    if (!client) throw AppError.notFound(CODES.CLIENT_NOT_FOUND, "Client not found");
+    if (!client.profileId) {
+      throw AppError.conflict(
+        CODES.CONFLICT,
+        "That client has no login yet — create an account instead."
+      );
+    }
+
+    const profile = await authRepository.getProfile(client.profileId);
+    if (!profile) throw AppError.notFound(CODES.PROFILE_NOT_FOUND, "Profile not found");
+    if (profile.role !== "CLIENT") {
+      throw AppError.forbidden(
+        CODES.FORBIDDEN,
+        "Only client passwords can be reset here."
+      );
+    }
+
+    await authRepository.updatePassword(client.profileId, input.password);
+    logger.info("auth.client_password_reset", {
+      clientId,
+      userId: client.profileId,
+      by: actor.id,
+    });
+
+    return { clientId, fullName: client.fullName };
   },
 
   async createStaff(input: CreateStaffInput, actor: Actor) {

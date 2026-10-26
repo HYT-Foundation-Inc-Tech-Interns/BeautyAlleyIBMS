@@ -241,6 +241,7 @@ Auth legend: 🌐 public · 👤 CLIENT · 🧑‍🔧 STAFF · 🛡️ ADMIN
 | GET | `/auth/me` | 👤🧑‍🔧🛡️ |
 | POST | `/admin/users/staff` | 🛡️ (Supabase admin API) |
 | POST | `/admin/users/client` | 🛡️🧑‍🔧 (client accounts only) |
+| POST | `/admin/users/client/:clientId/password` | 🛡️🧑‍🔧 (client accounts only) |
 
 ### Services
 | Method | Path | Role |

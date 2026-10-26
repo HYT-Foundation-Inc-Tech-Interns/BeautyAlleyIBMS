@@ -33,6 +33,15 @@ export const authController = {
     res.status(201).json({ data: result });
   },
 
+  async resetClientPassword(req: Request, res: Response) {
+    const result = await authService.resetClientPassword(
+      req.params.clientId,
+      req.body,
+      req.actor as Actor
+    );
+    res.status(200).json({ data: result });
+  },
+
   async createStaff(req: Request, res: Response) {
     const result = await authService.createStaff(req.body, req.actor as Actor);
     res.status(201).json({ data: result });
