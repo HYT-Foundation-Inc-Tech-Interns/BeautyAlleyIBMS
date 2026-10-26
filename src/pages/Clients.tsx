@@ -36,6 +36,7 @@ import { useAsync } from "@/lib/useAsync";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader, StatTile } from "@/components/app/bits";
+import { ClientAccountDialog } from "@/components/app/client-account-dialog";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
 
 function useDebounced<T>(value: T, ms = 300) {
@@ -99,6 +100,7 @@ export default function Clients() {
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={list.reload}>
               <RefreshCw className="size-4" />
             </Button>
+            <ClientAccountDialog onCreated={() => list.reload()} />
             <Button onClick={exportCsv} disabled={exporting}>
               {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               Export CSV

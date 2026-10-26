@@ -91,6 +91,15 @@ export interface LoginResult {
   session: Session;
 }
 
+/** `POST /admin/users/client` — the login plus the client row it was attached to. */
+export interface CreatedClientAccount {
+  id: string;
+  clientId: string;
+  email: string;
+  role: "CLIENT";
+  fullName: string;
+}
+
 /** `GET /auth/me` — richer than the login payload; carries the row ids. */
 export interface Me {
   id: string;

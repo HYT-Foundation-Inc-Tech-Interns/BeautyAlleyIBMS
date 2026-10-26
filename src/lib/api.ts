@@ -38,6 +38,7 @@ import type {
   ClientHit,
   ClientRecord,
   CreateBookingInput,
+  CreatedClientAccount,
   Dashboard,
   Employee,
   Health,
@@ -640,6 +641,18 @@ export const api = {
       fullName: string;
       role: "EMPLOYEE" | "CONCIERGE" | "ADMIN";
     }) => request<AuthUser>("POST", "/api/v1/admin/users/staff", { body }),
+
+    /**
+     * A client login, made at the desk. Allowed for ADMIN and CONCIERGE — the
+     * one account a concierge may create. The response carries the client row
+     * id as well as the profile id, because both are needed downstream.
+     */
+    createClientAccount: (body: {
+      email: string;
+      password: string;
+      fullName: string;
+      phone?: string;
+    }) => request<CreatedClientAccount>("POST", "/api/v1/admin/users/client", { body }),
 
     /**
      * The CSV endpoint is a plain `text/csv` response behind the same bearer

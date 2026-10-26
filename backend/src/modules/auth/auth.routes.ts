@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authController } from "./auth.controller";
-import { createStaffSchema, loginSchema, refreshSchema } from "./auth.schemas";
+import { createClientSchema, createStaffSchema, loginSchema, refreshSchema } from "./auth.schemas";
 import { authenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/requireRole";
 import { validate } from "../../middleware/validate";
@@ -36,6 +36,21 @@ authRouter.post("/logout", authenticate, asyncHandler(authController.logout));
 authRouter.get("/me", authenticate, asyncHandler(authController.me));
 
 export const adminAuthRouter = Router();
+
+/*
+ * The split the salon actually runs on: an administrator makes every account,
+ * and the concierge makes exactly one kind - a client. The desk meets people
+ * who want a login for their history, and sending them to an administrator
+ * for a form the desk already has on screen is friction with no security
+ * value: a CLIENT account can read its own bookings and nothing else.
+ */
+adminAuthRouter.post(
+  "/users/client",
+  authenticate,
+  requireRole("ADMIN", "CONCIERGE"),
+  validate({ body: createClientSchema }),
+  asyncHandler(authController.createClient)
+);
 
 adminAuthRouter.post(
   "/users/staff",

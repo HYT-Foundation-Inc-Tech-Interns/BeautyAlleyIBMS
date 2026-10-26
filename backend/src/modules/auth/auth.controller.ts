@@ -28,6 +28,11 @@ export const authController = {
     res.status(200).json({ data: result });
   },
 
+  async createClient(req: Request, res: Response) {
+    const result = await authService.createClientAccount(req.body, req.actor as Actor);
+    res.status(201).json({ data: result });
+  },
+
   async createStaff(req: Request, res: Response) {
     const result = await authService.createStaff(req.body, req.actor as Actor);
     res.status(201).json({ data: result });

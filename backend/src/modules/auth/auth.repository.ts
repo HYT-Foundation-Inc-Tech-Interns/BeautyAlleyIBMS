@@ -83,19 +83,38 @@ export const authRepository = {
     email: string,
     password: string,
     fullName: string,
-    role: Role
+    role: Role,
+    phone?: string
   ): Promise<string> {
     const db = requireServiceRole();
+    // `email_confirm: true` is what keeps Supabase from sending a
+    // confirmation mail at all. There is no public sign-up to confirm, and a
+    // link built from the project Site URL is exactly the localhost trap this
+    // used to fall into.
     const { data, error } = await db.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       app_metadata: { role },
-      user_metadata: { full_name: fullName },
+      user_metadata: { full_name: fullName, ...(phone ? { phone } : {}) },
     });
     if (error) throw error;
     if (!data.user) throw AppError.internal("User creation returned no user");
     return data.user.id;
+  },
+
+  /**
+   * Undo a half-finished account creation.
+   *
+   * Creating a client is two writes - the auth user, then the clients row that
+   * points at it. If the second one fails the first must not be left behind:
+   * an auth user with no client row can log in and see nothing, and the email
+   * is then taken for the retry.
+   */
+  async deleteUser(id: string) {
+    const db = requireServiceRole();
+    const { error } = await db.auth.admin.deleteUser(id);
+    if (error) throw error;
   },
 
   /** Count failed sign-ins for an email inside the lockout window. */

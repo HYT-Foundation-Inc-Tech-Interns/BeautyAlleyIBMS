@@ -2,7 +2,8 @@ import { env } from "../../config/env";
 import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { authRepository } from "./auth.repository";
-import type { CreateStaffInput, LoginInput } from "./auth.schemas";
+import type { CreateClientInput, CreateStaffInput, LoginInput } from "./auth.schemas";
+import { clientsRepository } from "../clients/clients.repository";
 import type { Actor } from "../../types/actor";
 
 /**
@@ -109,6 +110,43 @@ export const authService = {
    * which is the only path that can write `app_metadata` - so this cannot be
    * reached by a user promoting themselves.
    */
+  /**
+   * Create a CLIENT account at the desk.
+   *
+   * Two writes, in this order: the auth user (which the trigger mirrors into
+   * `profiles`), then the `clients` row that the rest of the system reads a
+   * client from. Without the second one the account can sign in and "My
+   * bookings" is empty forever, because `actor.clientId` is derived from it.
+   *
+   * If the second write fails the first is rolled back, so a failed attempt
+   * does not burn the email address.
+   */
+  async createClientAccount(input: CreateClientInput, actor: Actor) {
+    const userId = await authRepository.adminCreateUser(
+      input.email,
+      input.password,
+      input.fullName,
+      "CLIENT",
+      input.phone
+    );
+
+    let clientId: string;
+    try {
+      clientId = await clientsRepository.linkOrCreateForProfile({
+        profileId: userId,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+      });
+    } catch (err) {
+      await authRepository.deleteUser(userId).catch(() => undefined);
+      throw err;
+    }
+
+    logger.info("auth.client_created", { userId, clientId, by: actor.id });
+    return { id: userId, clientId, email: input.email, role: "CLIENT" as const, fullName: input.fullName };
+  },
+
   async createStaff(input: CreateStaffInput, actor: Actor) {
     const userId = await authRepository.adminCreateUser(
       input.email,
