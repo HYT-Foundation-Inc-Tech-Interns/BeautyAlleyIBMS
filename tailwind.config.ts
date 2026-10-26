@@ -88,6 +88,10 @@ const config: Config = {
           400: "#D3B884",
           500: "#C2A167",
           600: "#A8874C",
+          /* 600 is the decorative gold — it reads as gold on ivory but sits at
+           * about 3.5:1, which is fine for an icon and not fine for an 11px
+           * label. 700 is the same hue, darkened for text. */
+          700: "#8A6C36",
         },
         clay: "#B4472F",
       },

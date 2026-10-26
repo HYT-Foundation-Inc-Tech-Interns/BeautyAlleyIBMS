@@ -14,9 +14,9 @@ const badgeVariants = cva(
           "border-transparent bg-secondary text-secondary-foreground",
         outline: "border-border text-foreground",
         champagne:
-          "border-champagne-300/70 bg-champagne-300/25 text-champagne-600",
+          "border-champagne-300/70 bg-champagne-300/25 text-champagne-700",
         success: "border-success/25 bg-success/10 text-success",
-        warning: "border-champagne-300/70 bg-champagne-300/20 text-champagne-600",
+        warning: "border-champagne-300/70 bg-champagne-300/20 text-champagne-700",
         destructive: "border-destructive/25 bg-destructive/10 text-destructive",
       },
     },

@@ -51,7 +51,7 @@ import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SectionHeading } from "@/components/app/bits";
+import { PageHeader } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
 import { useAuth } from "@/auth/AuthProvider";
 
@@ -133,7 +133,10 @@ function AdminOverview() {
     : 0;
   const today = series.length ? series[series.length - 1] : null;
 
-  const metricColor = metric === "bookings" ? "#733A4A" : "#A8874C";
+  /* Emerald for volume, gold for money — the two colours the salon prints in.
+   * These are literals because Recharts needs a paint value, not a class; they
+   * mirror the emerald primary and champagne-500 and must move with them. */
+  const metricColor = metric === "bookings" ? "#1B4D3E" : "#A8874C";
   /* Pin the top of the plot to the data. Recharts' "auto" domain rounds a
    * single booking up to four, which leaves three quarters of the chart empty
    * and makes a busy day look like a flat line. */
@@ -158,7 +161,10 @@ function AdminOverview() {
         />
         <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-center">
           <div className="min-w-0">
-            <p className="eyebrow text-primary-foreground/55">Admin console</p>
+            <p className="flex items-center gap-2.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-champagne-300/85">
+              <span aria-hidden className="h-px w-6 bg-champagne-300/50" />
+              Admin console
+            </p>
             <h1 className="mt-2 font-display text-[26px] font-semibold leading-tight tracking-tight text-primary-foreground sm:text-[30px]">
               Business overview
             </h1>
@@ -341,7 +347,7 @@ function AdminOverview() {
                       </defs>
                       <CartesianGrid
                         vertical={false}
-                        stroke="rgba(115,58,74,0.10)"
+                        stroke="rgba(27,77,62,0.10)"
                         strokeDasharray="3 6"
                       />
                       <XAxis
@@ -349,7 +355,7 @@ function AdminOverview() {
                         tickLine={false}
                         axisLine={false}
                         tickMargin={10}
-                        tick={{ fontSize: 11, fill: "#8A7F7A" }}
+                        tick={{ fontSize: 11, fill: "#7C8A82" }}
                         tickFormatter={dayTick}
                       />
                       <YAxis
@@ -359,14 +365,14 @@ function AdminOverview() {
                         width={46}
                         tickLine={false}
                         axisLine={false}
-                        tick={{ fontSize: 11, fill: "#8A7F7A" }}
+                        tick={{ fontSize: 11, fill: "#7C8A82" }}
                         tickFormatter={(value: number) =>
                           metric === "revenue" ? compactPeso(value) : String(value)
                         }
                       />
                       <Tooltip
                         cursor={{
-                          stroke: "rgba(115,58,74,0.18)",
+                          stroke: "rgba(27,77,62,0.20)",
                           strokeWidth: 1,
                           strokeDasharray: "4 4",
                         }}
@@ -496,7 +502,7 @@ const KPI_TONES = {
   primary: {
     accent: "from-primary/50 via-primary/25 to-transparent",
     badge: "bg-primary/10 text-primary",
-    spark: "#733A4A",
+    spark: "#1B4D3E",
   },
   accent: {
     accent: "from-champagne-400/70 via-champagne-400/30 to-transparent",
@@ -506,12 +512,12 @@ const KPI_TONES = {
   success: {
     accent: "from-success/45 via-success/20 to-transparent",
     badge: "bg-success/10 text-success",
-    spark: "#336C51",
+    spark: "#2B6A54",
   },
   danger: {
     accent: "from-destructive/45 via-destructive/20 to-transparent",
     badge: "bg-destructive/10 text-destructive",
-    spark: "#BA363A",
+    spark: "#B4472F",
   },
 } as const;
 
@@ -1046,7 +1052,13 @@ function RunSheet({ name }: { name: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[1100px] space-y-7">
-      <SectionHeading
+      {/*
+       * The same band every record page opens with. The run sheet used to
+       * open with a bare heading, so the one page a therapist lands on was
+       * the one page that did not look like the product.
+       */}
+      <PageHeader
+        icon={CalendarDays}
         eyebrow="Your chair"
         title={`Good day${name ? `, ${name.split(" ")[0]}` : ""}.`}
         description={
@@ -1057,7 +1069,7 @@ function RunSheet({ name }: { name: string }) {
             ? "Reading today's diary…"
             : `Today's run sheet — ${rows.length} booking${rows.length === 1 ? "" : "s"}, ${arrived} already arrived.`
         }
-        action={
+        actions={
           <Button variant="outline" onClick={list.reload}>
             <RefreshCw className="size-4" />
             Refresh

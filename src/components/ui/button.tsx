@@ -10,7 +10,10 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-soft hover:bg-primary/90 hover:shadow-lift",
+          /* The inset highlight is what makes a solid emerald button read as
+           * a lit surface rather than a flat rectangle — one pixel, and it is
+           * the same trick the poster's gold plaque uses. */
+          "bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_1px_2px_rgba(14,43,35,0.08)] hover:bg-primary/90 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_8px_24px_-12px_rgba(14,43,35,0.45)]",
         champagne:
           "bg-champagne-400 text-accent-foreground shadow-soft hover:bg-champagne-500",
         outline:

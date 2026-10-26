@@ -43,7 +43,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useAuth, type Area, ROLE_LABEL } from "@/auth/AuthProvider";
@@ -217,7 +216,10 @@ function AppSidebar() {
           to="/app"
           className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-white/[0.05] group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
         >
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] ring-1 ring-white/10 group-data-[collapsible=icon]:size-10">
+          {/* The crest sits in a gold-ringed tile: the same framing the
+              poster uses for the mark, and the only warm accent above the
+              fold of the rail. */}
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] ring-1 ring-champagne-300/30 group-data-[collapsible=icon]:size-10">
             <img
               src="/brand/logo-ivory.png"
               alt="The Beauty Alley"
@@ -230,14 +232,16 @@ function AppSidebar() {
             <span className="block truncate font-display text-[16px] font-semibold leading-tight tracking-tight text-primary-foreground">
               The Beauty Alley
             </span>
-            <span className="mt-1 block text-[9.5px] font-semibold uppercase tracking-[0.2em] text-primary-foreground/40">
+            <span className="mt-1 block text-[9.5px] font-semibold uppercase tracking-[0.2em] text-champagne-300/70">
               Salon OS
             </span>
           </span>
         </Link>
       </SidebarHeader>
 
-      <SidebarSeparator className="mx-4 my-1" />
+      {/* A gold hairline rather than a grey one — it is the line the poster
+          draws under the crest, and it separates the brand from the work. */}
+      <div aria-hidden className="gold-rule mx-4 my-1.5" />
 
       <SidebarContent className="gap-0 px-0 py-2">
         {NAV_GROUPS.map((group) => {
@@ -258,7 +262,7 @@ function AppSidebar() {
                             cn(
                               "relative",
                               isActive &&
-                                "bg-white/[0.13] text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
+                                "bg-gradient-to-r from-champagne-300/[0.18] via-white/[0.07] to-transparent text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]",
                             )
                           }
                         >
@@ -274,7 +278,7 @@ function AppSidebar() {
                                 className={cn(
                                   "transition-colors",
                                   isActive
-                                    ? "text-primary-foreground"
+                                    ? "text-champagne-300"
                                     : "text-primary-foreground/55",
                                 )}
                               />
@@ -293,9 +297,10 @@ function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="gap-3 p-3">
-        <div className="rounded-xl border border-white/10 bg-white/[0.05] p-3 group-data-[collapsible=icon]:hidden">
+        <div className="relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] p-3 group-data-[collapsible=icon]:hidden">
+          <span aria-hidden className="gold-rule absolute inset-x-0 top-0" />
           <div className="flex items-center gap-2.5">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-[10.5px] font-semibold text-primary-foreground ring-1 ring-white/10">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-[10.5px] font-semibold text-primary-foreground ring-1 ring-champagne-300/25">
               {initialsOf(me?.fullName ?? null, me?.email ?? null)}
             </span>
             <div className="min-w-0">
@@ -335,7 +340,7 @@ export function AppShell() {
    * Body, not a wrapper div, because Radix portals the mobile sidebar sheet
    * into `document.body` — a wrapper-scoped class would leave that sheet in the
    * public site's emerald. Mounting it here also means the whole `/app` tree
-   * inherits the blush/champagne tokens from a single line, which is the point:
+   * inherits the green/gold tokens from a single line, which is the point:
    * no dashboard component hard-codes a colour or a font.
    *
    * The cleanup matters for the public site: `/` and `/book` must go back to
@@ -350,7 +355,15 @@ export function AppShell() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="min-w-0">
-        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl sm:px-6">
+        <header className="sticky top-0 z-20 flex h-[72px] items-center gap-3 border-b border-border/60 bg-background/85 px-4 backdrop-blur-xl sm:px-6">
+          {/* Gold hairline under the bar. It repeats the rule at the foot of
+              every hero band, so the header and the page below it are visibly
+              the same document. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-champagne-400/40 to-transparent"
+          />
+
           <SidebarTrigger
             aria-label="Toggle navigation"
             className="text-muted-foreground hover:text-foreground"
@@ -375,7 +388,7 @@ export function AppShell() {
             */}
           <div className="ml-auto flex items-center gap-2.5">
             <span className="hidden items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-1.5 text-[11.5px] font-medium text-muted-foreground shadow-soft md:inline-flex">
-              <CalendarDays className="size-3.5 text-primary/70" />
+              <CalendarDays className="size-3.5 text-champagne-600" />
               {shortDate(branchToday())}
             </span>
             <span aria-hidden className="hidden h-6 w-px bg-border/80 md:block" />
