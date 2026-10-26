@@ -775,6 +775,47 @@ describeBookings("bookings", () => {
       expect(ids).toContain(bookingA);
       expect(ids).toContain(bookingB);
     });
+
+    /*
+     * Reading is not the only way to leak a booking: without the same gate on
+     * the write, a stylist who knew an id could move a colleague's guest to
+     * IN_SERVICE and the list scope would have been decoration.
+     */
+    it("lets an employee advance their own booking", async () => {
+      const ana = await createTestStaff(floorA);
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${bookingA}/status`)
+        .set(...as(ana.token))
+        .send({ status: "CHECKED_IN" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe("CHECKED_IN");
+    });
+
+    it("refuses to advance a colleague's booking, and changes nothing", async () => {
+      const ana = await createTestStaff(floorA);
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${bookingB}/status`)
+        .set(...as(ana.token))
+        .send({ status: "CHECKED_IN" });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("BOOKING_NOT_FOUND");
+
+      const row = await db().query(`select status from public.bookings where id = $1`, [bookingB]);
+      expect(row.rows[0].status).toBe("CONFIRMED");
+    });
+
+    it("still lets the desk advance any booking", async () => {
+      const desk = await createTestConcierge("Floor Scope Desk");
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${bookingB}/status`)
+        .set(...as(desk.token))
+        .send({ status: "CHECKED_IN" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe("CHECKED_IN");
+    });
   });
 
   describe("list payload", () => {

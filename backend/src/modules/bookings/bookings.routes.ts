@@ -110,7 +110,12 @@ bookingsRouter.get(
 
 // --- status machine --------------------------------------------------------
 // The desk checks a client in; the therapist starts and finishes the service.
-// Both halves of the same walk-in, so both roles.
+// Both halves of the same walk-in, so both roles - but the therapist only on
+// their own bookings. The gate is in `updateStatus`, where the row is known.
+//
+// `POST /qr/check-in` is deliberately not part of this: admitting a guest at
+// the door is not the same act as progressing work in a chair, and a guest who
+// arrives for a colleague still has to be let in by whoever is at the door.
 bookingsRouter.patch(
   "/:id/status",
   authenticate,

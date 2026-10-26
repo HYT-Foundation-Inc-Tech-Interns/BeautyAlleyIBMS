@@ -128,7 +128,7 @@ export const API_GROUPS: ApiGroup[] = [
       { method: "POST", path: "/api/v1/bookings/:id/cancel", auth: "optional", summary: "Cancel. Refused inside the 2-hour window unless forced by staff." },
       { method: "POST", path: "/api/v1/bookings/:id/reschedule", auth: "optional", summary: "Move to a new slot and issue a fresh pass. A room clash reports ROOM_TAKEN, not SLOT_TAKEN." },
       { method: "GET", path: "/api/v1/bookings/:id/qr", auth: "optional", summary: "Re-issue the signed check-in pass." },
-      { method: "PATCH", path: "/api/v1/bookings/:id/status", auth: "OPERATIONS", summary: "Move a booking through the status machine. The desk checks in; the therapist starts and completes." },
+      { method: "PATCH", path: "/api/v1/bookings/:id/status", auth: "OPERATIONS", summary: "Move a booking through the status machine. The desk checks in; the therapist starts and completes - on their own bookings only. A colleague's id is a 404." },
       { method: "PATCH", path: "/api/v1/bookings/:id/room", auth: "DESK", summary: "Front-desk override of the treatment room. Rejects a room of the wrong type and one already in use." },
       { method: "GET", path: "/api/v1/bookings/:id/notes", auth: "optional", summary: "Aftercare notes. A client sees only the ones marked shareable; staff see all." },
       { method: "POST", path: "/api/v1/bookings/:id/notes", auth: "OPERATIONS", summary: "Write an aftercare note. visibleToClient defaults to true." },

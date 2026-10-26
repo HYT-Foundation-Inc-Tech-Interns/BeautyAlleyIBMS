@@ -455,10 +455,19 @@ export const bookingsService = {
   /**
    * Staff status change. The database trigger owns the legality of the
    * transition - this only checks that the caller is allowed to attempt it.
+   *
+   * "Allowed" is the same rule as reading the booking: the desk and the owner
+   * move any reservation in the branch, an employee moves their own. Without
+   * it, the list scope would be a pane of glass - the floor could not *see* a
+   * colleague's booking but could still advance it if it knew the id.
    */
   async updateStatus(id: string, status: BookingStatus, actor: Actor) {
     const row = await bookingsRepository.getById(id);
     if (!row) throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
+    /* Same 404 as a stranger gets: a guessed id must not confirm it exists. */
+    if (!canAccessBooking(row, actor)) {
+      throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
+    }
 
     // Cancelling is not a status write. It has to stamp `cancelled_at`, revoke
     // the pass, release the promo and write its own audit row - all of which
