@@ -43,5 +43,16 @@ apiRouter.use("/loyalty", loyaltyRouter);
 apiRouter.use("/attendance", attendanceRouter);
 apiRouter.use("/tasks", tasksRouter);
 apiRouter.use("/clients", clientsRouter);
-apiRouter.use("/admin", adminRouter);
+
+/*
+ * Order matters here, and it is not cosmetic.
+ *
+ * `adminRouter` opens with `use(authenticate, requireRole("ADMIN"))` - a
+ * blanket gate over everything under /admin. Mounted first, it answers a
+ * concierge with 403 before `adminAuthRouter` is ever consulted, so the
+ * desk-only routes below were unreachable for the desk and only ever worked
+ * for an administrator. Express runs middleware in mount order, so the
+ * narrower router is mounted first and falls through when it has no match.
+ */
 apiRouter.use("/admin", adminAuthRouter);
+apiRouter.use("/admin", adminRouter);
