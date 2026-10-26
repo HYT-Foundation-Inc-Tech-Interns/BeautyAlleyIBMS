@@ -68,6 +68,16 @@ export function ClientAccountDialog({
   const [newPassword, setNewPassword] = React.useState("");
   const [showNew, setShowNew] = React.useState(false);
 
+  /**
+   * Closing from a button inside the dialog (Done, Cancel) only flips `open`;
+   * Radix does not call `onOpenChange` for that, so `reset()` would be skipped
+   * and the next guest would be shown the last one's password. Hence `close()`.
+   */
+  function close() {
+    setOpen(false);
+    reset();
+  }
+
   function reset() {
     setMode(client ? "reset" : "create");
     setBusy(false);
@@ -204,7 +214,7 @@ export function ClientAccountDialog({
                 </div>
               </dl>
 
-              <Button className="mt-5 w-full" onClick={() => setOpen(false)}>
+              <Button className="mt-5 w-full" onClick={close}>
                 Done
               </Button>
             </div>
@@ -298,7 +308,7 @@ export function ClientAccountDialog({
                   />
 
                   <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                    <Button type="button" variant="ghost" onClick={close}>
                       Cancel
                     </Button>
                     <Button type="submit" disabled={busy}>
@@ -354,7 +364,7 @@ export function ClientAccountDialog({
                   />
 
                   <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                    <Button type="button" variant="ghost" onClick={close}>
                       Cancel
                     </Button>
                     <Button type="submit" disabled={busy}>
