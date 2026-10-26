@@ -35,7 +35,7 @@ import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { serviceImage } from "@/lib/service-images";
 import { Button } from "@/components/ui/button";
-import { AlleyBadge, AlleySprig, AlleyMark } from "@/components/brand/Logo";
+import { AlleySprig } from "@/components/brand/Logo";
 import { CategoryBadge, ErrorNote, Loading } from "@/components/app/api-bits";
 import { PublicMobileNav, PublicNavLinks } from "@/components/app/PublicNav";
 import { Reveal } from "@/components/app/reveal";
@@ -75,6 +75,17 @@ export default function Landing() {
             : "bg-transparent",
         )}
       >
+        {/*
+          The same gold hairline the console and the inner public pages carry.
+          Only once the bar has turned solid: over the hero photograph there is
+          no band to draw a line under.
+        */}
+        {scrolled && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-champagne-400/35 to-transparent"
+          />
+        )}
         <div className="container flex h-[74px] items-center gap-6">
           <Link to="/" className="flex items-center gap-3" aria-label="The Beauty Alley — home">
             <img
@@ -282,7 +293,14 @@ export default function Landing() {
         <AlleySprig className="pointer-events-none absolute -right-16 top-1/2 h-[420px] w-[320px] -translate-y-1/2 text-white/[0.05]" />
         <div className="container relative flex flex-wrap items-center justify-between gap-8 py-20">
           <div className="max-w-2xl">
-            <AlleyBadge className="mb-7 h-20 w-20 text-champagne-300" showText={false} />
+            <img
+              src="/brand/logo-ivory.png"
+              alt=""
+              aria-hidden
+              width={1912}
+              height={1912}
+              className="mb-7 h-20 w-20 object-contain opacity-90"
+            />
             <h2 className="font-display text-[clamp(2rem,4.6vw,3.2rem)] font-medium leading-[1.05] tracking-tight text-balance">
               Your chair is waiting.
             </h2>
@@ -314,7 +332,13 @@ export default function Landing() {
         <div className="container grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-3">
-              <AlleyMark className="h-10 w-10 text-primary" />
+              <img
+                src="/brand/logo-emerald.png"
+                alt="The Beauty Alley"
+                width={1912}
+                height={1912}
+                className="h-11 w-11 object-contain"
+              />
               <span className="font-display text-[19px] font-semibold tracking-tight">
                 The Beauty Alley
               </span>
