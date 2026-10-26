@@ -18,19 +18,6 @@ export interface ProfileRow {
 }
 
 export const authRepository = {
-  async signUp(email: string, password: string, fullName: string, phone?: string) {
-    // `data` lands in raw_user_meta_data, which the handle_new_auth_user
-    // trigger reads to populate the profile. It is user-controlled, so the
-    // trigger only takes full_name and phone from it - never the role.
-    const { data, error } = await supabasePublic.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName, ...(phone ? { phone } : {}) } },
-    });
-    if (error) throw error;
-    return data;
-  },
-
   async signIn(email: string, password: string) {
     const { data, error } = await supabasePublic.auth.signInWithPassword({ email, password });
     if (error) throw error;

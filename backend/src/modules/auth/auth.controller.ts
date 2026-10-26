@@ -8,11 +8,6 @@ function clientIp(req: Request): string | null {
 }
 
 export const authController = {
-  async register(req: Request, res: Response) {
-    const result = await authService.register(req.body, clientIp(req));
-    res.status(201).json({ data: result });
-  },
-
   async login(req: Request, res: Response) {
     const result = await authService.login(req.body, clientIp(req));
     res.status(200).json({ data: result });

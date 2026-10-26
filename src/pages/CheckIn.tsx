@@ -52,6 +52,7 @@ import {
 } from "@/components/app/api-bits";
 import { Reveal } from "@/components/app/reveal";
 import { PageHeader, Panel, StatTile } from "@/components/app/bits";
+import { CameraScanner } from "@/components/app/camera-scanner";
 
 /** `YYYY-MM-DD` at the branch -> the UTC instants that bracket it. */
 const ARRIVED: Booking["status"][] = ["CHECKED_IN", "IN_SERVICE", "COMPLETED"];
@@ -66,20 +67,36 @@ function Redeem() {
   const [error, setError] = React.useState<ApiError | null>(null);
   const [done, setDone] = React.useState<CheckInResult | null>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (busy || !pass.trim()) return;
+  /**
+   * Redeem whatever we were handed — a scanned string or a pasted one.
+   *
+   * The camera and the text box are the same door, so they share one function.
+   * A scan is a deliberate act at the desk (the guest is holding the pass up),
+   * so it submits; the arrival-confirmation flow, which does *not* commit on a
+   * scan, lives on /app/scan-arrivals.
+   */
+  async function redeem(raw: string) {
+    const value = raw.trim();
+    if (busy || !value) return;
     setBusy(true);
     setError(null);
     setDone(null);
     try {
-      setDone(await api.qr.checkIn(pass.trim()));
+      setDone(await api.qr.checkIn(value));
       setPass("");
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not check that in"));
+      // Leave the value in the box so the desk can see what was read and try
+      // again, instead of losing the scan to a cleared field.
+      setPass(value);
     } finally {
       setBusy(false);
     }
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    void redeem(pass);
   }
 
   return (
@@ -87,22 +104,22 @@ function Redeem() {
       <CardHeader>
         <CardTitle className="text-[17px]">Redeem an arrival pass</CardTitle>
         <CardDescription>
-          Scan the guest's code, or paste it. Each pass works once.
+          Hold the guest's code up to the camera, or paste it. Each pass works once.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col justify-center gap-4">
-        <div className="relative flex min-h-[280px] max-h-[420px] flex-1 items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-sidebar">
-          <div
-            aria-hidden
-            className="absolute inset-0 opacity-[0.14]"
-            style={{
-              backgroundImage:
-                "linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px)",
-              backgroundSize: "26px 26px",
-            }}
-          />
-          {done ? (
-            <div className="relative text-center">
+        {done ? (
+          <div className="relative flex min-h-[280px] flex-col items-center justify-center overflow-hidden rounded-xl border border-border/80 bg-sidebar px-6 text-center">
+            <div
+              aria-hidden
+              className="absolute inset-0 opacity-[0.14]"
+              style={{
+                backgroundImage:
+                  "linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px)",
+                backgroundSize: "26px 26px",
+              }}
+            />
+            <div className="relative">
               <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300">
                 <CheckCircle2 className="size-7" />
               </span>
@@ -112,17 +129,27 @@ function Redeem() {
               <p className="mt-1 text-[12.5px] text-primary-foreground/65">
                 Checked in at {branchTime(done.checkedInAt)}
               </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-5 border-white/20 bg-white/[0.08] text-primary-foreground hover:bg-white/[0.16]"
+                onClick={() => setDone(null)}
+              >
+                <ScanLine className="size-3.5" />
+                Scan the next guest
+              </Button>
             </div>
-          ) : (
-            <div className="relative text-center">
-              <ScanLine className="mx-auto size-8 text-champagne-400" />
-              <p className="mt-4 text-[13.5px] text-primary-foreground/80">Ready to scan</p>
-              <p className="mt-1 text-[11.5px] text-primary-foreground/45">
-                Align the pass inside the frame
-              </p>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          /*
+           * Paused while a request is in flight *and* while an error is on
+           * screen. Without the second half, a pass the server refuses stays
+           * in front of the lens and is re-submitted on every decoded frame —
+           * the desk would see the same refusal hammering the API until they
+           * moved the paper away.
+           */
+          <CameraScanner onCode={(raw) => void redeem(raw)} paused={busy || !!error} />
+        )}
 
         <form onSubmit={submit} className="space-y-3">
           <textarea
@@ -151,7 +178,9 @@ function Redeem() {
           </Button>
         </form>
 
-        {error && <ErrorNote error={error} />}
+        {/* Dismissing the error resumes the camera, so a refused pass can be
+            re-presented once the desk has read why it failed. */}
+        {error && <ErrorNote error={error} onRetry={() => setError(null)} />}
       </CardContent>
     </Card>
   );

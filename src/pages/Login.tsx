@@ -67,13 +67,12 @@ export default function Login() {
       title="Welcome back."
       lede="Your chair, your clients, today's run sheet — or your own appointments, if you're here for one."
       footer={
-        <>
-          No account yet?{" "}
-          <Link to="/register" className="font-medium text-primary hover:underline">
-            Create one
-          </Link>{" "}
-          — it takes a moment and it is free.
-        </>
+        /*
+         * There is no "create one" link, because there is no public sign-up.
+         * Accounts are made by an administrator; telling a visitor to ask at
+         * the desk is both true and the shortest route to an account.
+         */
+        <>Accounts are created at the desk. Ask reception to set one up for you.</>
       }
     >
       <form onSubmit={onSubmit} className="space-y-5" noValidate>

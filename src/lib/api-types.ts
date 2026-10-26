@@ -91,13 +91,6 @@ export interface LoginResult {
   session: Session;
 }
 
-export interface RegisterResult {
-  user: AuthUser | null;
-  /** Null when email confirmation is switched on. */
-  session: Session | null;
-  requiresEmailConfirmation: boolean;
-}
-
 /** `GET /auth/me` — richer than the login payload; carries the row ids. */
 export interface Me {
   id: string;

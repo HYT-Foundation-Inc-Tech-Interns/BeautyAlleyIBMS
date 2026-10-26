@@ -230,7 +230,7 @@ src/
 ├── lib/apiIndex.ts        the service index served at / and /api/v1
 ├── middleware/            authenticate, requireRole, validate, errorHandler, rateLimit
 ├── modules/
-│   ├── auth/              register, login (+ DB-backed lockout), refresh, me
+│   ├── auth/              login (+ DB-backed lockout), refresh, me; accounts are admin-created
 │   ├── services/          catalogue CRUD
 │   ├── employees/         staff, qualifications, hours, time off, availability
 │   ├── bookings/          create, cancel, reschedule, status, QR pass
@@ -337,7 +337,7 @@ section 6b asserts both halves — typed fields normalised, snapshot intact.
 | `integration/schema` | no | the constraint, RLS coverage, function grants |
 | `integration/rls` | no | cross-client isolation, privilege escalation |
 | `integration/public` | no | catalogue, availability, promo preview, auth gates |
-| `integration/auth` | **yes** | register, login, lockout, refresh, logout, RBAC |
+| `integration/auth` | **yes** | no public sign-up, login, lockout, refresh, logout, RBAC |
 | `integration/bookings` | **yes** | create, 409 double-book, window, reschedule |
 | `integration/promos` | **yes** | caps, per-customer limits, release on cancel |
 | `integration/qr` | **yes** | window, replay, revocation, forgery |

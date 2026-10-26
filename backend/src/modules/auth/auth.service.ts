@@ -2,7 +2,7 @@ import { env } from "../../config/env";
 import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { authRepository } from "./auth.repository";
-import type { CreateStaffInput, LoginInput, RegisterInput } from "./auth.schemas";
+import type { CreateStaffInput, LoginInput } from "./auth.schemas";
 import type { Actor } from "../../types/actor";
 
 /**
@@ -21,40 +21,6 @@ import type { Actor } from "../../types/actor";
  * evaded by rotating IPs. The IP limiter stays as a cheap first line.
  */
 export const authService = {
-  async register(input: RegisterInput, ip: string | null) {
-    const data = await authRepository.signUp(
-      input.email,
-      input.password,
-      input.fullName,
-      input.phone
-    );
-
-    // Supabase obfuscates "this email is taken" by returning a user with an
-    // empty identities array rather than an error. Detecting it here lets us
-    // give an honest 409 instead of a confusing success with no session.
-    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      throw AppError.conflict(CODES.CONFLICT, "An account with that email already exists");
-    }
-
-    logger.info("auth.register", { email: input.email, ip });
-
-    return {
-      user: data.user
-        ? { id: data.user.id, email: data.user.email ?? null, role: "CLIENT" as const }
-        : null,
-      // Null when email confirmation is switched on - the account exists but
-      // cannot sign in until the address is verified.
-      session: data.session
-        ? {
-            accessToken: data.session.access_token,
-            refreshToken: data.session.refresh_token,
-            expiresAt: data.session.expires_at,
-          }
-        : null,
-      requiresEmailConfirmation: !data.session,
-    };
-  },
-
   async login(input: LoginInput, ip: string | null) {
     const failures = await authRepository.countRecentFailures(input.email);
     if (failures >= env.loginMaxAttempts) {

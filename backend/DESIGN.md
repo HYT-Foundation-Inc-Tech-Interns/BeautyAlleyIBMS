@@ -234,7 +234,7 @@ Auth legend: 🌐 public · 👤 CLIENT · 🧑‍🔧 STAFF · 🛡️ ADMIN
 ### Auth
 | Method | Path | Role |
 |---|---|---|
-| POST | `/auth/register` | 🌐 |
+| ~~POST~~ | ~~`/auth/register`~~ | closed — accounts are created by an admin (`/admin/users/staff`) |
 | POST | `/auth/login` | 🌐 (rate-limited, 5 fails → 15 min lock) |
 | POST | `/auth/refresh` | 🌐 |
 | POST | `/auth/logout` | 👤🧑‍🔧🛡️ |

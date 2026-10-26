@@ -79,7 +79,6 @@ export const API_GROUPS: ApiGroup[] = [
   {
     name: "auth",
     endpoints: [
-      { method: "POST", path: "/api/v1/auth/register", auth: "public", summary: "Create a CLIENT account." },
       { method: "POST", path: "/api/v1/auth/login", auth: "public", summary: "Exchange credentials for a session. Rate-limited per address." },
       { method: "POST", path: "/api/v1/auth/refresh", auth: "public", summary: "Exchange a refresh token for a new session." },
       { method: "POST", path: "/api/v1/auth/logout", auth: "authenticated", summary: "Revoke the caller's session." },

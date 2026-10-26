@@ -170,16 +170,19 @@ export function PublicShell({
             </ul>
           </div>
 
+          {/*
+            * This column used to offer "Create a client account". Accounts are
+            * made by an administrator now, so the column says what a visitor
+            * actually needs to know instead of advertising a closed door.
+            */}
           <div>
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Your account
+              Good to know
             </h3>
-            <ul className="mt-4 space-y-2.5 text-[13px]">
-              <li>
-                <Link to="/register" className="text-foreground/75 transition-colors hover:text-primary">
-                  Create a client account
-                </Link>
-              </li>
+            <ul className="mt-4 space-y-2.5 text-[13px] text-foreground/75">
+              <li>No account needed to book</li>
+              <li>Arrival pass on the spot</li>
+              <li>Walk-ins welcome until 18:00</li>
             </ul>
           </div>
         </div>

@@ -50,7 +50,6 @@ import type {
   PromoValidation,
   QrState,
   QuotaProgress,
-  RegisterResult,
   Service,
   ServiceCategory,
   Session,
@@ -361,9 +360,6 @@ export const api = {
         auth: false,
         body: { email, password },
       }),
-
-    register: (body: { email: string; password: string; fullName: string; phone?: string }) =>
-      request<RegisterResult>("POST", "/api/v1/auth/register", { auth: false, body }),
 
     refresh: (refreshToken: string) =>
       request<{ session: Session }>("POST", "/api/v1/auth/refresh", {

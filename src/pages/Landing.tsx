@@ -199,11 +199,8 @@ export default function Landing() {
             </div>
 
             <p className="mt-6 text-[12.5px] text-primary-foreground/60">
-              No account needed to book —{" "}
-              <Link to="/register" className="underline decoration-white/30 underline-offset-4 hover:text-primary-foreground/90">
-                create one
-              </Link>{" "}
-              to keep your history and passes together.
+              No account needed to book — your arrival pass comes with the
+              confirmation.
             </p>
           </div>
         </div>

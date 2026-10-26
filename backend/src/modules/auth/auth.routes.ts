@@ -1,11 +1,6 @@
 import { Router } from "express";
 import { authController } from "./auth.controller";
-import {
-  createStaffSchema,
-  loginSchema,
-  refreshSchema,
-  registerSchema,
-} from "./auth.schemas";
+import { createStaffSchema, loginSchema, refreshSchema } from "./auth.schemas";
 import { authenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/requireRole";
 import { validate } from "../../middleware/validate";
@@ -14,7 +9,17 @@ import { loginLimiter } from "../../middleware/rateLimit";
 
 export const authRouter = Router();
 
-authRouter.post("/register", validate({ body: registerSchema }), asyncHandler(authController.register));
+/*
+ * There is no public sign-up.
+ *
+ * POST /auth/register used to exist and minted CLIENT accounts from the open
+ * internet, which meant anyone could create an identity inside the salon
+ * system - and, because Supabase sends a confirmation mail for it, anyone
+ * could also generate mail from the salon domain. Accounts are now created by
+ * an administrator through the route at the bottom of this file, with
+ * email_confirm already set, so no confirmation mail is ever generated and
+ * no self-service door exists to find.
+ */
 
 // The limiter sits in front of validation so a flood is rejected before it
 // costs a zod parse.
