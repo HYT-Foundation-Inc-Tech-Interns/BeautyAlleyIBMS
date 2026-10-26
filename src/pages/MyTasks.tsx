@@ -15,15 +15,23 @@
  */
 
 import * as React from "react";
-import { CheckCircle2, CircleDashed, ClipboardList, Loader2, PlayCircle } from "lucide-react";
+import {
+  AlarmClock,
+  CheckCircle2,
+  CircleDot,
+  ClipboardList,
+  Clock3,
+  PlayCircle,
+  RefreshCw,
+} from "lucide-react";
 
 import { api } from "@/lib/api";
 import type { Task, TaskPriority, TaskStatus } from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
-import { branchDay, cn } from "@/lib/utils";
+import { branchDay } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Panel, SectionHeading } from "@/components/app/bits";
+import { PageHeader, Panel, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading } from "@/components/app/api-bits";
 
 /* ------------------------------------------------------------------ *
@@ -66,38 +74,6 @@ export function TaskStatusBadge({ status, overdue }: { status: TaskStatus; overd
     CANCELLED: "secondary",
   };
   return <Badge variant={tone[status]}>{STATUS_LABEL[status]}</Badge>;
-}
-
-function Tile({
-  label,
-  value,
-  tone,
-  icon: Icon,
-}: {
-  label: string;
-  value: number | string;
-  tone?: "default" | "warning" | "destructive" | "success";
-  icon: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Panel className="flex items-center gap-3.5 px-4 py-3.5">
-      <span
-        className={cn(
-          "flex size-9 shrink-0 items-center justify-center rounded-full",
-          tone === "destructive" && "bg-destructive/10 text-destructive",
-          tone === "warning" && "bg-accent/20 text-accent-foreground",
-          tone === "success" && "bg-success/12 text-success",
-          (!tone || tone === "default") && "bg-primary/[0.08] text-primary",
-        )}
-      >
-        <Icon className="size-[17px]" />
-      </span>
-      <div className="min-w-0">
-        <p className="eyebrow">{label}</p>
-        <p className="tnum mt-0.5 text-[20px] font-semibold leading-none">{value}</p>
-      </div>
-    </Panel>
-  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -283,23 +259,48 @@ export default function MyTasks() {
   const showHistoryOnly = status === "COMPLETED" || status === "CANCELLED";
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-6">
-      <SectionHeading
+    <div className="mx-auto w-full max-w-[1400px] space-y-7">
+      <PageHeader
         eyebrow="Work"
+        icon={ClipboardList}
         title="My tasks"
         description="What the desk has asked you to do. Starting a task and completing it are yours to record; renaming it or handing it to someone else is not."
+        actions={
+          <Button variant="outline" onClick={refresh}>
+            <RefreshCw className="size-4" />
+            Refresh
+          </Button>
+        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile label="Pending" value={counts.data?.pending ?? "—"} icon={CircleDashed} />
-        <Tile label="In progress" value={counts.data?.inProgress ?? "—"} icon={Loader2} />
-        <Tile
-          label="Overdue"
-          value={counts.data?.overdue ?? "—"}
-          tone={counts.data?.overdue ? "destructive" : "default"}
-          icon={ClipboardList}
+        <StatTile
+          label="Pending"
+          value={counts.data ? String(counts.data.pending) : "—"}
+          hint="assigned, not started"
+          icon={Clock3}
         />
-        <Tile label="Completed" value={counts.data?.completed ?? "—"} tone="success" icon={CheckCircle2} />
+        <StatTile
+          label="In progress"
+          value={counts.data ? String(counts.data.inProgress) : "—"}
+          hint="you are on it"
+          icon={CircleDot}
+          tone="accent"
+        />
+        <StatTile
+          label="Overdue"
+          value={counts.data ? String(counts.data.overdue) : "—"}
+          hint="past the due date"
+          icon={AlarmClock}
+          tone="danger"
+        />
+        <StatTile
+          label="Completed"
+          value={counts.data ? String(counts.data.completed) : "—"}
+          hint="closed off your list"
+          icon={CheckCircle2}
+          tone="success"
+        />
       </div>
 
       <Panel className="px-5 py-4">
@@ -338,9 +339,6 @@ export default function MyTasks() {
               ))}
             </select>
           </label>
-          <Button variant="outline" className="h-10" onClick={refresh}>
-            Refresh
-          </Button>
         </div>
       </Panel>
 

@@ -15,14 +15,25 @@
  */
 
 import * as React from "react";
-import { CalendarClock, ClipboardList, Plus, Search, XCircle } from "lucide-react";
+import {
+  AlarmClock,
+  CalendarClock,
+  CheckCircle2,
+  CircleDot,
+  ClipboardList,
+  Clock3,
+  Plus,
+  RefreshCw,
+  Search,
+  XCircle,
+} from "lucide-react";
 
 import { api } from "@/lib/api";
 import type { Employee, Task, TaskPriority, TaskStatus } from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
 import { branchDay } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Panel, SectionHeading } from "@/components/app/bits";
+import { PageHeader, Panel, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, TextField } from "@/components/app/api-bits";
 import { PriorityBadge, TaskStatusBadge } from "@/pages/MyTasks";
 
@@ -460,27 +471,48 @@ export default function Tasks() {
   const rows = list.data?.data ?? [];
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-6">
-      <SectionHeading
+    <div className="mx-auto w-full max-w-[1400px] space-y-7">
+      <PageHeader
         eyebrow="Work"
+        icon={ClipboardList}
         title="Task board"
         description="Assign work to the floor and follow it through. What you create here appears on that employee's own My tasks page immediately — one set of records, two views."
+        actions={
+          <Button variant="outline" onClick={refresh}>
+            <RefreshCw className="size-4" />
+            Refresh
+          </Button>
+        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: "Pending", value: counts.data?.pending, tone: "" },
-          { label: "In progress", value: counts.data?.inProgress, tone: "" },
-          { label: "Overdue", value: counts.data?.overdue, tone: "text-destructive" },
-          { label: "Completed", value: counts.data?.completed, tone: "text-success" },
-        ].map((t) => (
-          <Panel key={t.label} className="px-4 py-3.5">
-            <p className="eyebrow">{t.label}</p>
-            <p className={`tnum mt-1.5 text-[22px] font-semibold leading-none ${t.tone}`}>
-              {t.value ?? "—"}
-            </p>
-          </Panel>
-        ))}
+        <StatTile
+          label="Pending"
+          value={counts.data ? String(counts.data.pending) : "—"}
+          hint="assigned, not started"
+          icon={Clock3}
+        />
+        <StatTile
+          label="In progress"
+          value={counts.data ? String(counts.data.inProgress) : "—"}
+          hint="someone is on it"
+          icon={CircleDot}
+          tone="accent"
+        />
+        <StatTile
+          label="Overdue"
+          value={counts.data ? String(counts.data.overdue) : "—"}
+          hint="past the due date"
+          icon={AlarmClock}
+          tone="danger"
+        />
+        <StatTile
+          label="Completed"
+          value={counts.data ? String(counts.data.completed) : "—"}
+          hint="closed off the board"
+          icon={CheckCircle2}
+          tone="success"
+        />
       </div>
 
       {flash && (
@@ -573,9 +605,6 @@ export default function Tasks() {
             />
             Overdue only
           </label>
-          <Button variant="outline" className="h-10" onClick={refresh}>
-            Refresh
-          </Button>
         </div>
       </Panel>
 

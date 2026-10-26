@@ -11,14 +11,14 @@
 
 import * as React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, CalendarPlus, Clock3, QrCode, UserRound } from "lucide-react";
+import { ArrowRight, CalendarDays, CalendarPlus, Clock3, QrCode, UserRound } from "lucide-react";
 
 import { branchDay, branchLongDay, branchTime, cn, peso, relativeToNow } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import { Button } from "@/components/ui/button";
 import { EmptyNote, ErrorNote, Loading, StatusBadge } from "@/components/app/api-bits";
-import { SectionHeading } from "@/components/app/bits";
+import { PageHeader, Panel } from "@/components/app/bits";
 import type { BookingStatus } from "@/lib/api-types";
 
 type Tab = "upcoming" | "past" | "all";
@@ -51,12 +51,13 @@ export default function MyBookings() {
   const rows = list.data ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-[900px] space-y-7">
-      <SectionHeading
+    <div className="mx-auto w-full max-w-[1400px] space-y-7">
+      <PageHeader
         eyebrow="Your account"
+        icon={CalendarDays}
         title="My bookings"
         description="Every appointment on your record, with the arrival pass for each. Passes can be re-opened at any time — the code is re-issued, never reused."
-        action={
+        actions={
           <Button asChild>
             <Link to="/book">
               <CalendarPlus className="size-4" />
@@ -66,24 +67,32 @@ export default function MyBookings() {
         }
       />
 
-      <div className="flex gap-1.5">
-        {TABS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => setTab(option.id)}
-            aria-pressed={tab === option.id}
-            className={cn(
-              "rounded-full border px-4 py-2 text-[12.5px] font-medium transition-colors",
-              tab === option.id
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <Panel className="flex flex-wrap items-center gap-3 px-4 py-3">
+        <div className="flex rounded-full border border-border bg-background p-0.5">
+          {TABS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setTab(option.id)}
+              aria-pressed={tab === option.id}
+              className={cn(
+                "rounded-full px-4 py-1.5 text-[12px] font-medium transition-colors",
+                tab === option.id
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <span className="ml-auto text-[12.5px] text-muted-foreground">
+          {list.initial
+            ? "Reading your record…"
+            : `${rows.length} appointment${rows.length === 1 ? "" : "s"}`}
+        </span>
+      </Panel>
 
       {list.error ? (
         <ErrorNote error={list.error} onRetry={list.reload} />
