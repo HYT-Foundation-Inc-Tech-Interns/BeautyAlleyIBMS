@@ -852,9 +852,9 @@ function RecentBookings({
  */
 const PRIMARY_MOVE: Partial<Record<BookingStatus, { to: BookingStatus; label: string }>> = {
   PENDING: { to: "CONFIRMED", label: "Confirm" },
-  CONFIRMED: { to: "CHECKED_IN", label: "Arrived" },
-  CHECKED_IN: { to: "IN_SERVICE", label: "Seated" },
-  IN_SERVICE: { to: "COMPLETED", label: "Done" },
+  CONFIRMED: { to: "CHECKED_IN", label: "Check in" },
+  CHECKED_IN: { to: "IN_SERVICE", label: "Seat" },
+  IN_SERVICE: { to: "COMPLETED", label: "Complete" },
 };
 
 /**
@@ -1012,7 +1012,7 @@ function NewRequests({ onChanged }: { onChanged: () => void }) {
 }
 
 function RunSheet({ name }: { name: string }) {
-  const { role } = useAuth();
+  const { role, can } = useAuth();
   const today = branchToday();
 
   const list = useAsync(`overview:runsheet:${today}`, async () =>
@@ -1179,8 +1179,13 @@ function RunSheet({ name }: { name: string }) {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/80 bg-sand-50 px-5 py-4">
         <p className="text-[12.5px] text-muted-foreground">
           A guest's pass is scanned at the door from{" "}
-          <Link to="/app/check-in" className="font-medium text-primary hover:underline">
-            QR Check-in
+          {/* The desk lost the QR board; the floor kept it. Point each role at
+              the door it actually has rather than at a page it cannot open. */}
+          <Link
+            to={can("check-in") ? "/app/check-in" : "/app/scan-arrivals"}
+            className="font-medium text-primary hover:underline"
+          >
+            {can("check-in") ? "QR Check-in" : "Scan arrival pass"}
           </Link>
           .
         </p>

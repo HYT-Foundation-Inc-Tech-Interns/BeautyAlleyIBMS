@@ -700,6 +700,24 @@ export const STATUS_LABEL: Record<BookingStatus, string> = {
   NO_SHOW: "No show",
 };
 
+/**
+ * What a button that *moves* a booking to a status says.
+ *
+ * A badge reports where the booking is ("Checked in"); a button offers what
+ * happens if you press it ("Check in"). Using the badge wording on the button
+ * reads as though the thing already happened, which is exactly the moment a
+ * person hesitates over whether they still need to do something.
+ */
+export const STATUS_ACTION: Record<BookingStatus, string> = {
+  PENDING: "Mark pending",
+  CONFIRMED: "Confirm",
+  CHECKED_IN: "Check in",
+  IN_SERVICE: "Start service",
+  COMPLETED: "Complete",
+  CANCELLED: "Cancel",
+  NO_SHOW: "No-show",
+};
+
 export type StatusTone = "default" | "secondary" | "outline" | "success" | "warning" | "destructive";
 
 export const STATUS_TONE: Record<BookingStatus, StatusTone> = {

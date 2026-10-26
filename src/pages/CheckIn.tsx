@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 
 import { branchLongDay, branchTime, branchToday, peso } from "@/lib/utils";
-import { api, ApiError, NEXT_STATUS } from "@/lib/api";
+import { api, ApiError, NEXT_STATUS, STATUS_ACTION } from "@/lib/api";
 import type { Booking, CheckInResult } from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
 import { Button } from "@/components/ui/button";
@@ -386,12 +386,8 @@ function Today() {
                           >
                             {moving === booking.id ? (
                               <Loader2 className="size-3.5 animate-spin" />
-                            ) : status === "CHECKED_IN" ? (
-                              "Arrived"
-                            ) : status === "COMPLETED" ? (
-                              "Done"
                             ) : (
-                              "No-show"
+                              STATUS_ACTION[status]
                             )}
                           </Button>
                         ))}

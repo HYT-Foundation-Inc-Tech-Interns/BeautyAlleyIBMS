@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 
 import { branchDay, branchTime, branchToday, cn, peso, shiftDayKey } from "@/lib/utils";
-import { api, ApiError, NEXT_STATUS, STATUS_LABEL } from "@/lib/api";
+import { api, ApiError, NEXT_STATUS, STATUS_ACTION, STATUS_LABEL } from "@/lib/api";
 import { useAuth } from "@/auth/AuthProvider";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
@@ -290,11 +290,13 @@ export default function Bookings() {
               >
                 Show everything
               </Button>
-            ) : (
+            ) : canCreate ? (
+              /* The desk books; the floor reads. An employee with an empty
+                 chair gets the sentence, not a door into the public form. */
               <Button asChild>
                 <Link to="/book">Create a booking</Link>
               </Button>
-            )
+            ) : null
           }
         />
       ) : (
@@ -387,7 +389,7 @@ export default function Bookings() {
                           disabled={busyId === booking.id}
                           onClick={() => advance(booking, s)}
                         >
-                          {STATUS_LABEL[s]}
+                          {STATUS_ACTION[s]}
                         </Button>
                       );
                     })
