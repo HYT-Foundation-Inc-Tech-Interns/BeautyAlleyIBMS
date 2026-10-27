@@ -25,10 +25,12 @@ import {
   ChevronRight,
   Clock3,
   Filter,
+  Loader2,
   Plus,
   RefreshCw,
   Search,
   Sparkles,
+  TriangleAlert,
   UserRound,
   X,
 } from "lucide-react";
@@ -39,6 +41,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
+import { Modal, ModalContent } from "@/components/ui/modal";
 import { PageHeader } from "@/components/app/bits";
 import { ClientAccountDialog } from "@/components/app/client-account-dialog";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
@@ -98,6 +101,13 @@ export default function Bookings() {
   /* The desk and the owner can open a client login; the floor cannot. */
   const canCreateClient = role === "CONCIERGE" || role === "ADMIN";
   /*
+   * Cancelling a guest's appointment is the desk's act — the person the guest
+   * is standing in front of, or on the phone — and the owner's, who answers
+   * for the same bookings. The floor keeps the status moves for their own
+   * chair; it does not cancel work out from under the desk.
+   */
+  const canCancel = role === "CONCIERGE" || role === "ADMIN";
+  /*
    * Seeded from the URL once, on mount, so another page can hand this one a
    * question instead of a bare page: `/app/bookings?range=all&q=BA-1A2B` opens
    * on that booking. Only the first read is taken — after that the controls own
@@ -141,6 +151,8 @@ export default function Bookings() {
 
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<ApiError | null>(null);
+  /* The booking the desk has asked to cancel, held until the dialog closes. */
+  const [cancelTarget, setCancelTarget] = React.useState<Booking | null>(null);
 
   async function advance(booking: Booking, next: BookingStatus) {
     setBusyId(booking.id);
@@ -199,7 +211,7 @@ export default function Bookings() {
           <input
             value={term}
             onChange={(e) => setTerm(e.target.value)}
-            placeholder="Client, guest, or reference…"
+            placeholder="Client name, phone, email, or reference…"
             aria-label="Search bookings"
             className="h-9 w-full rounded-full border border-border bg-background pl-10 pr-3 text-[13px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
           />
@@ -272,14 +284,23 @@ export default function Bookings() {
           icon={CalendarDays}
           title="No bookings match"
           description={
-            filtersActive
-              ? "Try a wider date range, or clear the filters."
-              : isFloor
-                ? "Nothing is on your chair in this window yet."
-                : "Nothing has been booked in this window yet."
+            q.trim() && range !== "all"
+              ? `Nothing in this window matches "${q.trim()}". The client may only have bookings outside it.`
+              : filtersActive
+                ? "Try a wider date range, or clear the filters."
+                : isFloor
+                  ? "Nothing is on your chair in this window yet."
+                  : "Nothing has been booked in this window yet."
           }
           action={
-            filtersActive ? (
+            // A name typed into the bar is usually a question about a person,
+            // not about this week — so the first thing offered is the same
+            // search across every date, rather than clearing what was typed.
+            q.trim() && range !== "all" ? (
+              <Button variant="outline" onClick={() => setRange("all")}>
+                Search all dates
+              </Button>
+            ) : filtersActive ? (
               <Button
                 variant="outline"
                 onClick={() => {
@@ -311,6 +332,28 @@ export default function Bookings() {
           {rows.map((booking) => {
             const who = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
             const next = NEXT_STATUS[booking.status];
+            /*
+             * The desk gets one Cancel, and it is the endpoint that records a
+             * reason — not a raw status move. Taking CANCELLED out of the
+             * generated moves keeps a second, quieter way to do the same
+             * destructive thing off the row.
+             */
+            const moves = canCancel ? next.filter((s) => s !== "CANCELLED") : next;
+            /*
+             * No-show is legal from PENDING, but the row only had room for the
+             * two moves that take a guest forward, so it was silently dropped:
+             * the desk had to confirm a booking before it could record that
+             * nobody turned up — which is the one thing a confirmation does not
+             * mean. It is added back while the guest is still expected; once
+             * they are checked in, being absent is not a move this row offers.
+             */
+            const shown = moves.slice(0, 2);
+            const visible =
+              (booking.status === "PENDING" || booking.status === "CONFIRMED") &&
+              moves.includes("NO_SHOW") &&
+              !shown.includes("NO_SHOW")
+                ? [...shown, "NO_SHOW" as BookingStatus]
+                : shown;
             return (
               <li
                 key={booking.id}
@@ -371,10 +414,10 @@ export default function Bookings() {
                 <StatusBadge status={booking.status} />
 
                 <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                  {next.length === 0 ? (
+                  {visible.length === 0 ? (
                     <span className="text-[11.5px] text-muted-foreground">Settled</span>
                   ) : (
-                    next.slice(0, 2).map((s, index) => {
+                    visible.map((s, index) => {
                       const destructive = s === "NO_SHOW" || s === "CANCELLED";
                       return (
                         <Button
@@ -394,6 +437,16 @@ export default function Bookings() {
                       );
                     })
                   )}
+                  {canCancel && next.includes("CANCELLED") && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-clay hover:bg-clay/10"
+                      onClick={() => setCancelTarget(booking)}
+                    >
+                      Cancel
+                    </Button>
+                  )}
                   {booking.client === null && booking.status !== "CANCELLED" && (
                     <Button asChild size="sm" variant="ghost">
                       <Link to={`/pass/${booking.id}`}>Pass</Link>
@@ -404,6 +457,17 @@ export default function Bookings() {
             );
           })}
         </ol>
+      )}
+
+      {cancelTarget && (
+        <CancelBookingDialog
+          booking={cancelTarget}
+          onClose={() => setCancelTarget(null)}
+          onDone={() => {
+            setCancelTarget(null);
+            list.reload();
+          }}
+        />
       )}
 
       {meta && meta.totalPages > 1 && (
@@ -434,5 +498,106 @@ export default function Bookings() {
         </div>
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * The desk's cancel
+ * ------------------------------------------------------------------ */
+
+/**
+ * Cancelling, with a reason.
+ *
+ * This is `POST /bookings/:id/cancel`, not a status move: the endpoint records
+ * who cancelled and why, and revokes the guest's pass. `force` is set because
+ * the concierge is the person the guest is in front of — a booking made for an
+ * hour's time is precisely the one that needs cancelling, and the two-hour
+ * guard would otherwise refuse it. The dialog says so rather than hiding it.
+ */
+function CancelBookingDialog({
+  booking,
+  onClose,
+  onDone,
+}: {
+  booking: Booking;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [reason, setReason] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<ApiError | null>(null);
+
+  const who = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.bookings.cancel(booking.id, {
+        reason: reason.trim() || undefined,
+        force: true,
+      });
+      onDone();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not cancel that booking"),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onOpenChange={(open) => !open && onClose()}>
+      <ModalContent title="Cancel booking" description={`Cancel ${booking.reference}`}>
+        <div className="p-6">
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-clay/10 text-clay">
+              <TriangleAlert className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="font-display text-[19px] font-semibold tracking-tight">
+                Cancel this booking?
+              </h2>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+                {who} · {branchDay(booking.startTime)} at {branchTime(booking.startTime)} ·{" "}
+                <span className="font-mono text-[11px]">{booking.reference}</span>
+              </p>
+            </div>
+          </div>
+
+          <label className="mt-5 block">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Reason (optional)
+            </span>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              maxLength={300}
+              placeholder="Guest called to cancel…"
+              className="mt-1.5 w-full resize-none rounded-lg border border-border bg-card px-3 py-2 text-[13px] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            />
+          </label>
+
+          <p className="mt-3 text-[11.5px] leading-relaxed text-muted-foreground">
+            The booking stays on record as cancelled and the guest's pass stops
+            working. The desk may cancel inside the two-hour window.
+          </p>
+
+          {error && <ErrorNote error={error} className="mt-4" />}
+
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <Button variant="destructive" onClick={submit} disabled={busy}>
+              {busy ? <Loader2 className="animate-spin" /> : <X />}
+              {busy ? "Cancelling…" : "Cancel booking"}
+            </Button>
+            <Button variant="outline" onClick={onClose} disabled={busy}>
+              Keep booking
+            </Button>
+          </div>
+        </div>
+      </ModalContent>
+    </Modal>
   );
 }
