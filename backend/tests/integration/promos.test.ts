@@ -20,8 +20,9 @@ const describePromos = hasServiceRole ? describe : describe.skip;
 useSlotBand(SLOT_BANDS.promos);
 
 describePromos("promos", () => {
-  const SVC_MASSAGE = "11111111-0000-0000-0000-000000000001";
-  const SVC_HAIRCUT = "11111111-0000-0000-0000-000000000003";
+  const SVC_COMBINATION = "11111111-0000-0000-0000-000000000021";
+  const SVC_THERAPEUTIC = "11111111-0000-0000-0000-000000000023";
+  const SVC_SCRUB = "11111111-0000-0000-0000-000000000024";
   const EMP_ANA = "22222222-0000-0000-0000-000000000001";
   const EMP_CARA = "22222222-0000-0000-0000-000000000003";
 
@@ -45,7 +46,7 @@ describePromos("promos", () => {
     return request(api())
       .post("/api/v1/bookings")
       .send({
-        serviceIds: [SVC_MASSAGE],
+        serviceIds: [SVC_COMBINATION],
         employeeId: EMP_ANA,
         startTime: ISO(nextWorkingSlot(slotOffset, manilaHour)),
         guest: { name: "Promo Guest", phone: guestPhone },
@@ -57,14 +58,14 @@ describePromos("promos", () => {
     it("applies a percentage discount to the subtotal", async () => {
       const res = await request(api())
         .post("/api/v1/promos/validate")
-        .send({ code: "SAVE10", serviceIds: [SVC_MASSAGE], subtotalCents: 250000 });
+        .send({ code: "SAVE10", serviceIds: [SVC_COMBINATION], subtotalCents: 250000 });
       expect(res.body.data.discountCents).toBe(25000);
     });
 
     it("applies a fixed discount", async () => {
       const res = await request(api())
         .post("/api/v1/promos/validate")
-        .send({ code: "FLAT500", serviceIds: [SVC_MASSAGE], subtotalCents: 250000 });
+        .send({ code: "FLAT500", serviceIds: [SVC_COMBINATION], subtotalCents: 250000 });
       expect(res.body.data.valid).toBe(true);
       expect(res.body.data.discountCents).toBe(50000);
     });
@@ -74,7 +75,7 @@ describePromos("promos", () => {
       // never produce a negative total.
       const res = await request(api())
         .post("/api/v1/promos/validate")
-        .send({ code: "FLAT500", serviceIds: [SVC_MASSAGE], subtotalCents: 30000 });
+        .send({ code: "FLAT500", serviceIds: [SVC_COMBINATION], subtotalCents: 30000 });
       expect(res.body.data.valid).toBe(false);
       expect(res.body.data.reason).toBe("MIN_SPEND_NOT_MET");
     });
@@ -84,8 +85,8 @@ describePromos("promos", () => {
     it("records the discount and the redemption on the booking", async () => {
       const res = await redeem("SAVE10", "+639180000001", 4);
       expect(res.status).toBe(201);
-      expect(res.body.data.discountCents).toBe(25000);
-      expect(res.body.data.totalCents).toBe(225000);
+      expect(res.body.data.discountCents).toBe(8000);
+      expect(res.body.data.totalCents).toBe(72000);
 
       const { rows } = await db().query(
         `select released_at from public.promo_redemptions where booking_id = $1`,
@@ -102,12 +103,11 @@ describePromos("promos", () => {
     });
 
     it("refuses a booking below the minimum spend", async () => {
-      // FLAT500 needs 100000 minor units; a haircut is 120000 so it passes,
-      // but a 95000 manicure would not.
+      // FLAT500 needs 100000 minor units; a 500.00 body scrub is below it.
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: ["11111111-0000-0000-0000-000000000004"], // 95000
+          serviceIds: [SVC_SCRUB], // 50000
           employeeId: "22222222-0000-0000-0000-000000000002",
           startTime: ISO(nextWorkingSlot(4, 15)),
           guest: { name: "Too Cheap", phone: "+639180000003" },
@@ -118,13 +118,13 @@ describePromos("promos", () => {
     });
 
     it("refuses a code that does not apply to the selected services", async () => {
-      // A promo restricted to massage, used against a haircut.
+      // A promo restricted to a combination massage, used against another treatment.
       const { rows } = await db().query(
         `insert into public.promo_codes
            (code, type, value, applicable_service_ids, is_active)
          values ($1, 'PERCENT', 20, array[$2::uuid], true)
          returning id`,
-        [`MASSAGEONLY${Date.now()}`, SVC_MASSAGE]
+        [`MASSAGEONLY${Date.now()}`, SVC_COMBINATION]
       );
       const code = (await db().query(`select code from public.promo_codes where id = $1`, [rows[0].id]))
         .rows[0].code;
@@ -132,7 +132,7 @@ describePromos("promos", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_HAIRCUT],
+          serviceIds: [SVC_THERAPEUTIC],
           employeeId: EMP_CARA,
           startTime: ISO(nextWorkingSlot(4, 16)),
           guest: { name: "Wrong Service", phone: "+639180000004" },
@@ -254,7 +254,7 @@ describePromos("promos", () => {
       // A deactivated code must no longer validate.
       const check = await request(api())
         .post("/api/v1/promos/validate")
-        .send({ code: created2.body.data.code, serviceIds: [SVC_MASSAGE], subtotalCents: 250000 });
+        .send({ code: created2.body.data.code, serviceIds: [SVC_COMBINATION], subtotalCents: 250000 });
       expect(check.body.data.valid).toBe(false);
       expect(check.body.data.reason).toBe("INACTIVE");
     });

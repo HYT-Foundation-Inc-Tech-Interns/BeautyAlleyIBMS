@@ -3,7 +3,7 @@
  * Deterministic seed data.
  *
  * Wipes the transactional tables and inserts a fixed dataset: the full
- * fourteen-service catalogue, three stylists with qualifications and weekly
+ * five-service catalogue, three stylists with qualifications and weekly
  * hours, two promo codes and two registered clients.
  *
  * ## Why the whole catalogue lives here, not just the four salon services
@@ -98,23 +98,14 @@ const c = {
 
 /** Fixed uuids so tests can reference them without a lookup. */
 const IDS = {
-  svcMassage: "11111111-0000-0000-0000-000000000001",
-  svcFacial: "11111111-0000-0000-0000-000000000002",
-  svcHaircut: "11111111-0000-0000-0000-000000000003",
-  svcManiPedi: "11111111-0000-0000-0000-000000000004",
-
-  // Wellness catalogue - the ten services from the business's own price list.
-  // The suffix mirrors the subcategory so the mapping is readable at a glance.
-  svcGlassSkin: "11111111-0000-0000-0000-000000000011",
-  svcYouthful: "11111111-0000-0000-0000-000000000012",
-  svcLuminous: "11111111-0000-0000-0000-000000000013",
-  svcImmune: "11111111-0000-0000-0000-000000000014",
-  svcShotAntiAging: "11111111-0000-0000-0000-000000000015",
-  svcShotRejuvenating: "11111111-0000-0000-0000-000000000016",
-  svcAddonPlacenta: "11111111-0000-0000-0000-000000000017",
-  svcAddonCollagen: "11111111-0000-0000-0000-000000000018",
-  svcAddonVitaminC: "11111111-0000-0000-0000-000000000019",
-  svcAddonMultivitamins: "11111111-0000-0000-0000-000000000020",
+  // The five treatments on the business's printed price list. These are the
+  // same uuids migration 41 uses, so a seeded database and a migrated one
+  // agree row for row.
+  svcCombination: "11111111-0000-0000-0000-000000000021",
+  svcHotStone: "11111111-0000-0000-0000-000000000022",
+  svcTherapeutic: "11111111-0000-0000-0000-000000000023",
+  svcBodyScrub: "11111111-0000-0000-0000-000000000024",
+  svcBodyScrubMassage: "11111111-0000-0000-0000-000000000025",
 
   empAna: "22222222-0000-0000-0000-000000000001",
   empBea: "22222222-0000-0000-0000-000000000002",
@@ -128,208 +119,92 @@ const IDS = {
 };
 
 /**
- * The second catalogue level. Migration 22 owns these in production; they are
+ * The second catalogue level. Migration 41 owns this row in production; it is
  * re-stated here (idempotently, matched on the unique slug) so a database that
  * this script has just cleared is still self-sufficient.
  */
 const SUBCATEGORIES = [
-  { category: "WELLNESS", name: "IV Drips", slug: "iv-drips", sortOrder: 10 },
-  { category: "WELLNESS", name: "Beauty Shots", slug: "beauty-shots", sortOrder: 20 },
-  { category: "WELLNESS", name: "Add-ons", slug: "add-ons", sortOrder: 30 },
+  { category: "SPA", name: "Massage & Body", slug: "massage-body", sortOrder: 10 },
 ];
 
 /**
- * The whole menu. Prices are the business's own and are never invented here.
- *
- * `durationMinutes` for the wellness rows is a PLACEHOLDER (60/30/15) pending
- * confirmation - the brief supplied prices but not durations, and the column is
- * NOT NULL, so something has to be written. Each description says so, so the
- * number is never mistaken for a confirmed figure. The four salon rows keep the
- * prices already in the database.
- *
- * `requiredRoomType` is OTHER for the drips (they need a private treatment
- * room) and null for shots and add-ons, which are quick in-chair procedures.
- *
- * `loyaltyEligible` is false for every wellness row: the brief is explicit that
- * wellness treatments must not count toward haircut loyalty.
+ * The whole menu. Names, descriptions and prices are the business's own and are
+ * never invented here. See the note inside the array for the two values the
+ * printed price list does not supply.
  */
 const SERVICES = [
-  // --- haircut and salon services ----------------------------------------
-  // `requiredRoomType` stays null for all four, exactly as it was before this
-  // list moved into the seed. Setting it would make every existing booking
-  // test start demanding a room of a type the demo floor does not have.
+  // --- massage and body ----------------------------------------------------
+  // The five treatments on the business's printed price list. The names,
+  // descriptions and prices are the business's own. Two values it does not
+  // supply are chosen here and flagged, never presented as fact:
+  //
+  //   * DURATIONS are PLACEHOLDERS - the price list carries no times and the
+  //     column is NOT NULL. Unlike the retired wellness rows these are not
+  //     written into the description, because that copy goes onto the site
+  //     verbatim. Correct them in Admin -> Services.
+  //
+  //   * `requiredRoomType` is null. The demo floor has no MASSAGE rooms, and
+  //     requiring a room type that does not exist makes every slot unbookable.
+  //
+  // These five are the WHOLE catalogue. The four demo salon rows and the ten
+  // wellness rows are retired by migration 42 - a seed that rebuilds a table
+  // has to rebuild all of it, so they cannot linger here.
   {
-    id: IDS.svcMassage,
-    name: "Signature Massage",
+    id: IDS.svcCombination,
+    name: "Combination Massage",
     category: "SPA",
-    description: "Deep tissue, 60 minutes.",
-    priceCents: 250000,
+    subcategory: "massage-body",
+    description:
+      "These services are designed to promote overall wellness and reduce stress, tension and muscle pain.",
+    priceCents: 80000,
     durationMinutes: 60,
     requiredRoomType: null,
   },
   {
-    id: IDS.svcFacial,
-    name: "Radiance Facial",
-    category: "SALON",
-    description: "Brightening treatment.",
-    priceCents: 180000,
-    durationMinutes: 45,
+    id: IDS.svcHotStone,
+    name: "Hot Stone w/ Combination Massage",
+    category: "SPA",
+    subcategory: "massage-body",
+    description:
+      "Massage that uses smooth, heated stones to deeply penetrate the muscles and release tension.",
+    priceCents: 150000,
+    durationMinutes: 90,
     requiredRoomType: null,
   },
   {
-    id: IDS.svcHaircut,
-    name: "Cut & Style",
-    category: "SALON",
-    description: "Consultation, cut and finish.",
-    priceCents: 120000,
-    durationMinutes: 45,
-    requiredRoomType: null,
-  },
-  {
-    id: IDS.svcManiPedi,
-    name: "Manicure & Pedicure",
-    category: "WELLNESS",
-    description: "Classic hands and feet.",
+    id: IDS.svcTherapeutic,
+    name: "Therapeutic Massage",
+    category: "SPA",
+    subcategory: "massage-body",
+    description:
+      "Gentle massage that uses essential oils to promote relaxation and balance in the body and mind.",
     priceCents: 95000,
     durationMinutes: 60,
     requiredRoomType: null,
   },
-
-  // --- IV drips -----------------------------------------------------------
   {
-    id: IDS.svcGlassSkin,
-    name: "Korean Glass Skin Drip",
-    category: "WELLNESS",
-    subcategory: "iv-drips",
+    id: IDS.svcBodyScrub,
+    name: "Body Scrub",
+    category: "SPA",
+    subcategory: "massage-body",
     description:
-      "Korean-style glutathione drip. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Glutathione, Lipotocin (Thioctic Acid), Korean Vitamin C",
-    ingredientsVerified: true,
-    priceCents: 180000,
-    durationMinutes: 60,
-    requiredRoomType: "OTHER",
-  },
-  {
-    id: IDS.svcYouthful,
-    name: "Korean Youthful Glowing Skin Drip",
-    category: "WELLNESS",
-    subcategory: "iv-drips",
-    description:
-      "Also known as the Cinderella or Baby Face Drip. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Glutathione, Vitamin C, Alpha Lipoic Acid",
-    ingredientsVerified: true,
-    priceCents: 160000,
-    durationMinutes: 60,
-    requiredRoomType: "OTHER",
-  },
-  {
-    id: IDS.svcLuminous,
-    name: "Luminous Drip",
-    category: "WELLNESS",
-    subcategory: "iv-drips",
-    description:
-      "Also known as Miracle White with Melanin Inhibitor. INGREDIENTS NOT SUPPLIED by the business - confirm before publishing. Duration is also a placeholder.",
-    // The brief did not supply this ingredient list. Left null and flagged, so
-    // the API presents it as "requires verification" rather than inventing it.
-    ingredients: null,
-    ingredientsVerified: false,
-    priceCents: 140000,
-    durationMinutes: 60,
-    requiredRoomType: "OTHER",
-  },
-  {
-    id: IDS.svcImmune,
-    name: "Immune Booster Drip",
-    category: "WELLNESS",
-    subcategory: "iv-drips",
-    description:
-      "Vitamin and mineral drip. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Vitamin C, Zinc, Vitamin B12, Collagen",
-    ingredientsVerified: true,
-    priceCents: 150000,
-    durationMinutes: 60,
-    requiredRoomType: "OTHER",
-  },
-
-  // --- beauty shots -------------------------------------------------------
-  {
-    id: IDS.svcShotAntiAging,
-    name: "Anti-Aging Shot (Placenta)",
-    category: "WELLNESS",
-    subcategory: "beauty-shots",
-    description:
-      "A beauty treatment marketed for skin rejuvenation and anti-aging. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Placenta",
-    ingredientsVerified: true,
-    priceCents: 120000,
-    durationMinutes: 30,
-    requiredRoomType: null,
-  },
-  {
-    id: IDS.svcShotRejuvenating,
-    name: "Rejuvenating Shot (Collagen)",
-    category: "WELLNESS",
-    subcategory: "beauty-shots",
-    description:
-      "A beauty treatment marketed to support skin elasticity and improve the appearance of fine lines and wrinkles. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Collagen",
-    ingredientsVerified: true,
-    priceCents: 120000,
-    durationMinutes: 30,
-    requiredRoomType: null,
-  },
-
-  // --- add-ons ------------------------------------------------------------
-  {
-    id: IDS.svcAddonPlacenta,
-    name: "Placenta Add-on",
-    category: "WELLNESS",
-    subcategory: "add-ons",
-    description: "Optional add-on. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Placenta",
-    ingredientsVerified: true,
+      "A rejuvenating treatment that gently exfoliates the skin to remove dead skin cells, leaving the body feeling smooth, soft, and refreshed.",
     priceCents: 50000,
-    durationMinutes: 15,
+    durationMinutes: 60,
     requiredRoomType: null,
   },
   {
-    id: IDS.svcAddonCollagen,
-    name: "Collagen Add-on",
-    category: "WELLNESS",
-    subcategory: "add-ons",
-    description: "Optional add-on. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Collagen",
-    ingredientsVerified: true,
-    priceCents: 50000,
-    durationMinutes: 15,
-    requiredRoomType: null,
-  },
-  {
-    id: IDS.svcAddonVitaminC,
-    name: "Vitamin C Add-on",
-    category: "WELLNESS",
-    subcategory: "add-ons",
-    description: "Optional add-on. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Vitamin C",
-    ingredientsVerified: true,
-    priceCents: 30000,
-    durationMinutes: 15,
-    requiredRoomType: null,
-  },
-  {
-    id: IDS.svcAddonMultivitamins,
-    name: "Multivitamins Add-on (Vitamin B12)",
-    category: "WELLNESS",
-    subcategory: "add-ons",
-    description: "Optional add-on. Duration is a placeholder pending confirmation from the business.",
-    ingredients: "Vitamin B12",
-    ingredientsVerified: true,
-    priceCents: 30000,
-    durationMinutes: 15,
+    id: IDS.svcBodyScrubMassage,
+    name: "Body Scrub w/ Massage",
+    category: "SPA",
+    subcategory: "massage-body",
+    description:
+      "A refreshing treatment that combines gentle body exfoliation and relaxing massage to leave the skin smooth, the body relaxed, and the senses revitalized.",
+    priceCents: 120000,
+    durationMinutes: 90,
     requiredRoomType: null,
   },
 ];
-
 /**
  * Truncation order matters: `cascade` handles the foreign keys, but listing
  * the tables explicitly documents what is considered "data" rather than
@@ -421,44 +296,33 @@ async function seed(client, { quiet = false, confirmed = false } = {}) {
     `insert into public.employees (id, full_name, title, bio, is_active)
      values
        ($1, 'Ana Reyes',   'Senior Therapist', 'Fifteen years in therapeutic massage.', true),
-       ($2, 'Bea Santos',  'Beauty Specialist','Facials, skin and nail care.',          true),
-       ($3, 'Cara Lim',    'Hair Stylist',     'Precision cutting and colour.',         true)`,
+       ($2, 'Bea Santos',  'Beauty Specialist','Body scrubs and skin care.',            true),
+       ($3, 'Cara Lim',    'Massage Therapist','Therapeutic and hot-stone work.',       true)`,
     [IDS.empAna, IDS.empBea, IDS.empCara]
   );
   log(`${c.green}3 employees${c.reset}`);
 
   // --- qualifications ------------------------------------------------------
-  // Ana does everything except hair; Bea does facial, nails, and the wellness
-  // shots and add-ons; Cara does cut only. The gaps are deliberate: they let
-  // the tests prove EMPLOYEE_NOT_QUALIFIED is enforced rather than incidentally
-  // true, and they keep Cara as the "hair only" stylist those tests rely on.
+  // Ana is the senior therapist and takes the massages plus the scrubs. Bea is
+  // the skin specialist and takes the two body scrubs. Cara is the therapeutic
+  // specialist and takes Therapeutic Massage and Hot Stone.
   //
-  // The wellness rows need at least one qualified stylist each, or the ten new
-  // catalogue services would be unbookable and would fail the availability
-  // check for every day of the week.
-  const WELLNESS_DRIPS = [IDS.svcGlassSkin, IDS.svcYouthful, IDS.svcLuminous, IDS.svcImmune];
-  const WELLNESS_SHOTS = [IDS.svcShotAntiAging, IDS.svcShotRejuvenating];
-  const WELLNESS_ADDONS = [
-    IDS.svcAddonPlacenta,
-    IDS.svcAddonCollagen,
-    IDS.svcAddonVitaminC,
-    IDS.svcAddonMultivitamins,
+  // The gaps are deliberate, and the integration tests depend on them: one
+  // service must be deliverable by exactly one person (Therapeutic -> Cara) so
+  // auto-assignment is forced, one by two people (Body Scrub -> Ana or Bea) so
+  // the desk can move a booking between them, and one Cara cannot take at all
+  // (Combination -> Ana) so EMPLOYEE_NOT_QUALIFIED is proven rather than
+  // incidentally true.
+  const quals = [
+    [IDS.empAna, IDS.svcCombination],
+    [IDS.empAna, IDS.svcBodyScrub],
+    [IDS.empAna, IDS.svcBodyScrubMassage],
+    [IDS.empBea, IDS.svcBodyScrub],
+    [IDS.empBea, IDS.svcBodyScrubMassage],
+    [IDS.empCara, IDS.svcTherapeutic],
+    [IDS.empCara, IDS.svcHotStone],
   ];
 
-  const quals = [
-    [IDS.empAna, IDS.svcMassage],
-    [IDS.empAna, IDS.svcFacial],
-    [IDS.empAna, IDS.svcManiPedi],
-    [IDS.empBea, IDS.svcFacial],
-    [IDS.empBea, IDS.svcManiPedi],
-    [IDS.empCara, IDS.svcHaircut],
-    // Ana takes the whole wellness menu; Bea takes the in-chair procedures.
-    ...WELLNESS_DRIPS.map((svc) => [IDS.empAna, svc]),
-    ...WELLNESS_SHOTS.map((svc) => [IDS.empAna, svc]),
-    ...WELLNESS_ADDONS.map((svc) => [IDS.empAna, svc]),
-    ...WELLNESS_SHOTS.map((svc) => [IDS.empBea, svc]),
-    ...WELLNESS_ADDONS.map((svc) => [IDS.empBea, svc]),
-  ];
   const qualParams = [];
   const qualValues = quals.map(([emp, svc]) => {
     qualParams.push(emp, svc);

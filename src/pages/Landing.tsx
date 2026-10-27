@@ -36,7 +36,7 @@ import { useAsync } from "@/lib/useAsync";
 import { serviceImage } from "@/lib/service-images";
 import { Button } from "@/components/ui/button";
 import { AlleySprig } from "@/components/brand/Logo";
-import { CategoryBadge, ErrorNote, Loading } from "@/components/app/api-bits";
+import { CategoryBadge, EmptyNote, ErrorNote, Loading } from "@/components/app/api-bits";
 import { PublicMobileNav, PublicNavLinks } from "@/components/app/PublicNav";
 import { Reveal } from "@/components/app/reveal";
 
@@ -60,6 +60,8 @@ export default function Landing() {
   }, []);
 
   // Six is a taste, not the whole menu — the full catalogue lives at /services.
+  // The catalogue itself is the five treatments the salon sells, and anything
+  // the Admin adds in the console shows up here without a code change.
   const menu = useAsync("landing:services", async () =>
     (await api.services.list({ limit: 6, sort: "price_cents", order: "asc" })).data,
   );
@@ -239,6 +241,16 @@ export default function Landing() {
             <ErrorNote error={menu.error} onRetry={menu.reload} className="mt-12" />
           ) : menu.initial ? (
             <Loading label="Reading the menu…" className="mt-12" />
+          ) : (menu.data ?? []).length === 0 ? (
+            // An empty group is not a design state to hide: it means the menu
+            // has not been seeded (or the group slug changed), and a blank
+            // band under "Services, priced plainly" reads as a broken page.
+            <EmptyNote
+              icon={Sparkles}
+              title="The menu is being updated"
+              description="Our treatment list is not published yet. Book an appointment and the desk will confirm what is available."
+              className="mt-12"
+            />
           ) : (
             <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {(menu.data ?? []).map((s, i) => (

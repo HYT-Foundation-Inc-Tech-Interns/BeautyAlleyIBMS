@@ -41,6 +41,7 @@ export type Area =
   | "bookings"
   | "clients"
   | "promos"
+  | "services"
   | "employees"
   | "check-in"
   | "scan-arrivals"
@@ -81,6 +82,7 @@ export const SCOPE: Record<Role, Area[]> = {
     "bookings",
     "clients",
     "promos",
+    "services",
     "employees",
     "check-in",
     "scan-arrivals",

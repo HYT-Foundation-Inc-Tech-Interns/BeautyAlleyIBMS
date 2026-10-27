@@ -30,9 +30,9 @@ const describeReferences = hasServiceRole ? describe : describe.skip;
 useSlotBand(SLOT_BANDS.references);
 
 describeReferences("booking references", () => {
-  const SVC_MASSAGE = "11111111-0000-0000-0000-000000000001";
-  // Only Ana delivers Signature Massage; Cara is qualified for Cut & Style
-  // alone. The reference-holding row is a raw INSERT (no qualification check),
+  const SVC_COMBINATION = "11111111-0000-0000-0000-000000000021";
+  // Only Ana delivers a Combination Massage; Cara is qualified for Therapeutic
+  // Massage alone. The reference-holding row is a raw INSERT (no qualification check),
   // so it can sit with anyone - but the booking made through the API cannot.
   const EMP_ANA = "22222222-0000-0000-0000-000000000001";
   const EMP_CARA = "22222222-0000-0000-0000-000000000003";
@@ -190,7 +190,7 @@ describeReferences("booking references", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(nextWorkingSlot(3, 11)),
           guest: { name: "Reference Probe", phone: "+639170000903" },

@@ -17,9 +17,9 @@ const describeBookings = hasServiceRole ? describe : describe.skip;
 useSlotBand(SLOT_BANDS.bookings);
 
 describeBookings("bookings", () => {
-  const SVC_MASSAGE = "11111111-0000-0000-0000-000000000001";
-  const SVC_FACIAL = "11111111-0000-0000-0000-000000000002";
-  const SVC_HAIRCUT = "11111111-0000-0000-0000-000000000003";
+  const SVC_COMBINATION = "11111111-0000-0000-0000-000000000021";
+  const SVC_SCRUB = "11111111-0000-0000-0000-000000000024";
+  const SVC_THERAPEUTIC = "11111111-0000-0000-0000-000000000023";
   const EMP_ANA = "22222222-0000-0000-0000-000000000001";
   const EMP_BEA = "22222222-0000-0000-0000-000000000002";
   const EMP_CARA = "22222222-0000-0000-0000-000000000003";
@@ -60,7 +60,7 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Guest One", phone: "+639170000001" },
@@ -70,7 +70,7 @@ describeBookings("bookings", () => {
       expect(res.body.data.reference).toMatch(/^BA-\d{8}-\d{4}$/);
       // A self-service booking starts PENDING: nobody has confirmed it yet.
       expect(res.body.data.status).toBe("PENDING");
-      expect(res.body.data.totalCents).toBe(250000);
+      expect(res.body.data.totalCents).toBe(80000);
       expect(res.body.data.items).toHaveLength(1);
       expect(res.body.data.qr.pass).toMatch(/^BA1\./);
       expect(res.body.data.qr.url).toContain("?pass=");
@@ -81,7 +81,7 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_FACIAL, SVC_MASSAGE], // 45 + 60 = 105 minutes
+          serviceIds: [SVC_SCRUB, SVC_COMBINATION], // 60 + 60 = 120 minutes
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Guest Two", phone: "+639170000002" },
@@ -90,8 +90,8 @@ describeBookings("bookings", () => {
       expect(res.status).toBe(201);
       const start = new Date(res.body.data.startTime).getTime();
       const end = new Date(res.body.data.endTime).getTime();
-      expect((end - start) / 60_000).toBe(105);
-      expect(res.body.data.totalCents).toBe(180000 + 250000);
+      expect((end - start) / 60_000).toBe(120);
+      expect(res.body.data.totalCents).toBe(50000 + 80000);
     });
 
     it("writes a price snapshot so a later reprice cannot change the total", async () => {
@@ -99,7 +99,7 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_HAIRCUT],
+          serviceIds: [SVC_THERAPEUTIC],
           employeeId: EMP_CARA,
           startTime: ISO(slot),
           guest: { name: "Guest Snapshot", phone: "+639170000003" },
@@ -108,15 +108,15 @@ describeBookings("bookings", () => {
       const bookingId = res.body.data.id;
 
       // Reprice the service underneath the booking.
-      await db().query(`update public.services set price_cents = 999999 where id = $1`, [SVC_HAIRCUT]);
+      await db().query(`update public.services set price_cents = 999999 where id = $1`, [SVC_THERAPEUTIC]);
       try {
         const after = await request(api()).get(`/api/v1/bookings/${bookingId}`);
         expect(after.status).toBe(200);
         // The booking must still total what it did when it was made.
-        expect(after.body.data.totalCents).toBe(120000);
-        expect(after.body.data.items[0].priceCents).toBe(120000);
+        expect(after.body.data.totalCents).toBe(95000);
+        expect(after.body.data.items[0].priceCents).toBe(95000);
       } finally {
-        await db().query(`update public.services set price_cents = 120000 where id = $1`, [SVC_HAIRCUT]);
+        await db().query(`update public.services set price_cents = 95000 where id = $1`, [SVC_THERAPEUTIC]);
       }
     });
 
@@ -130,7 +130,7 @@ describeBookings("bookings", () => {
     it("rejects a booking with neither a client nor guest details", async () => {
       const res = await request(api())
         .post("/api/v1/bookings")
-        .send({ serviceIds: [SVC_MASSAGE], employeeId: EMP_ANA, startTime: ISO(nextWorkingSlot(4)) });
+        .send({ serviceIds: [SVC_COMBINATION], employeeId: EMP_ANA, startTime: ISO(nextWorkingSlot(4)) });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("CLIENT_REQUIRED");
     });
@@ -139,7 +139,7 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: "2020-01-01T01:00:00Z",
           guest: { name: "Time Traveller", phone: "+639170000004" },
@@ -162,11 +162,11 @@ describeBookings("bookings", () => {
     });
 
     it("refuses a stylist who is not qualified for the service", async () => {
-      // Cara does hair only.
+      // Cara does therapeutic work only.
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_CARA,
           startTime: ISO(nextWorkingSlot(4, 11)),
           guest: { name: "Wrong Stylist", phone: "+639170000006" },
@@ -182,7 +182,7 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Night Owl", phone: "+639170000007" },
@@ -198,7 +198,7 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(shifted),
           guest: { name: "Late Finish", phone: "+639170000008" },
@@ -211,12 +211,12 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_HAIRCUT],
+          serviceIds: [SVC_THERAPEUTIC],
           startTime: ISO(nextWorkingSlot(6, 10)),
           guest: { name: "Auto Assign", phone: "+639170000010" },
         });
       expect(res.status).toBe(201);
-      // Only Cara does hair, so the choice is forced.
+      // Only Cara does therapeutic work, so the choice is forced.
       expect(res.body.data.employee.id).toBe(EMP_CARA);
     });
   });
@@ -230,12 +230,12 @@ describeBookings("bookings", () => {
    * too, or the override becomes a way around qualification and availability.
    */
   describe("PATCH /api/v1/bookings/:id/employee", () => {
-    /** Facial, because both Ana and Bea are qualified for it. */
-    async function facialFor(day: number, hour: number, guest: string) {
+    /** Body Scrub, because both Ana and Bea are qualified for it. */
+    async function scrubFor(day: number, hour: number, guest: string) {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_FACIAL],
+          serviceIds: [SVC_SCRUB],
           employeeId: EMP_ANA,
           startTime: ISO(nextWorkingSlot(day, hour)),
           guest: { name: guest, phone: "+639170000011" },
@@ -248,7 +248,7 @@ describeBookings("bookings", () => {
       const desk = await createTestConcierge("Desk Assigner");
       created.push(desk);
 
-      const id = await facialFor(20, 11, "Reassign Me");
+      const id = await scrubFor(20, 11, "Reassign Me");
 
       const res = await request(api())
         .patch(`/api/v1/bookings/${id}/employee`)
@@ -263,9 +263,9 @@ describeBookings("bookings", () => {
       const desk = await createTestConcierge("Desk Assigner");
       created.push(desk);
 
-      const id = await facialFor(21, 11, "Wrong Stylist Again");
+      const id = await scrubFor(21, 11, "Wrong Stylist Again");
 
-      // Cara does hair only.
+      // Cara does therapeutic work only.
       const res = await request(api())
         .patch(`/api/v1/bookings/${id}/employee`)
         .set(...as(desk.token))
@@ -279,7 +279,7 @@ describeBookings("bookings", () => {
       const client = await createTestClient("Not The Desk");
       created.push(client);
 
-      const id = await facialFor(22, 11, "Client Picker");
+      const id = await scrubFor(22, 11, "Client Picker");
 
       const res = await request(api())
         .patch(`/api/v1/bookings/${id}/employee`)
@@ -298,7 +298,7 @@ describeBookings("bookings", () => {
       const first = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "First", phone: "+639170000011" },
@@ -310,7 +310,7 @@ describeBookings("bookings", () => {
       const second = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(overlapping),
           guest: { name: "Second", phone: "+639170000012" },
@@ -326,7 +326,7 @@ describeBookings("bookings", () => {
       const first = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE], // 60 minutes
+          serviceIds: [SVC_COMBINATION], // 60 minutes
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Back A", phone: "+639170000013" },
@@ -337,7 +337,7 @@ describeBookings("bookings", () => {
       const second = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(shiftHours(slot, 1)),
           guest: { name: "Back B", phone: "+639170000014" },
@@ -351,7 +351,7 @@ describeBookings("bookings", () => {
       const ana = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_FACIAL],
+          serviceIds: [SVC_SCRUB],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Ana Booking", phone: "+639170000015" },
@@ -361,7 +361,7 @@ describeBookings("bookings", () => {
       const bea = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_FACIAL],
+          serviceIds: [SVC_SCRUB],
           employeeId: EMP_BEA,
           startTime: ISO(slot),
           guest: { name: "Bea Booking", phone: "+639170000016" },
@@ -374,7 +374,7 @@ describeBookings("bookings", () => {
       await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Blocker", phone: "+639170000017" },
@@ -382,7 +382,7 @@ describeBookings("bookings", () => {
 
       const day = ISO(slot).slice(0, 10);
       const avail = await request(api()).get(
-        `/api/v1/availability?serviceId=${SVC_MASSAGE}&date=${day}&employeeId=${EMP_ANA}&intervalMinutes=60`
+        `/api/v1/availability?serviceId=${SVC_COMBINATION}&date=${day}&employeeId=${EMP_ANA}&intervalMinutes=60`
       );
       expect(avail.status).toBe(200);
       const starts = avail.body.data.employees[0]?.slots.map((s: { start: string }) => s.start) ?? [];
@@ -396,7 +396,7 @@ describeBookings("bookings", () => {
       const created = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Canceller", phone: "+639170000018" },
@@ -421,7 +421,7 @@ describeBookings("bookings", () => {
       const first = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Frees", phone: "+639170000019" },
@@ -431,7 +431,7 @@ describeBookings("bookings", () => {
       const replacement = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Takes Over", phone: "+639170000020" },
@@ -444,7 +444,7 @@ describeBookings("bookings", () => {
       const created = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Double Cancel", phone: "+639170000021" },
@@ -525,7 +525,7 @@ describeBookings("bookings", () => {
       const created = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Rescheduler", phone: "+639170000024" },
@@ -549,7 +549,7 @@ describeBookings("bookings", () => {
       const first = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(a),
           guest: { name: "Occupant", phone: "+639170000025" },
@@ -557,7 +557,7 @@ describeBookings("bookings", () => {
       const second = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(b),
           guest: { name: "Mover", phone: "+639170000026" },
@@ -621,7 +621,7 @@ describeBookings("bookings", () => {
       await request(api())
         .post("/api/v1/bookings")
         .set(...as(client.token))
-        .send({ serviceIds: [SVC_MASSAGE], employeeId: EMP_ANA, startTime: ISO(slot) });
+        .send({ serviceIds: [SVC_COMBINATION], employeeId: EMP_ANA, startTime: ISO(slot) });
 
       const mine = await request(api()).get("/api/v1/me/bookings").set(...as(client.token));
       expect(mine.status).toBe(200);
@@ -640,7 +640,7 @@ describeBookings("bookings", () => {
       const booking = await request(api())
         .post("/api/v1/bookings")
         .set(...as(owner.token))
-        .send({ serviceIds: [SVC_MASSAGE], employeeId: EMP_ANA, startTime: ISO(slot) });
+        .send({ serviceIds: [SVC_COMBINATION], employeeId: EMP_ANA, startTime: ISO(slot) });
 
       const res = await request(api())
         .get(`/api/v1/bookings/${booking.body.data.id}`)
@@ -659,7 +659,7 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           clientId: victim.clientId,
@@ -690,7 +690,7 @@ describeBookings("bookings", () => {
       const made = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_FACIAL, SVC_MASSAGE], // 45 + 60 = 105 minutes
+          serviceIds: [SVC_SCRUB, SVC_COMBINATION], // 60 + 60 = 120 minutes
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Guest List", phone: "+639170000019" },
@@ -715,7 +715,7 @@ describeBookings("bookings", () => {
         (n: number, i: { durationMinutes: number }) => n + i.durationMinutes,
         0
       );
-      expect(minutes).toBe(105);
+      expect(minutes).toBe(120);
 
       // The batch load must not cross-contaminate: every item row belongs to
       // exactly one booking, so no id may appear twice across the page.

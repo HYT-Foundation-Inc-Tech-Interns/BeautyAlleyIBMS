@@ -79,7 +79,7 @@ function workingSlot(daysAhead = 3, manilaHour = 10) {
   throw new Error("no working slot found");
 }
 
-const SVC_MASSAGE = "11111111-0000-0000-0000-000000000001";
+const SVC_COMBINATION = "11111111-0000-0000-0000-000000000021";
 const EMP_ANA = "22222222-0000-0000-0000-000000000001";
 
 /**
@@ -190,8 +190,8 @@ async function main() {
     check("GET /services", services.status === 200 && Array.isArray(services.body?.data),
       `${services.body?.meta?.total} services`);
 
-    const one = await call("GET", `/services/${SVC_MASSAGE}`);
-    check("GET /services/:id", one.status === 200 && one.body?.data?.priceCents === 250000,
+    const one = await call("GET", `/services/${SVC_COMBINATION}`);
+    check("GET /services/:id", one.status === 200 && one.body?.data?.priceCents === 80000,
       `${one.body?.data?.name} @ ${one.body?.data?.priceCents}`);
 
     const missing = await call("GET", "/services/99999999-0000-0000-0000-000000000000");
@@ -220,7 +220,7 @@ async function main() {
     const day = slot.toISOString().slice(0, 10);
     const avail = await call(
       "GET",
-      `/availability?serviceId=${SVC_MASSAGE}&date=${day}&employeeId=${EMP_ANA}&intervalMinutes=60`
+      `/availability?serviceId=${SVC_COMBINATION}&date=${day}&employeeId=${EMP_ANA}&intervalMinutes=60`
     );
     const slots = avail.body?.data?.employees?.[0]?.slots ?? [];
     check("GET /availability returns a slot grid", avail.status === 200 && slots.length > 0,
@@ -230,13 +230,13 @@ async function main() {
     // ---------------------------------------------------------------------
     section("3. Promo preview");
     const promo = await call("POST", "/promos/validate", {
-      body: { code: "save10", serviceIds: [SVC_MASSAGE], subtotalCents: 250000 },
+      body: { code: "save10", serviceIds: [SVC_COMBINATION], subtotalCents: 250000 },
     });
     check("POST /promos/validate (case-insensitive)", promo.status === 200 && promo.body?.data?.discountCents === 25000,
       `${promo.body?.data?.discountCents} off`);
 
     const bogus = await call("POST", "/promos/validate", {
-      body: { code: "NOPE404", serviceIds: [SVC_MASSAGE], subtotalCents: 250000 },
+      body: { code: "NOPE404", serviceIds: [SVC_COMBINATION], subtotalCents: 250000 },
     });
     check("unknown code is a 200 with valid:false, not a 4xx",
       bogus.status === 200 && bogus.body?.data?.valid === false, bogus.body?.data?.reason);
@@ -245,7 +245,7 @@ async function main() {
     section("4. Guest booking, start to finish");
     const booking = await call("POST", "/bookings", {
       body: {
-        serviceIds: [SVC_MASSAGE],
+        serviceIds: [SVC_COMBINATION],
         employeeId: EMP_ANA,
         startTime: slot.toISOString(),
         guest: { name: "Smoke Test", phone: "+639009990001" },
@@ -276,7 +276,7 @@ async function main() {
 
     const clash = await call("POST", "/bookings", {
       body: {
-        serviceIds: [SVC_MASSAGE],
+        serviceIds: [SVC_COMBINATION],
         employeeId: EMP_ANA,
         startTime: new Date(slot.getTime() + 2 * 3_600_000 + 30 * 60_000).toISOString(),
         guest: { name: "Clash", phone: "+639009990002" },
@@ -452,7 +452,7 @@ async function main() {
     }
 
     const surfaces = {
-      "/availability": (await call("GET", `/availability?serviceId=${SVC_MASSAGE}&date=${day}&employeeId=${EMP_ANA}&intervalMinutes=60`)).body,
+      "/availability": (await call("GET", `/availability?serviceId=${SVC_COMBINATION}&date=${day}&employeeId=${EMP_ANA}&intervalMinutes=60`)).body,
       "/bookings/:id": reread.body,
       "/bookings/:id/qr": qr.body,
       "/qr/check-in": checkin.body,

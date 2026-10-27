@@ -37,6 +37,7 @@ import Promos from "@/pages/Promos";
 import CheckIn from "@/pages/CheckIn";
 import ScanArrivals from "@/pages/ScanArrivals";
 import Team from "@/pages/Team";
+import ServicesAdmin from "@/pages/ServicesAdmin";
 import Board from "@/pages/Board";
 import Tasks from "@/pages/Tasks";
 import MyTasks from "@/pages/MyTasks";
@@ -115,6 +116,14 @@ export default function App() {
             element={
               <RequireArea area="promos">
                 <Promos />
+              </RequireArea>
+            }
+          />
+          <Route
+            path="services"
+            element={
+              <RequireArea area="services">
+                <ServicesAdmin />
               </RequireArea>
             }
           />
