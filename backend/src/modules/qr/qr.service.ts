@@ -14,6 +14,14 @@ export const checkInSchema = z.object({
    * without the client having to parse it first.
    */
   pass: z.string().trim().min(10, "A check-in pass is required").max(2048),
+  /**
+   * Admit the guest ahead of the arrival window.
+   *
+   * Same rule as the cancellation override: any member of staff may ask, and
+   * the database records that the window was skipped and who skipped it. The
+   * route is already OPERATIONS, so there is nothing extra to enforce here.
+   */
+  force: z.boolean().default(false),
 });
 
 /**
@@ -71,7 +79,7 @@ export const qrService = {
     };
   },
 
-  async checkIn(input: { pass: string }, actor: Actor) {
+  async checkIn(input: { pass: string; force: boolean }, actor: Actor) {
     // Tolerate a full URL: pull the `pass` query parameter back out if the
     // scanner decoded the QR into a link rather than a raw token.
     let pass = input.pass.trim();
@@ -83,7 +91,7 @@ export const qrService = {
         /* not a URL after all - fall through and let the verifier reject it */
       }
     }
-    return bookingsService.checkIn(pass, actor);
+    return bookingsService.checkIn(pass, actor, input.force);
   },
 
   /**

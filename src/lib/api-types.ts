@@ -285,6 +285,8 @@ export interface CheckInResult {
   status: BookingStatus;
   checkedInAt: string;
   checkinId: string;
+  /** True when the pass was redeemed ahead of its arrival window. */
+  early: boolean;
 }
 
 export interface BranchQr {

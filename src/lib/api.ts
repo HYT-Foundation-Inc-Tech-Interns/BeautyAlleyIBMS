@@ -457,8 +457,12 @@ export const api = {
   qr: {
     branch: () => request<BranchQr>("GET", "/api/v1/qr/branch"),
 
-    checkIn: (pass: string) =>
-      request<CheckInResult>("POST", "/api/v1/qr/check-in", { body: { pass } }),
+    /**
+     * Redeem a pass. `force` admits the guest ahead of the arrival window —
+     * staff only, and recorded in the audit trail as an override.
+     */
+    checkIn: (pass: string, force = false) =>
+      request<CheckInResult>("POST", "/api/v1/qr/check-in", { body: { pass, force } }),
   },
 
   attendance: {

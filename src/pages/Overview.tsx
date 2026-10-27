@@ -47,12 +47,14 @@ import {
   shortDate,
 } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { checkInBooking, isEarlyArrival } from "@/lib/check-in";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
+import { EarlyArrivalDialog } from "@/components/app/early-arrival-dialog";
 import { useAuth } from "@/auth/AuthProvider";
 
 const RANGE_DAYS = 7;
@@ -1029,17 +1031,22 @@ function RunSheet({ name }: { name: string }) {
 
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<ApiError | null>(null);
+  const [earlyTarget, setEarlyTarget] = React.useState<Booking | null>(null);
 
   async function advance(booking: Booking, status: BookingStatus) {
     setBusyId(booking.id);
     setActionError(null);
     try {
-      await api.bookings.setStatus(booking.id, status);
+      // Admitting a guest is the pass redemption, not a status write.
+      if (status === "CHECKED_IN") await checkInBooking(booking.id);
+      else await api.bookings.setStatus(booking.id, status);
       list.reload();
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not move that booking"),
-      );
+      if (isEarlyArrival(err)) setEarlyTarget(booking);
+      else
+        setActionError(
+          err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not move that booking"),
+        );
     } finally {
       setBusyId(null);
     }
@@ -1200,6 +1207,17 @@ function RunSheet({ name }: { name: string }) {
           )}
         </div>
       </div>
+
+      {earlyTarget && (
+        <EarlyArrivalDialog
+          booking={earlyTarget}
+          onClose={() => setEarlyTarget(null)}
+          onDone={() => {
+            setEarlyTarget(null);
+            list.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

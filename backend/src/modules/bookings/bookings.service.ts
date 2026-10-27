@@ -528,7 +528,7 @@ export const bookingsService = {
    * database decides. Both steps are required: the signature proves we issued
    * the pass, the row proves it has not been revoked or already used.
    */
-  async checkIn(pass: string, actor: Actor) {
+  async checkIn(pass: string, actor: Actor, force = false) {
     const verified = verifyQrPass(pass);
     if (!verified.ok) {
       const map = {
@@ -543,12 +543,19 @@ export const bookingsService = {
     // to mark themselves arrived would defeat the point of a desk check-in.
     const staffId = actor.employeeId ?? null;
 
+    // `force` follows the same rule as the cancellation override: any member
+    // of staff may use it, because the route already restricts this to
+    // OPERATIONS, and the audit row names the account that did. The person
+    // standing in front of the guest is the one who can judge whether the
+    // window applies — not a role table three files away.
+
     const db = requireServiceRole();
     const { data, error } = await db.rpc("check_in_booking", {
       p_jti: verified.payload.jti,
       p_staff_id: staffId,
       p_actor: actor.id,
       p_window_minutes: env.qrCheckinWindowMinutes,
+      p_force: force,
     });
     if (error) throw error;
 
@@ -563,6 +570,7 @@ export const bookingsService = {
       status: string;
       checkedInAt: string;
       checkinId: string;
+      early: boolean;
     };
     return { ...result, checkedInAt: iso(result.checkedInAt) };
   },

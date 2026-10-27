@@ -37,6 +37,7 @@ import {
 
 import { branchDay, branchTime, branchToday, cn, peso, shiftDayKey } from "@/lib/utils";
 import { api, ApiError, NEXT_STATUS, STATUS_ACTION, STATUS_LABEL } from "@/lib/api";
+import { checkInBooking, isEarlyArrival } from "@/lib/check-in";
 import { useAuth } from "@/auth/AuthProvider";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
@@ -44,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Modal, ModalContent } from "@/components/ui/modal";
 import { PageHeader } from "@/components/app/bits";
 import { ClientAccountDialog } from "@/components/app/client-account-dialog";
+import { EarlyArrivalDialog } from "@/components/app/early-arrival-dialog";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
 
 const STATUSES: BookingStatus[] = [
@@ -153,17 +155,24 @@ export default function Bookings() {
   const [actionError, setActionError] = React.useState<ApiError | null>(null);
   /* The booking the desk has asked to cancel, held until the dialog closes. */
   const [cancelTarget, setCancelTarget] = React.useState<Booking | null>(null);
+  /* A guest who arrived before their pass opened, held for the override. */
+  const [earlyTarget, setEarlyTarget] = React.useState<Booking | null>(null);
 
   async function advance(booking: Booking, next: BookingStatus) {
     setBusyId(booking.id);
     setActionError(null);
     try {
-      await api.bookings.setStatus(booking.id, next);
+      // Check-in goes through the pass, not a status write — see lib/check-in.
+      if (next === "CHECKED_IN") await checkInBooking(booking.id);
+      else await api.bookings.setStatus(booking.id, next);
       list.reload();
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not move that booking"),
-      );
+      // Early arrival is not a failure — it is a question for the desk.
+      if (isEarlyArrival(err)) setEarlyTarget(booking);
+      else
+        setActionError(
+          err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not move that booking"),
+        );
     } finally {
       setBusyId(null);
     }
@@ -457,6 +466,17 @@ export default function Bookings() {
             );
           })}
         </ol>
+      )}
+
+      {earlyTarget && (
+        <EarlyArrivalDialog
+          booking={earlyTarget}
+          onClose={() => setEarlyTarget(null)}
+          onDone={() => {
+            setEarlyTarget(null);
+            list.reload();
+          }}
+        />
       )}
 
       {cancelTarget && (
