@@ -100,6 +100,19 @@ export interface CreatedStaffAccount extends AuthUser {
   employeeId?: string;
 }
 
+/**
+ * `GET /admin/staff-logins` — an EMPLOYEE login with no roster row.
+ *
+ * The account can sign in, and the run sheet answers EMPLOYEE_NOT_LINKED
+ * because there is no chair behind it. Linking it to an employee record is the
+ * repair, and this is the list the Team page offers.
+ */
+export interface StaffLogin {
+  id: string;
+  fullName: string | null;
+  email: string | null;
+}
+
 /** `POST /admin/users/client` — the login plus the client row it was attached to. */
 export interface CreatedClientAccount {
   id: string;

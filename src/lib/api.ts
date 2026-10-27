@@ -40,6 +40,7 @@ import type {
   CreateBookingInput,
   CreatedClientAccount,
   CreatedStaffAccount,
+  StaffLogin,
   Dashboard,
   Employee,
   Health,
@@ -680,6 +681,9 @@ export const api = {
 
     employees: (query: ListQuery & { includeInactive?: boolean } = {}) =>
       request<Paginated<Employee>>("GET", "/api/v1/admin/employees", { query }),
+
+    /** EMPLOYEE logins with no roster row, for the Team page's link control. */
+    staffLogins: () => request<StaffLogin[]>("GET", "/api/v1/admin/staff-logins"),
 
     promos: (query: ListQuery & { activeOnly?: boolean } = {}) =>
       request<Paginated<Promo>>("GET", "/api/v1/admin/promos", { query }),

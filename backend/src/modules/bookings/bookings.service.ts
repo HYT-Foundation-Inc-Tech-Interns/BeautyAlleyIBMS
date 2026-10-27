@@ -157,7 +157,7 @@ function scopeEmployee(actor: Actor | undefined, requestedId?: string): string |
   if (actor?.role !== "EMPLOYEE") return requestedId;
   if (!actor.employeeId) {
     throw AppError.forbidden(
-      CODES.FORBIDDEN,
+      CODES.EMPLOYEE_NOT_LINKED,
       "This account is not linked to an employee record, so it has no chair to show"
     );
   }

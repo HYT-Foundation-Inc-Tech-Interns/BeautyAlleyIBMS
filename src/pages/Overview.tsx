@@ -1025,6 +1025,30 @@ function NewRequests({ onChanged }: { onChanged: () => void }) {
   );
 }
 
+/**
+ * An EMPLOYEE whose login is not linked to an employees row.
+ *
+ * The API refuses their run sheet with EMPLOYEE_NOT_LINKED - they are allowed
+ * to read a chair, they just do not have one. That is a fact about the record,
+ * not a failure to retry, so the page says what it is and who can fix it,
+ * rather than offering a Try again that can never succeed.
+ */
+function UnlinkedAccount({ onRetry }: { onRetry: () => void }) {
+  return (
+    <EmptyNote
+      icon={UserRound}
+      title="This login has no chair yet"
+      description="The account is not linked to an employee record, so there is no day to show. The owner can link it from Team — once they do, this page fills in."
+      action={
+        <Button variant="outline" onClick={onRetry}>
+          <RefreshCw className="size-4" />
+          Check again
+        </Button>
+      }
+    />
+  );
+}
+
 function RunSheet({ name }: { name: string }) {
   const { role, can } = useAuth();
   const today = branchToday();
@@ -1123,20 +1147,20 @@ function RunSheet({ name }: { name: string }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <StatTile
           label="On the sheet"
-          value={list.initial ? "—" : String(rows.length)}
+          value={list.initial || list.error ? "—" : String(rows.length)}
           hint="booked for today"
           icon={CalendarDays}
         />
         <StatTile
           label="Arrived"
-          value={list.initial ? "—" : String(arrived)}
+          value={list.initial || list.error ? "—" : String(arrived)}
           hint="checked in or in the chair"
           icon={CheckCircle2}
           tone="success"
         />
         <StatTile
           label="Still to come"
-          value={list.initial ? "—" : String(Math.max(0, rows.length - arrived))}
+          value={list.initial || list.error ? "—" : String(Math.max(0, rows.length - arrived))}
           hint="yet to reach the desk"
           icon={Clock3}
           tone="accent"
@@ -1150,7 +1174,11 @@ function RunSheet({ name }: { name: string }) {
       {role === "CONCIERGE" && <NewRequests onChanged={list.reload} />}
 
       {list.error ? (
-        <ErrorNote error={list.error} onRetry={list.reload} />
+        list.error.code === "EMPLOYEE_NOT_LINKED" ? (
+          <UnlinkedAccount onRetry={list.reload} />
+        ) : (
+          <ErrorNote error={list.error} onRetry={list.reload} />
+        )
       ) : list.initial ? (
         <Loading label="Loading today's run sheet…" />
       ) : sheetRows.length === 0 && pendingToday > 0 ? (

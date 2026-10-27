@@ -234,6 +234,7 @@ export const API_GROUPS: ApiGroup[] = [
       { method: "GET", path: "/api/v1/admin/bookings", auth: "ADMIN", summary: "Cross-employee booking list." },
       { method: "GET", path: "/api/v1/admin/employees", auth: "ADMIN", summary: "Employee list including inactive." },
       { method: "GET", path: "/api/v1/admin/promos", auth: "ADMIN", summary: "Promo list including inactive." },
+      { method: "GET", path: "/api/v1/admin/staff-logins", auth: "ADMIN", summary: "EMPLOYEE logins with no roster row — the accounts the Team page can link." },
       { method: "GET", path: "/api/v1/admin/audit-logs", auth: "ADMIN", summary: "The append-only audit trail." },
     ],
   },

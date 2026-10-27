@@ -3,6 +3,12 @@ import { toRange } from "../../lib/pagination";
 import type { Database } from "../../types/database";
 import type { ListAuditLogsQuery, ListClientsQuery, UpdateClientInput } from "./admin.schemas";
 
+export interface StaffLoginRow {
+  id: string;
+  fullName: string | null;
+  email: string | null;
+}
+
 export interface ClientHistoryRow {
   id: string;
   full_name: string;
@@ -23,6 +29,56 @@ const CLIENT_SELECT =
 type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
 
 export const adminRepository = {
+  /**
+   * Staff logins with no roster row.
+   *
+   * These are accounts that can sign in and then see nothing: an EMPLOYEE
+   * whose profile has no `employees` row has no chair, no run sheet and no
+   * day. Every one of them was created by the console before it linked the two
+   * - the invite wrote a profile and stopped - so this is the list the owner
+   * needs to repair them from.
+   *
+   * Emails live in `auth.users`, which PostgREST cannot join to a public
+   * table, so the names come from `profiles` and the addresses from the auth
+   * admin API. The loop is paging, not optimism: one page covers any salon,
+   * and a bigger one still gets every address.
+   */
+  async unlinkedStaffLogins(): Promise<StaffLoginRow[]> {
+    const db = requireServiceRole();
+
+    const { data: profiles, error } = await db
+      .from("profiles")
+      .select("id, full_name")
+      .eq("role", "EMPLOYEE");
+    if (error) throw error;
+
+    const { data: linked, error: linkError } = await db
+      .from("employees")
+      .select("profile_id")
+      .not("profile_id", "is", null);
+    if (linkError) throw linkError;
+
+    const taken = new Set((linked ?? []).map((row) => row.profile_id as string));
+    const candidates = (profiles ?? []).filter((row) => !taken.has(row.id));
+    if (candidates.length === 0) return [];
+
+    const emails = new Map<string, string>();
+    for (let page = 1; ; page += 1) {
+      const { data, error: authError } = await db.auth.admin.listUsers({ page, perPage: 200 });
+      if (authError) throw authError;
+      for (const user of data.users) if (user.email) emails.set(user.id, user.email);
+      if (data.users.length < 200) break;
+    }
+
+    return candidates
+      .map((row) => ({
+        id: row.id,
+        fullName: row.full_name,
+        email: emails.get(row.id) ?? null,
+      }))
+      .sort((a, b) => (a.fullName ?? a.email ?? "").localeCompare(b.fullName ?? b.email ?? ""));
+  },
+
   async dashboard(from: string, to: string) {
     const db = requireServiceRole();
     const { data, error } = await db.rpc("get_dashboard_summary", { p_from: from, p_to: to });

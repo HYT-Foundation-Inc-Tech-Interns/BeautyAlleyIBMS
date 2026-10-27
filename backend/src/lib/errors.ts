@@ -37,6 +37,15 @@ export const CODES = {
   ACCOUNT_DISABLED: "ACCOUNT_DISABLED",
   ACCOUNT_LOCKED: "ACCOUNT_LOCKED",
   FORBIDDEN: "FORBIDDEN",
+  /**
+   * The caller is an EMPLOYEE whose account has no employees row.
+   *
+   * Distinct from FORBIDDEN because the caller is allowed to do this - they
+   * simply have no chair, no roster record and no day. A screen can act on
+   * that ("ask the owner to link this login"), where a plain 403 only offers a
+   * Try again that can never succeed.
+   */
+  EMPLOYEE_NOT_LINKED: "EMPLOYEE_NOT_LINKED",
   EMPLOYEE_NOT_QUALIFIED: "EMPLOYEE_NOT_QUALIFIED",
   INSUFFICIENT_ROLE: "INSUFFICIENT_ROLE",
   NOT_TASK_OWNER: "NOT_TASK_OWNER",

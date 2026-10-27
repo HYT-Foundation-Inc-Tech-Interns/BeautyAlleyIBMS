@@ -25,6 +25,7 @@ import {
   BadgeCheck,
   Check,
   ChevronDown,
+  Link2,
   Loader2,
   Pencil,
   RefreshCw,
@@ -39,7 +40,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import type { Employee, Service } from "@/lib/api-types";
+import type { Employee, Service, StaffLogin } from "@/lib/api-types";
 import { ROLE_LABEL } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,16 @@ export default function Team() {
 
   // Only needed to turn a service uuid into a readable name.
   const catalogue = useAsync("team:services", async () => (await api.services.list({ limit: 100 })).data);
+
+  /*
+   * The logins that are not attached to a roster row. Fetched only while a
+   * card is open, because that is the only place the control exists - and
+   * refetched per card, since linking one removes it from the list.
+   */
+  const logins = useAsync(`team:logins:${expanded ?? "closed"}`, async () => {
+    if (!expanded) return [];
+    return api.admin.staffLogins();
+  });
 
   const rows = roster.data?.data ?? [];
 
@@ -93,6 +104,33 @@ export default function Team() {
     } catch (err) {
       setActionError(
         err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not save those qualifications"),
+      );
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /*
+   * Attach an existing login to a roster row.
+   *
+   * This is the repair for accounts made before the console linked the two:
+   * the person can sign in, and every screen behind the login says they have
+   * no chair. Linking is a PATCH because the row already exists - the account
+   * is what was missing from it.
+   */
+  async function linkLogin(person: Employee, profileId: string): Promise<boolean> {
+    setBusyId(person.id);
+    setActionError(null);
+    try {
+      await api.employees.update(person.id, { profileId });
+      roster.reload();
+      detail.reload();
+      logins.reload();
+      return true;
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not link that login"),
       );
       return false;
     } finally {
@@ -208,9 +246,11 @@ export default function Team() {
               detail={expanded === person.id ? detail : null}
               serviceName={serviceName}
               services={catalogue.data ?? []}
+              logins={logins.data ?? []}
               busy={busyId === person.id}
               onToggleActive={() => void toggleActive(person)}
               onSaveServices={(ids) => saveServices(person, ids)}
+              onLinkLogin={(profileId) => linkLogin(person, profileId)}
             />
           ))}
         </div>
@@ -226,9 +266,11 @@ function EmployeeCard({
   detail,
   serviceName,
   services,
+  logins,
   busy,
   onToggleActive,
   onSaveServices,
+  onLinkLogin,
 }: {
   person: Employee;
   open: boolean;
@@ -236,9 +278,11 @@ function EmployeeCard({
   detail: { data: Employee | null; error: ApiError | null; initial: boolean } | null;
   serviceName: (id: string) => string;
   services: Service[];
+  logins: StaffLogin[];
   busy: boolean;
   onToggleActive: () => void;
   onSaveServices: (serviceIds: string[]) => Promise<boolean>;
+  onLinkLogin: (profileId: string) => Promise<boolean>;
 }) {
   return (
     <article
@@ -290,6 +334,9 @@ function EmployeeCard({
             <Loading label="Loading qualifications…" className="py-6" />
           ) : detail?.data ? (
             <>
+              {!person.profileId && (
+                <LinkLogin logins={logins} busy={busy} onLink={onLinkLogin} />
+              )}
               <Qualifications
                 employee={detail.data}
                 services={services}
@@ -342,6 +389,95 @@ function EmployeeCard({
         </button>
       </div>
     </article>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Link a login
+ * ------------------------------------------------------------------ */
+
+/**
+ * Attach an existing sign-in account to this roster row.
+ *
+ * A record without a login is a normal thing - a stylist who does not use the
+ * console - so this is offered, not demanded. It is also the only repair for
+ * the accounts created before the invite linked the two: those people can sign
+ * in, and their run sheet says they have no chair.
+ *
+ * Only logins with no roster row are offered, so the list cannot be used to
+ * steal an account from someone else's card.
+ */
+function LinkLogin({
+  logins,
+  busy,
+  onLink,
+}: {
+  logins: StaffLogin[];
+  busy: boolean;
+  onLink: (profileId: string) => Promise<boolean>;
+}) {
+  const [choice, setChoice] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+
+  async function submit() {
+    if (!choice) return;
+    setSaving(true);
+    const ok = await onLink(choice);
+    setSaving(false);
+    if (ok) setChoice("");
+  }
+
+  const disabled = busy || saving;
+
+  return (
+    <div className="mb-4 rounded-lg border border-dashed border-border/80 px-3 py-2.5">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        Sign-in account
+      </p>
+
+      {logins.length === 0 ? (
+        <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground">
+          No login is linked to this record, and no unlinked employee logins are
+          waiting. Issue one above to give them a way in.
+        </p>
+      ) : (
+        <>
+          <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted-foreground">
+            No login is linked to this record. Attach one of the accounts that
+            has no roster row:
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <label htmlFor={`login-${logins[0].id}`} className="sr-only">
+              Sign-in account to link
+            </label>
+            <select
+              id={`login-${logins[0].id}`}
+              value={choice}
+              disabled={disabled}
+              onChange={(event) => setChoice(event.target.value)}
+              className="h-9 max-w-[260px] rounded-lg border border-border bg-card px-2.5 text-[12.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            >
+              <option value="">Choose a login…</option>
+              {logins.map((login) => (
+                <option key={login.id} value={login.id}>
+                  {login.fullName ?? login.email ?? login.id}
+                  {login.email && login.fullName ? ` — ${login.email}` : ""}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!choice || disabled}
+              onClick={() => void submit()}
+            >
+              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Link2 className="size-3.5" />}
+              Link
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

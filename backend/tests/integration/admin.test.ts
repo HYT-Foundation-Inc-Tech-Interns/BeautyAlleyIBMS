@@ -5,6 +5,7 @@ import {
   createTestAdmin,
   createTestClient,
   createTestConcierge,
+  createTestUser,
   deleteTestUsers,
   type TestUser,
 } from "../helpers/api";
@@ -289,6 +290,53 @@ describeAdmin("admin", () => {
         .set(...as(admin.token));
       expect(res.status).toBe(200);
       expect(res.body.data.every((r: { action: string }) => r.action === "booking.created")).toBe(true);
+    });
+  });
+
+  describe("GET /api/v1/admin/staff-logins", () => {
+    /*
+     * The repair list. An EMPLOYEE login created before the console linked the
+     * account to a roster row can sign in and then sees a page saying it has no
+     * chair; this endpoint is how the owner finds it and puts it right.
+     */
+    it("lists an employee login with no roster row, and drops it once linked", async () => {
+      const admin = await createTestAdmin();
+      created.push(admin);
+
+      const orphan = await createTestUser({ role: "EMPLOYEE", fullName: "Orphan Login" });
+      created.push(orphan);
+
+      const before = await request(api())
+        .get("/api/v1/admin/staff-logins")
+        .set(...as(admin.token));
+      expect(before.status).toBe(200);
+      const listed = before.body.data.find((row: { id: string }) => row.id === orphan.id);
+      expect(listed).toBeTruthy();
+      expect(listed.email).toBe(orphan.email);
+
+      const linked = await request(api())
+        .post("/api/v1/employees")
+        .set(...as(admin.token))
+        .send({ fullName: "Orphan Login", profileId: orphan.id });
+      expect(linked.status).toBe(201);
+
+      const after = await request(api())
+        .get("/api/v1/admin/staff-logins")
+        .set(...as(admin.token));
+      expect(after.status).toBe(200);
+      expect(after.body.data.some((row: { id: string }) => row.id === orphan.id)).toBe(false);
+
+      await db().query(`delete from public.employees where id = $1`, [linked.body.data.id]);
+    });
+
+    it("refuses the desk — linking accounts is the owner's", async () => {
+      const concierge = await createTestConcierge();
+      created.push(concierge);
+
+      const res = await request(api())
+        .get("/api/v1/admin/staff-logins")
+        .set(...as(concierge.token));
+      expect(res.status).toBe(403);
     });
   });
 

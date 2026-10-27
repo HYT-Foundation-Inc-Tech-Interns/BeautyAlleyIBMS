@@ -72,8 +72,13 @@ export type AttendanceDto = ReturnType<typeof toAttendanceDto>;
  */
 async function resolveTarget(actor: Actor, requestedId?: string): Promise<string> {
   if (!actor.employeeId) {
+    /*
+     * Two different refusals wear the same shape here. An EMPLOYEE without a
+     * row has an account problem the owner can fix, so the code says so; the
+     * desk has no row by design, and for them this is simply not their job.
+     */
     throw AppError.forbidden(
-      CODES.FORBIDDEN,
+      actor.role === "EMPLOYEE" ? CODES.EMPLOYEE_NOT_LINKED : CODES.FORBIDDEN,
       "This account is not linked to an employee record, so it has no attendance to record",
     );
   }
@@ -99,7 +104,7 @@ async function resolveTarget(actor: Actor, requestedId?: string): Promise<string
 function scopeFor(actor: Actor, requestedId?: string): string | undefined {
   if (actor.role === "EMPLOYEE") {
     if (!actor.employeeId) {
-      throw AppError.forbidden(CODES.FORBIDDEN, "This account is not linked to an employee record");
+      throw AppError.forbidden(CODES.EMPLOYEE_NOT_LINKED, "This account is not linked to an employee record");
     }
     /*
      * Naming a colleague is refused, not silently ignored.

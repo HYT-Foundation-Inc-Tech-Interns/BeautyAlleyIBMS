@@ -169,6 +169,11 @@ export const adminService = {
     return toCsv(headers, body);
   },
 
+  /** The logins an owner can attach to a roster row. See the repository. */
+  async unlinkedStaffLogins() {
+    return adminRepository.unlinkedStaffLogins();
+  },
+
   async listAuditLogs(query: ListAuditLogsQuery) {
     const { rows, total } = await adminRepository.listAuditLogs(query);
     return paginated(

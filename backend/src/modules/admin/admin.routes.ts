@@ -73,5 +73,10 @@ adminRouter.get("/bookings", validate({ query: listBookingsQuerySchema }), async
 adminRouter.get("/employees", validate({ query: listEmployeesSchema }), asyncHandler(employeesController.list));
 adminRouter.get("/promos", validate({ query: listPromosQuerySchema }), asyncHandler(promosController.list));
 
+// --- staff logins ----------------------------------------------------------
+// The logins that are not attached to a roster row: what the Team page offers
+// when the owner links an account to an employee record.
+adminRouter.get("/staff-logins", asyncHandler(adminController.staffLogins));
+
 // --- audit -----------------------------------------------------------------
 adminRouter.get("/audit-logs", validate({ query: listAuditLogsQuerySchema }), asyncHandler(adminController.listAuditLogs));

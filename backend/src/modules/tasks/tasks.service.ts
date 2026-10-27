@@ -61,7 +61,7 @@ async function reload(id: string): Promise<TaskDto> {
 function scopeFor(actor: Actor, requestedId?: string): string | undefined {
   if (actor.role === "EMPLOYEE") {
     if (!actor.employeeId) {
-      throw AppError.forbidden(CODES.FORBIDDEN, "This account is not linked to an employee record");
+      throw AppError.forbidden(CODES.EMPLOYEE_NOT_LINKED, "This account is not linked to an employee record");
     }
     if (requestedId && requestedId !== actor.employeeId) {
       throw AppError.forbidden(CODES.NOT_TASK_OWNER, "You can only see tasks assigned to you");
@@ -135,7 +135,12 @@ export const tasksService = {
   /** The caller's own tasks. The employee dashboard's page. */
   async mine(actor: Actor, query: ListTasksQuery) {
     if (!actor.employeeId) {
-      throw AppError.forbidden(CODES.FORBIDDEN, "This account is not linked to an employee record");
+      // A stylist with no roster row has an account to repair; anyone else
+      // asking for "my tasks" is simply in the wrong place.
+      throw AppError.forbidden(
+        actor.role === "EMPLOYEE" ? CODES.EMPLOYEE_NOT_LINKED : CODES.FORBIDDEN,
+        "This account is not linked to an employee record"
+      );
     }
     /*
      * `scopeFor` runs before the override below, so an explicit filter naming a

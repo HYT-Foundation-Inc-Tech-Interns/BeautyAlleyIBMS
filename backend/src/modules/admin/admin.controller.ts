@@ -40,6 +40,11 @@ export const adminController = {
       .send("\uFEFF" + csv);
   },
 
+  async staffLogins(_req: Request, res: Response) {
+    const result = await adminService.unlinkedStaffLogins();
+    res.status(200).json({ data: result });
+  },
+
   async listAuditLogs(req: Request, res: Response) {
     const result = await adminService.listAuditLogs(req.query as never);
     res.status(200).json(result);
