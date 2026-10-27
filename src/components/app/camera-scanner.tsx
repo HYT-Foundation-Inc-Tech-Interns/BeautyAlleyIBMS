@@ -36,6 +36,38 @@ type Scanner = {
   clear: () => void;
 };
 
+/**
+ * Close a scanner without ever throwing.
+ *
+ * `Html5Qrcode.stop()` throws **synchronously** — not as a rejected promise —
+ * when the instance never reached "scanning": camera permission denied, no
+ * device, or a start that is still in flight. Called from an effect cleanup,
+ * that throw propagates out of unmount and React tears down the tree, which is
+ * the "Cannot stop, scanner is not running or paused" crash seen after leaving
+ * a camera page on a device that refused the camera. So the call is wrapped,
+ * and the promise branch keeps its own guard for the rejecting case.
+ */
+function stopScanner(scanner: Scanner | null) {
+  if (!scanner) return;
+  try {
+    Promise.resolve(scanner.stop())
+      .then(() => {
+        try {
+          scanner.clear();
+        } catch {
+          /* the region is already gone */
+        }
+      })
+      .catch(() => undefined);
+  } catch {
+    try {
+      scanner.clear();
+    } catch {
+      /* nothing was rendered */
+    }
+  }
+}
+
 export function CameraScanner({
   onCode,
   paused,
@@ -93,11 +125,29 @@ export function CameraScanner({
       }
       if (cancelled) return;
 
-      /** A fresh instance per attempt — a failed start leaves one unusable. */
+      /**
+       * A fresh instance per attempt — a failed start leaves one unusable.
+       *
+       * The instance is parked in the ref *before* start, so a navigation that
+       * happens mid-start still has something to stop. If the start lands after
+       * the page has gone, the camera it just opened is closed here instead of
+       * being left running with no component behind it.
+       */
       const attempt = async (target: { facingMode: string } | string) => {
         const scanner = new Html5Qrcode(regionId, { verbose: false }) as unknown as Scanner;
         scannerRef.current = scanner;
-        await scanner.start(target, config, onDecode, onFrame);
+        try {
+          await scanner.start(target, config, onDecode, onFrame);
+        } catch (err) {
+          // A rejected start can still have acquired the stream.
+          stopScanner(scanner);
+          if (scannerRef.current === scanner) scannerRef.current = null;
+          throw err;
+        }
+        if (cancelled) {
+          if (scannerRef.current === scanner) scannerRef.current = null;
+          stopScanner(scanner);
+        }
       };
 
       try {
@@ -147,13 +197,7 @@ export function CameraScanner({
       cancelled = true;
       const scanner = scannerRef.current;
       scannerRef.current = null;
-      if (!scanner) return;
-      // stop() rejects when the scanner never started; swallow that so an
-      // unmount during a failed start does not throw.
-      scanner
-        .stop()
-        .then(() => scanner.clear())
-        .catch(() => undefined);
+      stopScanner(scanner);
     };
   }, [regionId]);
 
