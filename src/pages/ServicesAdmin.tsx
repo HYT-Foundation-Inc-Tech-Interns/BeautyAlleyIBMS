@@ -93,7 +93,7 @@ export default function ServicesAdmin() {
   // the public menu already renders.
   const groups = useAsync("catalogue:groups", () => api.subcategories.menu());
 
-  const rows = catalogue.data ?? [];
+  const rows: Service[] = catalogue.data?.data ?? [];
   const live = rows.filter((s) => s.isActive);
   const averagePrice = live.length
     ? Math.round(live.reduce((sum, s) => sum + s.priceCents, 0) / live.length)
