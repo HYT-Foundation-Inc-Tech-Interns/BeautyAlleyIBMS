@@ -96,7 +96,7 @@ export default function ServicesAdmin() {
   // `list` answers with a page envelope (`{ data, meta }`) because the same
   // endpoint serves the public menu, which paginates. This page asks for 100
   // and reads the array.
-  const rows = catalogue.data?.data ?? [];
+  const rows: Service[] = catalogue.data?.data ?? [];
   const live = rows.filter((s) => s.isActive);
   const averagePrice = live.length
     ? Math.round(live.reduce((sum, s) => sum + s.priceCents, 0) / live.length)
