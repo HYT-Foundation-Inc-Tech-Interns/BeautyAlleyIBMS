@@ -165,12 +165,20 @@ export default function NewBooking() {
     const term = clientQuery.trim();
     if (client || term.length < 2) {
       setClientHits([]);
+      setClientSearching(false);
       return;
     }
 
+    /*
+     * The spinner belongs to the effect, not to the request: it goes up when
+     * the term changes and comes down when the answer for *that* term lands.
+     * Setting it inside the timer meant a term that never reached the timer -
+     * cleared to one character, or replaced mid-flight, which kills `live` and
+     * with it the `finally` - left it spinning forever.
+     */
     let live = true;
+    setClientSearching(true);
     const timer = setTimeout(async () => {
-      setClientSearching(true);
       try {
         const hits = await api.clients.search(term);
         if (live) setClientHits(hits);
@@ -464,8 +472,14 @@ export default function NewBooking() {
                       placeholder="Search the client book by name, phone or email…"
                       className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-[13px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                     />
+                    {/* The spinner rides in a flex column so its own rotation
+                        is the only transform on it - `-translate-y-1/2` beside
+                        `animate-spin` loses to the keyframe and the icon
+                        bounces between centred and uncentred. */}
                     {clientSearching && (
-                      <Loader2 className="absolute right-3 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                      </span>
                     )}
                   </div>
                 </label>

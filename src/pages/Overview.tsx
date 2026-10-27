@@ -1069,6 +1069,24 @@ function RunSheet({ name }: { name: string }) {
     ["CHECKED_IN", "IN_SERVICE", "COMPLETED"].includes(b.status),
   ).length;
 
+  /*
+   * The desk's day is what has been agreed, and a PENDING booking has not been
+   * agreed yet - it is sitting in the queue above, with the stylist picker and
+   * the Confirm button that decide it. Rendering it here as well gave the desk
+   * two cards for one 4:30 appointment: the request, and the same appointment
+   * on the sheet. Confirming it in the queue puts it on the sheet; until then
+   * the queue is the only place it appears.
+   *
+   * Only the desk, because only the desk has that queue. A therapist's page
+   * has no way to confirm anything, so for them the request stays on the day.
+   *
+   * The counts above still include it - the day IS booked, that is why the
+   * request matters - and the empty state below says where it went.
+   */
+  const sheetRows =
+    role === "CONCIERGE" ? rows.filter((booking) => booking.status !== "PENDING") : rows;
+  const pendingToday = rows.length - sheetRows.length;
+
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-7">
       <PageHeader
@@ -1135,7 +1153,13 @@ function RunSheet({ name }: { name: string }) {
         <ErrorNote error={list.error} onRetry={list.reload} />
       ) : list.initial ? (
         <Loading label="Loading today's run sheet…" />
-      ) : rows.length === 0 ? (
+      ) : sheetRows.length === 0 && pendingToday > 0 ? (
+        <EmptyNote
+          icon={Clock3}
+          title="Today is still a request"
+          description={`The ${pendingToday === 1 ? "appointment" : `${pendingToday} appointments`} above ${pendingToday === 1 ? "is" : "are"} waiting to be confirmed. Confirming one puts it on the sheet.`}
+        />
+      ) : sheetRows.length === 0 ? (
         <EmptyNote
           icon={CalendarDays}
           title="Nothing on the sheet today"
@@ -1143,7 +1167,7 @@ function RunSheet({ name }: { name: string }) {
         />
       ) : (
         <ol className="space-y-3">
-          {rows.map((booking) => {
+          {sheetRows.map((booking) => {
             const move = PRIMARY_MOVE[booking.status];
             const canNoShow =
               booking.status === "CONFIRMED" || booking.status === "CHECKED_IN";
