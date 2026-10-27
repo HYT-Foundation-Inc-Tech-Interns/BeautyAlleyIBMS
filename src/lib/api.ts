@@ -428,6 +428,16 @@ export const api = {
     ) => request<Employee>("PATCH", `/api/v1/employees/${id}`, { body }),
 
     /**
+     * Replace a stylist's qualifications in one call.
+     *
+     * A replace, not an add: the body is the whole set. The server validates
+     * every id before it writes, and applies the delete and the insert in one
+     * statement, so a bad id cannot leave them qualified for nothing.
+     */
+    setServices: (id: string, serviceIds: string[]) =>
+      request<Employee>("PUT", `/api/v1/employees/${id}/services`, { body: { serviceIds } }),
+
+    /**
      * One stylist's progress against the daily quota. `date` is a plain
      * `YYYY-MM-DD` in the branch timezone; omit it for today. OPERATIONS, so a
      * stylist can read their own.

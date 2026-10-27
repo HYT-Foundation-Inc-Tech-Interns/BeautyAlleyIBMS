@@ -23,8 +23,10 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 import {
   BadgeCheck,
+  Check,
   ChevronDown,
   Loader2,
+  Pencil,
   RefreshCw,
   Scissors,
   Sparkles,
@@ -37,7 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import type { Employee } from "@/lib/api-types";
+import type { Employee, Service } from "@/lib/api-types";
 import { ROLE_LABEL } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -74,6 +76,29 @@ export default function Team() {
 
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<ApiError | null>(null);
+
+  /*
+   * Qualifications are a replace, so the editor hands over the whole set.
+   * Both views are reloaded afterwards: the card's own list, and the roster,
+   * whose "taking bookings" tile is only true for people who are qualified.
+   */
+  async function saveServices(person: Employee, serviceIds: string[]): Promise<boolean> {
+    setBusyId(person.id);
+    setActionError(null);
+    try {
+      await api.employees.setServices(person.id, serviceIds);
+      detail.reload();
+      roster.reload();
+      return true;
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not save those qualifications"),
+      );
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function toggleActive(person: Employee) {
     setBusyId(person.id);
@@ -182,8 +207,10 @@ export default function Team() {
               onToggle={() => setExpanded(expanded === person.id ? null : person.id)}
               detail={expanded === person.id ? detail : null}
               serviceName={serviceName}
+              services={catalogue.data ?? []}
               busy={busyId === person.id}
               onToggleActive={() => void toggleActive(person)}
+              onSaveServices={(ids) => saveServices(person, ids)}
             />
           ))}
         </div>
@@ -198,16 +225,20 @@ function EmployeeCard({
   onToggle,
   detail,
   serviceName,
+  services,
   busy,
   onToggleActive,
+  onSaveServices,
 }: {
   person: Employee;
   open: boolean;
   onToggle: () => void;
   detail: { data: Employee | null; error: ApiError | null; initial: boolean } | null;
   serviceName: (id: string) => string;
+  services: Service[];
   busy: boolean;
   onToggleActive: () => void;
+  onSaveServices: (serviceIds: string[]) => Promise<boolean>;
 }) {
   return (
     <article
@@ -259,23 +290,13 @@ function EmployeeCard({
             <Loading label="Loading qualifications…" className="py-6" />
           ) : detail?.data ? (
             <>
-              <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Qualified for
-              </p>
-              {detail.data.serviceIds && detail.data.serviceIds.length > 0 ? (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {detail.data.serviceIds.map((id) => (
-                    <Badge key={id} variant="outline">
-                      {serviceName(id)}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 text-[12px] text-muted-foreground">
-                  No qualifications recorded — this stylist cannot be booked for
-                  anything yet.
-                </p>
-              )}
+              <Qualifications
+                employee={detail.data}
+                services={services}
+                serviceName={serviceName}
+                busy={busy}
+                onSave={onSaveServices}
+              />
               <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
                 Shift patterns are not exposed by the API; they are an internal
                 scheduling detail.
@@ -321,6 +342,154 @@ function EmployeeCard({
         </button>
       </div>
     </article>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Qualifications
+ * ------------------------------------------------------------------ */
+
+/**
+ * What a stylist may be booked for.
+ *
+ * The booking engine reads this set before it offers a slot, so an empty one
+ * is not a detail: it is the difference between a name on the roster and a
+ * person who can actually be assigned. That is why the empty state says so
+ * plainly rather than showing nothing.
+ *
+ * The set is replaced, not patched - Save sends every id on screen - and the
+ * editor stays open when the write fails, so the admin can correct the draft
+ * instead of starting again.
+ */
+function Qualifications({
+  employee,
+  services,
+  serviceName,
+  busy,
+  onSave,
+}: {
+  employee: Employee;
+  services: Service[];
+  serviceName: (id: string) => string;
+  busy: boolean;
+  onSave: (serviceIds: string[]) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [selected, setSelected] = React.useState<string[]>(employee.serviceIds ?? []);
+
+  /*
+   * The card is not remounted when it is collapsed and reopened, so the draft
+   * has to follow the record it belongs to. Keyed on the id alone: a reload
+   * after a save returns a new object for the same person, and resetting on
+   * that would wipe a draft mid-edit.
+   */
+  React.useEffect(() => {
+    setSelected(employee.serviceIds ?? []);
+    setEditing(false);
+  }, [employee.id]);
+
+  const offered = services
+    .filter((service) => service.isActive)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function save() {
+    if (await onSave(selected)) setEditing(false);
+  }
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Qualified for
+        </p>
+        {!editing && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11.5px]"
+            onClick={() => {
+              setSelected(employee.serviceIds ?? []);
+              setEditing(true);
+            }}
+          >
+            <Pencil className="size-3" />
+            Edit
+          </Button>
+        )}
+      </div>
+
+      {editing ? (
+        <>
+          <div className="mt-2 flex max-h-52 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-border/70 bg-card p-2.5">
+            {offered.length === 0 ? (
+              <p className="px-1 py-0.5 text-[11.5px] text-muted-foreground">
+                No treatments are on the menu yet.
+              </p>
+            ) : (
+              offered.map((service) => {
+                const on = selected.includes(service.id);
+                return (
+                  <button
+                    key={service.id}
+                    type="button"
+                    onClick={() => toggle(service.id)}
+                    aria-pressed={on}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+                      on
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card text-muted-foreground hover:border-primary/40",
+                    )}
+                  >
+                    {service.name}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            {selected.length === 0
+              ? "Nothing selected — this stylist will not be offered for any treatment."
+              : `${selected.length} treatment${selected.length === 1 ? "" : "s"} — the booking engine only offers them for these.`}
+          </p>
+
+          <div className="mt-3 flex items-center gap-1.5">
+            <Button type="button" size="sm" disabled={busy} onClick={() => void save()}>
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+              Save
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </>
+      ) : selected.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {selected.map((id) => (
+            <Badge key={id} variant="outline">
+              {serviceName(id)}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-[12px] text-muted-foreground">
+          No qualifications recorded — this stylist cannot be booked for anything
+          yet. Use Edit to say what they can do.
+        </p>
+      )}
+    </>
   );
 }
 
