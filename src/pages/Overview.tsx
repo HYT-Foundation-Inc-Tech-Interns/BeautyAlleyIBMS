@@ -52,7 +52,7 @@ import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/app/bits";
+import { PageHeader, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
 import { EarlyArrivalDialog } from "@/components/app/early-arrival-dialog";
 import { useAuth } from "@/auth/AuthProvider";
@@ -1070,15 +1070,10 @@ function RunSheet({ name }: { name: string }) {
   ).length;
 
   return (
-    <div className="mx-auto w-full max-w-[1100px] space-y-7">
-      {/*
-       * The same band every record page opens with. The run sheet used to
-       * open with a bare heading, so the one page a therapist lands on was
-       * the one page that did not look like the product.
-       */}
+    <div className="mx-auto w-full max-w-[1400px] space-y-7">
       <PageHeader
-        icon={CalendarDays}
         eyebrow="Your chair"
+        icon={CalendarDays}
         title={`Good day${name ? `, ${name.split(" ")[0]}` : ""}.`}
         description={
           // While the list is in flight the counts are not 0, they are unknown —
@@ -1090,11 +1085,45 @@ function RunSheet({ name }: { name: string }) {
         }
         actions={
           <Button variant="outline" onClick={list.reload}>
-            <RefreshCw className="size-4" />
+            <RefreshCw className={cn("size-4", list.loading && "animate-spin")} />
             Refresh
           </Button>
         }
-      />
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
+            <CalendarDays className="size-3.5" />
+            {shortDate(today)}
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
+            <UserRound className="size-3.5" />
+            {role === "CONCIERGE" ? "Front desk" : "The floor"}
+          </span>
+        </div>
+      </PageHeader>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile
+          label="On the sheet"
+          value={list.initial ? "—" : String(rows.length)}
+          hint="booked for today"
+          icon={CalendarDays}
+        />
+        <StatTile
+          label="Arrived"
+          value={list.initial ? "—" : String(arrived)}
+          hint="checked in or in the chair"
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <StatTile
+          label="Still to come"
+          value={list.initial ? "—" : String(Math.max(0, rows.length - arrived))}
+          hint="yet to reach the desk"
+          icon={Clock3}
+          tone="accent"
+        />
+      </div>
 
       {actionError && <ErrorNote error={actionError} />}
 

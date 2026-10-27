@@ -123,6 +123,25 @@ export interface ServiceSubcategory {
   category: ServiceCategory;
 }
 
+/**
+ * What the console sends to create or patch a service.
+ *
+ * Prices cross the wire in minor units, never as a formatted string: the peso
+ * sign is a rendering decision, and a float would round someone's 800 into
+ * 799.99 somewhere between the form and the database.
+ */
+export interface ServiceInput {
+  name: string;
+  category: ServiceCategory;
+  description?: string;
+  priceCents: number;
+  durationMinutes: number;
+  /** The catalogue group, e.g. "Massage & Body". Omit for the salon floor. */
+  subcategoryId?: string | null;
+  requiredRoomType?: string | null;
+  isActive?: boolean;
+}
+
 export interface Service {
   id: string;
   name: string;

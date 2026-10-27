@@ -247,7 +247,7 @@ describeAdmin("admin", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: ["11111111-0000-0000-0000-000000000001"],
+          serviceIds: ["11111111-0000-0000-0000-000000000021"],
           employeeId: "22222222-0000-0000-0000-000000000001",
           // A real in-shift slot: "now + 5 days" lands outside the stylist's
           // 09:00-18:00 shift for most of the day, so the booking would be

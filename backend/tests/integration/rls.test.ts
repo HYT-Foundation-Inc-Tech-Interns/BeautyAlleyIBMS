@@ -149,10 +149,10 @@ describe("RLS isolation", () => {
 
   it("hides inactive services from anon", async () => {
     await inRollback(async (c) => {
-      await c.query(`update public.services set is_active = false where name = 'Cut & Style'`);
+      await c.query(`update public.services set is_active = false where name = 'Body Scrub w/ Massage'`);
       await actAsAnon(c);
       const { rows } = await c.query(`select name from public.services`);
-      expect(rows.map((r) => r.name)).not.toContain("Cut & Style");
+      expect(rows.map((r) => r.name)).not.toContain("Body Scrub w/ Massage");
     });
   });
 

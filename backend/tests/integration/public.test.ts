@@ -10,8 +10,8 @@ import { api } from "../helpers/api";
  * widest exposure, so the input handling is tested adversarially.
  */
 describe("public API", () => {
-  const SVC_MASSAGE = "11111111-0000-0000-0000-000000000001";
-  const SVC_HAIRCUT = "11111111-0000-0000-0000-000000000003";
+  const SVC_COMBINATION = "11111111-0000-0000-0000-000000000021";
+  const SVC_THERAPEUTIC = "11111111-0000-0000-0000-000000000023";
 
   describe("GET /health", () => {
     it("reports status and the environment", async () => {
@@ -26,9 +26,9 @@ describe("public API", () => {
     it("returns the seeded catalogue", async () => {
       const res = await request(api()).get("/api/v1/services");
       expect(res.status).toBe(200);
-      expect(res.body.meta.total).toBeGreaterThanOrEqual(4);
+      expect(res.body.meta.total).toBeGreaterThanOrEqual(5);
       const names = res.body.data.map((s: { name: string }) => s.name);
-      expect(names).toContain("Signature Massage");
+      expect(names).toContain("Combination Massage");
     });
 
     it("exposes prices in integer minor units, never a float", async () => {
@@ -74,9 +74,9 @@ describe("public API", () => {
 
   describe("GET /api/v1/services/:id", () => {
     it("returns one service", async () => {
-      const res = await request(api()).get(`/api/v1/services/${SVC_MASSAGE}`);
+      const res = await request(api()).get(`/api/v1/services/${SVC_COMBINATION}`);
       expect(res.status).toBe(200);
-      expect(res.body.data.name).toBe("Signature Massage");
+      expect(res.body.data.name).toBe("Combination Massage");
     });
 
     it("404s an unknown id", async () => {
@@ -118,7 +118,7 @@ describe("public API", () => {
     it("returns slots for a qualified stylist", async () => {
       // A Monday far enough out that nothing is booked.
       const res = await request(api()).get(
-        `/api/v1/availability?serviceId=${SVC_MASSAGE}&date=2031-03-03&intervalMinutes=60`
+        `/api/v1/availability?serviceId=${SVC_COMBINATION}&date=2031-03-03&intervalMinutes=60`
       );
       expect(res.status).toBe(200);
       expect(res.body.data.totalSlots).toBeGreaterThan(0);
@@ -128,9 +128,9 @@ describe("public API", () => {
     });
 
     it("does not offer a stylist who is not qualified for the service", async () => {
-      // Cara is the only stylist qualified for Cut & Style.
+      // Cara is the only stylist qualified for Therapeutic Massage.
       const res = await request(api()).get(
-        `/api/v1/availability?serviceId=${SVC_HAIRCUT}&date=2031-03-03&intervalMinutes=60`
+        `/api/v1/availability?serviceId=${SVC_THERAPEUTIC}&date=2031-03-03&intervalMinutes=60`
       );
       expect(res.status).toBe(200);
       const ids = res.body.data.employees.map((e: { employeeId: string }) => e.employeeId);
@@ -140,7 +140,7 @@ describe("public API", () => {
     it("offers nothing on a day the stylist does not work", async () => {
       // Sunday. The seed gives nobody Sunday hours.
       const res = await request(api()).get(
-        `/api/v1/availability?serviceId=${SVC_MASSAGE}&date=2031-03-02&intervalMinutes=60`
+        `/api/v1/availability?serviceId=${SVC_COMBINATION}&date=2031-03-02&intervalMinutes=60`
       );
       expect(res.status).toBe(200);
       expect(res.body.data.totalSlots).toBe(0);
@@ -161,7 +161,7 @@ describe("public API", () => {
 
     it("rejects a malformed date", async () => {
       const res = await request(api()).get(
-        `/api/v1/availability?serviceId=${SVC_MASSAGE}&date=03-03-2031`
+        `/api/v1/availability?serviceId=${SVC_COMBINATION}&date=03-03-2031`
       );
       expect(res.status).toBe(400);
     });
@@ -171,7 +171,7 @@ describe("public API", () => {
     it("accepts a valid code and reports the discount", async () => {
       const res = await request(api())
         .post("/api/v1/promos/validate")
-        .send({ code: "SAVE10", serviceIds: [SVC_MASSAGE], subtotalCents: 250000 });
+        .send({ code: "SAVE10", serviceIds: [SVC_COMBINATION], subtotalCents: 250000 });
       expect(res.status).toBe(200);
       expect(res.body.data.valid).toBe(true);
       expect(res.body.data.discountCents).toBe(25000);
@@ -180,7 +180,7 @@ describe("public API", () => {
     it("matches the code case-insensitively", async () => {
       const res = await request(api())
         .post("/api/v1/promos/validate")
-        .send({ code: "save10", serviceIds: [SVC_MASSAGE], subtotalCents: 250000 });
+        .send({ code: "save10", serviceIds: [SVC_COMBINATION], subtotalCents: 250000 });
       expect(res.status).toBe(200);
       expect(res.body.data.valid).toBe(true);
     });
@@ -200,7 +200,7 @@ describe("public API", () => {
       // FLAT500 requires 100000 minor units.
       const res = await request(api())
         .post("/api/v1/promos/validate")
-        .send({ code: "FLAT500", serviceIds: [SVC_HAIRCUT], subtotalCents: 50000 });
+        .send({ code: "FLAT500", serviceIds: [SVC_THERAPEUTIC], subtotalCents: 50000 });
       expect(res.status).toBe(200);
       expect(res.body.data.valid).toBe(false);
       expect(res.body.data.reason).toBe("MIN_SPEND_NOT_MET");

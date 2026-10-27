@@ -24,6 +24,7 @@ import {
   QrCode,
   ScanLine,
   Scissors,
+  Sparkles,
   Tag,
   Ticket,
   Users,
@@ -91,6 +92,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { area: "clients", to: "/app/clients", label: "Clients", icon: Users },
       { area: "promos", to: "/app/promos", label: "Promo codes", icon: Tag },
+      { area: "services", to: "/app/services", label: "Services", icon: Sparkles },
       { area: "employees", to: "/app/team", label: "Employees", icon: Scissors },
     ],
   },
@@ -109,6 +111,7 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/app/bookings": { title: "Bookings", sub: "Reservations and chair schedule" },
   "/app/clients": { title: "Clients", sub: "Profiles, visits and retention" },
   "/app/promos": { title: "Promo codes", sub: "Discounts, caps and redemptions" },
+  "/app/services": { title: "Services", sub: "The menu, its prices and durations" },
   "/app/team": { title: "Employees", sub: "The floor and what they are qualified for" },
   "/app/check-in": { title: "QR Check-in", sub: "Redeem an arrival pass" },
   "/app/scan-arrivals": { title: "Scan arrival pass", sub: "Confirm a guest has arrived" },

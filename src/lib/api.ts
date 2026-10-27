@@ -53,6 +53,8 @@ import type {
   QuotaProgress,
   Service,
   ServiceCategory,
+  ServiceInput,
+  ServiceSubcategory,
   Session,
   Task,
   TaskCounts,
@@ -381,6 +383,29 @@ export const api = {
       request<Service[]>("GET", "/api/v1/services/search", { auth: false, query: { q, limit } }),
 
     get: (id: string) => request<Service>("GET", `/api/v1/services/${id}`, { auth: false }),
+
+    /** ADMIN. A new row is bookable the moment it is active. */
+    create: (body: ServiceInput) => request<Service>("POST", "/api/v1/services", { body }),
+
+    update: (id: string, body: Partial<ServiceInput>) =>
+      request<Service>("PATCH", `/api/v1/services/${id}`, { body }),
+
+    /**
+     * Retires a service. The row survives - past bookings point at it - and it
+     * disappears from every public surface, because the public read only ever
+     * returns active rows.
+     */
+    retire: (id: string) => request<Service>("DELETE", `/api/v1/services/${id}`),
+  },
+
+  subcategories: {
+    /** The catalogue's second level, grouped by category, in display order. */
+    menu: (category?: ServiceCategory) =>
+      request<{ category: ServiceCategory; subcategories: ServiceSubcategory[] }[]>(
+        "GET",
+        "/api/v1/service-subcategories/menu",
+        { auth: false, query: { category } },
+      ),
   },
 
   employees: {
