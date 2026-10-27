@@ -23,6 +23,9 @@ describePromos("promos", () => {
   const SVC_COMBINATION = "11111111-0000-0000-0000-000000000021";
   const SVC_THERAPEUTIC = "11111111-0000-0000-0000-000000000023";
   const SVC_SCRUB = "11111111-0000-0000-0000-000000000024";
+  /* 90 minutes, 1,200.00 — the first service on Ana's list that clears
+     FLAT500's 1,000.00 minimum spend. */
+  const SVC_SCRUB_MASSAGE = "11111111-0000-0000-0000-000000000025";
   const EMP_ANA = "22222222-0000-0000-0000-000000000001";
   const EMP_CARA = "22222222-0000-0000-0000-000000000003";
 
@@ -42,11 +45,17 @@ describePromos("promos", () => {
    * the same day without fighting over one slot - the stylist's day is 09:00 to
    * 18:00, so there is room for several non-overlapping appointments.
    */
-  async function redeem(promoCode: string, guestPhone: string, slotOffset = 4, manilaHour = 10) {
+  async function redeem(
+    promoCode: string,
+    guestPhone: string,
+    slotOffset = 4,
+    manilaHour = 10,
+    serviceIds: string[] = [SVC_COMBINATION],
+  ) {
     return request(api())
       .post("/api/v1/bookings")
       .send({
-        serviceIds: [SVC_COMBINATION],
+        serviceIds,
         employeeId: EMP_ANA,
         startTime: ISO(nextWorkingSlot(slotOffset, manilaHour)),
         guest: { name: "Promo Guest", phone: guestPhone },
@@ -164,13 +173,16 @@ describePromos("promos", () => {
     });
 
     it("enforces the global redemption cap", async () => {
-      // FLAT500 has max_redemptions = 2.
-      const a = await redeem("FLAT500", "+639180000020", 7, 10);
+      // FLAT500 has max_redemptions = 2 and a 1,000.00 minimum spend, which the
+      // 800.00 combination massage no longer clears - so these bookings use the
+      // 1,200.00 scrub-and-massage, on three different days so a 90-minute
+      // appointment cannot collide with the next one.
+      const a = await redeem("FLAT500", "+639180000020", 7, 13, [SVC_SCRUB_MASSAGE]);
       expect(a.status).toBe(201);
-      const b = await redeem("FLAT500", "+639180000021", 7, 11);
+      const b = await redeem("FLAT500", "+639180000021", 8, 13, [SVC_SCRUB_MASSAGE]);
       expect(b.status).toBe(201);
 
-      const c = await redeem("FLAT500", "+639180000022", 7, 12);
+      const c = await redeem("FLAT500", "+639180000022", 9, 13, [SVC_SCRUB_MASSAGE]);
       expect(c.status).toBe(400);
       expect(c.body.error.code).toBe("PROMO_LIMIT_REACHED");
     });

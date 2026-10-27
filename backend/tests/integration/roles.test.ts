@@ -94,13 +94,19 @@ describeRoles("role gates", () => {
   describe("GET /api/v1/admin/dashboard — the owner's numbers", () => {
     const query = "?from=2026-01-01&to=2026-12-31";
 
-    it("refuses the concierge even though they run the desk", async () => {
+    /*
+     * The board is the desk's screen too: it draws revenue, the week's flow and
+     * the best clients from this endpoint. The two aggregates are the only
+     * admin routes the concierge may call - the client record, the export and
+     * every write stay the owner's, and admin.test.ts holds that line.
+     */
+    it("lets the concierge read the board's numbers", async () => {
       const desk = await concierge();
       created.push(desk);
 
       const res = await request(api()).get(`/api/v1/admin/dashboard${query}`).set(...as(desk.token));
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe("INSUFFICIENT_ROLE");
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveProperty("totals");
     });
 
     it("refuses an employee", async () => {

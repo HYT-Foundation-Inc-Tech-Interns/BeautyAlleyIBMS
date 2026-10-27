@@ -63,14 +63,15 @@ export type Area =
  *   CONCIERGE runs the desk — reception, the run sheet, check-in, and (from
  *             the transactions work) payments, receipts and loyalty. What
  *             they do NOT get is anything that configures the business:
- *             promos, employee records, or the board.
+ *             promos or employee records. The board is the one report it may
+ *             read.
  *   EMPLOYEE  works the floor — the run sheet and the door. No money, no
  *             customer records, no employee management.
  *   CLIENT    is a customer — their own bookings and nothing else.
  *
- * The board is ADMIN-only because `/admin/dashboard` is `requireRole("ADMIN")`
- * — a tile showing revenue has no honest front-desk version, so the desk gets
- * the run sheet on Overview instead of a filtered imitation of this page.
+ * The board is read by the owner and the desk. Its two aggregates are the only
+ * admin routes the concierge may call (`/admin/dashboard`, `/admin/clients`);
+ * everything that writes a client record stays the administrator's.
  *
  * CONCIERGE and EMPLOYEE currently share a scope because the API they call
  * does. They diverge as soon as the payment and customer-record routes land:

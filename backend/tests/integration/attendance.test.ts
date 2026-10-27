@@ -124,29 +124,29 @@ describeAttendance("attendance", () => {
       expect(res.body.error.code).toBe("FORBIDDEN");
     });
 
-    it("lets the desk clock in a stylist whose hands are busy", async () => {
+    /*
+     * "The clock is the employee's own record" (see the service's resolveTarget):
+     * a stylist with wet hands asks a colleague to tap for them, and the answer
+     * is still no - a time-in that somebody else wrote is not evidence of
+     * anything. The desk has no employee row, so naming one is refused rather
+     * than silently redirected, and an unknown id takes the same path.
+     */
+    it("refuses the desk clocking a stylist in", async () => {
       const desk = await concierge();
       created.push(desk);
 
-      const res = await request(api())
+      const named = await request(api())
         .post("/api/v1/attendance/clock-in")
         .set(...as(desk.token))
         .send({ employeeId: employeeRowId });
+      expect(named.status).toBe(403);
+      expect(named.body.error.code).toBe("FORBIDDEN");
 
-      expect(res.status).toBe(201);
-      expect(res.body.data.employeeId).toBe(employeeRowId);
-    });
-
-    it("404s an unknown employee instead of inventing a row", async () => {
-      const desk = await concierge();
-      created.push(desk);
-
-      const res = await request(api())
+      const unknown = await request(api())
         .post("/api/v1/attendance/clock-in")
         .set(...as(desk.token))
         .send({ employeeId: randomUUID() });
-
-      expect(res.status).toBe(404);
+      expect(unknown.status).toBe(403);
     });
 
     it("refuses a client", async () => {

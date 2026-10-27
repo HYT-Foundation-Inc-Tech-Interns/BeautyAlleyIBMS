@@ -108,6 +108,8 @@ describeBookings("bookings", () => {
       const res = await request(api())
         .post("/api/v1/bookings")
         .send({
+          // Therapeutic is Cara's own treatment (95,000.00), and the reprice
+          // below moves that same row - so the snapshot is what is under test.
           serviceIds: [SVC_THERAPEUTIC],
           employeeId: EMP_CARA,
           startTime: ISO(slot),
@@ -542,7 +544,7 @@ describeBookings("bookings", () => {
       const placed = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Admin Cancel", phone: "+639170000026" },
@@ -600,7 +602,7 @@ describeBookings("bookings", () => {
       const placed = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Double Admin Cancel", phone: "+639170000027" },
@@ -710,7 +712,7 @@ describeBookings("bookings", () => {
       const placed = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Cancelled Mover", phone: "+639170000028" },
@@ -787,7 +789,7 @@ describeBookings("bookings", () => {
       const placed = await request(api())
         .post("/api/v1/bookings")
         .send({
-          serviceIds: [SVC_MASSAGE],
+          serviceIds: [SVC_COMBINATION],
           employeeId: EMP_ANA,
           startTime: ISO(slot),
           guest: { name: "Never Arrived", phone: "+639170000029" },

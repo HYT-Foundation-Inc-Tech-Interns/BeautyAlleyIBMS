@@ -36,8 +36,10 @@ describe("schema guarantees", () => {
     it("rejects a raw overlapping INSERT that bypasses the service layer", async () => {
       await inRollback(async (c) => {
         const emp = "22222222-0000-0000-0000-000000000001";
+        // Any active service will do; this is the first row of the menu the
+        // five-service migration seeds.
         const { rows: svc } = await c.query(
-          `select id, duration_minutes from public.services where id = '11111111-0000-0000-0000-000000000001'`
+          `select id, duration_minutes from public.services where id = '11111111-0000-0000-0000-000000000021'`
         );
         const dur = svc[0].duration_minutes;
 
