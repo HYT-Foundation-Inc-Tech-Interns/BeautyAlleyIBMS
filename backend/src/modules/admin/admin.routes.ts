@@ -9,6 +9,7 @@ import {
 } from "./admin.schemas";
 import { authenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/requireRole";
+import { DESK } from "../../lib/roleGroups";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../lib/asyncHandler";
 
@@ -24,16 +25,41 @@ import { listPromosQuerySchema } from "../promos/promos.schemas";
 
 export const adminRouter = Router();
 
-adminRouter.use(authenticate, requireRole("ADMIN"));
+adminRouter.use(authenticate);
 
-adminRouter.get("/dashboard", validate({ query: dashboardQuerySchema }), asyncHandler(adminController.dashboard));
+/*
+ * Two reports are read by the desk as well as the owner.
+ *
+ * The monitoring board draws revenue, the day's flow and the best clients from
+ * these two, and the board is the concierge's screen as much as the
+ * administrator's - the desk is the one who needs to see how the week is
+ * going. Everything below the guard stays ADMIN: these are the only two
+ * routes that are reads of an aggregate, and neither exposes a client's
+ * record beyond the row the desk already reads in a booking.
+ *
+ * They are declared before the blanket guard on purpose: Express matches in
+ * order, so a route registered above it never passes through it.
+ */
+adminRouter.get(
+  "/dashboard",
+  requireRole(...DESK),
+  validate({ query: dashboardQuerySchema }),
+  asyncHandler(adminController.dashboard)
+);
+adminRouter.get(
+  "/clients",
+  requireRole(...DESK),
+  validate({ query: listClientsQuerySchema }),
+  asyncHandler(adminController.listClients)
+);
+
+adminRouter.use(requireRole("ADMIN"));
 
 // --- clients ---------------------------------------------------------------
 // The literal route is declared before the parameterised one: Express matches
 // in declaration order, so `/clients/export.csv` would otherwise be captured
 // by `/clients/:id` and fail uuid validation.
 adminRouter.get("/clients/export.csv", asyncHandler(adminController.exportClients));
-adminRouter.get("/clients", validate({ query: listClientsQuerySchema }), asyncHandler(adminController.listClients));
 adminRouter.get("/clients/:id", validate({ params: idParamSchema }), asyncHandler(adminController.getClient));
 adminRouter.patch(
   "/clients/:id",

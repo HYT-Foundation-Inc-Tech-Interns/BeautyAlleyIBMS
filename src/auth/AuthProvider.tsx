@@ -99,8 +99,12 @@ export const SCOPE: Record<Role, Area[]> = {
    * the stylist's act, on the chair they are about to work. The desk still has
    * `scan-arrivals`, which is the deliberate lookup-and-confirm version - see
    * the note in the EMPLOYEE block below.
+   *
+   * It does get the monitoring board: the desk is the one who answers "how is
+   * the week going" for the owner, and every tile is a read. The two aggregate
+   * endpoints behind it are the only admin routes the desk may call.
    */
-  CONCIERGE: ["overview", "bookings", "promos", "scan-arrivals", "tasks"],
+  CONCIERGE: ["overview", "bookings", "promos", "scan-arrivals", "tasks", "board"],
   /*
    * The floor gets its own two screens — the work assigned to it and its own
    * clock — plus the run sheet and the door. It deliberately does NOT get the

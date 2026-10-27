@@ -16,10 +16,11 @@
  * result down. A tile that needed a *different* question would get its own
  * fetch — none of them do.
  *
- * This board is ADMIN-only, and that is the API's doing rather than a choice:
- * `/admin/dashboard` and `/admin/clients` are both `requireRole("ADMIN")`, and
- * a tile showing revenue is not something to fake for staff. Staff get the run
- * sheet on Overview instead, which is the question they actually have.
+ * The owner and the desk both read it. The two aggregate endpoints behind it
+ * (`/admin/dashboard`, `/admin/clients`) are the only admin routes the
+ * concierge may call; everything that writes a client record stays the
+ * administrator's. The floor still gets the run sheet on Overview instead,
+ * which is the question a stylist actually has.
  */
 
 import * as React from "react";
@@ -620,18 +621,34 @@ function WidgetBody({ kind, data }: { kind: Kind; data: BoardData }) {
               {data.today.slice(0, 10).map((booking) => {
                 const name = booking.client?.fullName ?? booking.guest?.name ?? "Walk-in guest";
                 return (
-                  <li key={booking.id} className="flex items-center gap-2.5 py-1">
-                    <span className="w-14 shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
-                      {branchTime(booking.startTime)}
-                    </span>
-                    <PersonAvatar name={name} className="size-6 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] font-medium">{name}</p>
-                      <p className="truncate text-[10.5px] text-muted-foreground">
-                        {booking.items.map((i) => i.name).join(", ") || booking.reference} ·{" "}
-                        {booking.employee.fullName.split(" ")[0]}
-                      </p>
-                    </div>
+                  <li key={booking.id}>
+                    {/*
+                     * The row opens the record. A tile that names a booking and
+                     * cannot show it is a dead end, and the record lives on
+                     * Bookings - so the reference travels with the link and
+                     * "all dates" keeps the search from landing in a window the
+                     * booking is not in.
+                     */}
+                    <Link
+                      to={`/app/bookings?range=all&q=${encodeURIComponent(booking.reference)}`}
+                      title={`Open ${booking.reference}`}
+                      className="flex items-center gap-2.5 rounded-lg py-1 pr-1.5 transition-colors hover:bg-muted/60"
+                    >
+                      <span className="w-14 shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
+                        {branchTime(booking.startTime)}
+                      </span>
+                      <PersonAvatar name={name} className="size-6 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-medium">{name}</p>
+                        <p className="truncate text-[10.5px] text-muted-foreground">
+                          {booking.items.map((i) => i.name).join(", ") || "—"} ·{" "}
+                          {booking.employee.fullName.split(" ")[0]}
+                        </p>
+                      </div>
+                      <span className="shrink-0 font-mono text-[10px] text-muted-foreground/80">
+                        {booking.reference}
+                      </span>
+                    </Link>
                   </li>
                 );
               })}

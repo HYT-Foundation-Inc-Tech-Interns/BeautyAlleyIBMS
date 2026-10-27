@@ -153,8 +153,8 @@ export default function Bookings() {
 
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<ApiError | null>(null);
-  /* The booking the desk has asked to cancel, held until the dialog closes. */
-  const [cancelTarget, setCancelTarget] = React.useState<Booking | null>(null);
+  /* The booking the desk has asked to end, held until the dialog closes. */
+  const [endTarget, setEndTarget] = React.useState<Booking | null>(null);
   /* A guest who arrived before their pass opened, held for the override. */
   const [earlyTarget, setEarlyTarget] = React.useState<Booking | null>(null);
 
@@ -342,27 +342,23 @@ export default function Bookings() {
             const who = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
             const next = NEXT_STATUS[booking.status];
             /*
-             * The desk gets one Cancel, and it is the endpoint that records a
-             * reason — not a raw status move. Taking CANCELLED out of the
-             * generated moves keeps a second, quieter way to do the same
-             * destructive thing off the row.
+             * The row moves a booking forward. Everything that *ends* one —
+             * cancel and no-show — is behind a single control, because they
+             * are the same decision with two answers and side by side they
+             * read as two equally safe buttons next to the one that is safe.
+             *
+             * CANCELLED is filtered out for every role, not just the desk: as
+             * a raw status move it skipped the reason, the cancellation time
+             * and the pass revocation that POST /cancel writes. No-show is
+             * only offered while the guest is still expected; once they are in
+             * the chair, being absent is not a move this row offers.
              */
-            const moves = canCancel ? next.filter((s) => s !== "CANCELLED") : next;
-            /*
-             * No-show is legal from PENDING, but the row only had room for the
-             * two moves that take a guest forward, so it was silently dropped:
-             * the desk had to confirm a booking before it could record that
-             * nobody turned up — which is the one thing a confirmation does not
-             * mean. It is added back while the guest is still expected; once
-             * they are checked in, being absent is not a move this row offers.
-             */
-            const shown = moves.slice(0, 2);
-            const visible =
+            const allMoves: BookingStatus[] = next;
+            const moves = allMoves.filter((s) => s !== "CANCELLED" && s !== "NO_SHOW");
+            const visible = moves.slice(0, 2);
+            const canNoShow =
               (booking.status === "PENDING" || booking.status === "CONFIRMED") &&
-              moves.includes("NO_SHOW") &&
-              !shown.includes("NO_SHOW")
-                ? [...shown, "NO_SHOW" as BookingStatus]
-                : shown;
+              next.includes("NO_SHOW");
             return (
               <li
                 key={booking.id}
@@ -426,9 +422,7 @@ export default function Bookings() {
                   {visible.length === 0 ? (
                     <span className="text-[11.5px] text-muted-foreground">Settled</span>
                   ) : (
-                    visible.map((s, index) => {
-                      const destructive = s === "NO_SHOW" || s === "CANCELLED";
-                      return (
+                    visible.map((s, index) => (
                         <Button
                           key={s}
                           size="sm"
@@ -436,24 +430,22 @@ export default function Bookings() {
                           // sheet: two identical buttons make the desk read
                           // both before choosing, which is the cost this list
                           // exists to avoid.
-                          variant={destructive ? "ghost" : index === 0 ? "default" : "outline"}
-                          className={cn(destructive && "text-clay hover:bg-clay/10")}
+                          variant={index === 0 ? "default" : "outline"}
                           disabled={busyId === booking.id}
                           onClick={() => advance(booking, s)}
                         >
                           {STATUS_ACTION[s]}
                         </Button>
-                      );
-                    })
+                      ))
                   )}
-                  {canCancel && next.includes("CANCELLED") && (
+                  {(canCancel || canNoShow) && (
                     <Button
                       size="sm"
                       variant="ghost"
                       className="text-clay hover:bg-clay/10"
-                      onClick={() => setCancelTarget(booking)}
+                      onClick={() => setEndTarget(booking)}
                     >
-                      Cancel
+                      End booking…
                     </Button>
                   )}
                   {booking.client === null && booking.status !== "CANCELLED" && (
@@ -479,12 +471,17 @@ export default function Bookings() {
         />
       )}
 
-      {cancelTarget && (
-        <CancelBookingDialog
-          booking={cancelTarget}
-          onClose={() => setCancelTarget(null)}
+      {endTarget && (
+        <EndBookingDialog
+          booking={endTarget}
+          canCancel={canCancel && NEXT_STATUS[endTarget.status].includes("CANCELLED")}
+          canNoShow={
+            (endTarget.status === "PENDING" || endTarget.status === "CONFIRMED") &&
+            NEXT_STATUS[endTarget.status].includes("NO_SHOW")
+          }
+          onClose={() => setEndTarget(null)}
           onDone={() => {
-            setCancelTarget(null);
+            setEndTarget(null);
             list.reload();
           }}
         />
@@ -522,27 +519,37 @@ export default function Bookings() {
 }
 
 /* ------------------------------------------------------------------ *
- * The desk's cancel
+ * The desk's ending
  * ------------------------------------------------------------------ */
 
 /**
- * Cancelling, with a reason.
+ * Ending a booking, with the two answers that end one.
  *
- * This is `POST /bookings/:id/cancel`, not a status move: the endpoint records
- * who cancelled and why, and revokes the guest's pass. `force` is set because
- * the concierge is the person the guest is in front of — a booking made for an
- * hour's time is precisely the one that needs cancelling, and the two-hour
- * guard would otherwise refuse it. The dialog says so rather than hiding it.
+ * Cancel and no-show were two ghost buttons on the row, and side by side they
+ * looked like one decision split in two: the desk had to read both every time
+ * to find the one that applied. They are also different records — a
+ * cancellation takes a reason and revokes the pass through POST /cancel,
+ * while a no-show is a status move that says the guest never turned up — so
+ * the dialog asks which happened and then shows only the field that answer
+ * needs.
+ *
+ * Neither is offered unless the state machine allows it, so the dialog cannot
+ * be the way around a rule the row already honours.
  */
-function CancelBookingDialog({
+function EndBookingDialog({
   booking,
+  canCancel,
+  canNoShow,
   onClose,
   onDone,
 }: {
   booking: Booking;
+  canCancel: boolean;
+  canNoShow: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
+  const [mode, setMode] = React.useState<"cancel" | "noshow">(canCancel ? "cancel" : "noshow");
   const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<ApiError | null>(null);
@@ -553,23 +560,41 @@ function CancelBookingDialog({
     setBusy(true);
     setError(null);
     try {
-      await api.bookings.cancel(booking.id, {
-        reason: reason.trim() || undefined,
-        force: true,
-      });
+      if (mode === "cancel") {
+        await api.bookings.cancel(booking.id, { reason: reason.trim() || undefined, force: true });
+      } else {
+        await api.bookings.setStatus(booking.id, "NO_SHOW");
+      }
       onDone();
     } catch (err) {
       setError(
-        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not cancel that booking"),
+        err instanceof ApiError
+          ? err
+          : new ApiError(0, "UNKNOWN", "Could not end that booking"),
       );
     } finally {
       setBusy(false);
     }
   }
 
+  const choices = [
+    {
+      id: "cancel" as const,
+      label: "The guest cancelled",
+      note: "Stays on record as cancelled, with the reason, and their pass stops working.",
+      allowed: canCancel,
+    },
+    {
+      id: "noshow" as const,
+      label: "The guest never arrived",
+      note: "Marks a no-show. Nothing was delivered and nothing is owed.",
+      allowed: canNoShow,
+    },
+  ].filter((choice) => choice.allowed);
+
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
-      <ModalContent title="Cancel booking" description={`Cancel ${booking.reference}`}>
+      <ModalContent title="End booking" description={`End ${booking.reference}`}>
         <div className="p-6">
           <div className="flex items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-clay/10 text-clay">
@@ -577,7 +602,7 @@ function CancelBookingDialog({
             </span>
             <div className="min-w-0">
               <h2 className="font-display text-[19px] font-semibold tracking-tight">
-                Cancel this booking?
+                How did this booking end?
               </h2>
               <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
                 {who} · {branchDay(booking.startTime)} at {branchTime(booking.startTime)} ·{" "}
@@ -586,31 +611,81 @@ function CancelBookingDialog({
             </div>
           </div>
 
-          <label className="mt-5 block">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Reason (optional)
-            </span>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              maxLength={300}
-              placeholder="Guest called to cancel…"
-              className="mt-1.5 w-full resize-none rounded-lg border border-border bg-card px-3 py-2 text-[13px] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-            />
-          </label>
+          <div className="mt-5 space-y-2">
+            {choices.map((choice) => {
+              const active = mode === choice.id;
+              return (
+                <button
+                  key={choice.id}
+                  type="button"
+                  onClick={() => setMode(choice.id)}
+                  aria-pressed={active}
+                  disabled={busy}
+                  className={cn(
+                    "w-full rounded-xl border px-4 py-3 text-left transition-colors",
+                    active
+                      ? "border-clay/50 bg-clay/[0.06]"
+                      : "border-border bg-card hover:border-clay/30",
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "flex size-3.5 shrink-0 items-center justify-center rounded-full border",
+                        active ? "border-clay" : "border-border",
+                      )}
+                    >
+                      {active && <span className="size-1.5 rounded-full bg-clay" />}
+                    </span>
+                    <span className="text-[13px] font-medium">{choice.label}</span>
+                  </span>
+                  <span className="mt-1 block pl-[22px] text-[11.5px] leading-relaxed text-muted-foreground">
+                    {choice.note}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {mode === "cancel" && (
+            <label className="mt-4 block">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Reason (optional)
+              </span>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
+                maxLength={300}
+                placeholder="Guest called to cancel…"
+                className="mt-1.5 w-full resize-none rounded-lg border border-border bg-card px-3 py-2 text-[13px] outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+              />
+            </label>
+          )}
 
           <p className="mt-3 text-[11.5px] leading-relaxed text-muted-foreground">
-            The booking stays on record as cancelled and the guest's pass stops
-            working. The desk may cancel inside the two-hour window.
+            {mode === "cancel"
+              ? "The desk may cancel inside the two-hour window; the booking stays on record either way."
+              : "A no-show is not a cancellation: it keeps the appointment on the record and frees the chair."}
           </p>
 
           {error && <ErrorNote error={error} className="mt-4" />}
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <Button variant="destructive" onClick={submit} disabled={busy}>
-              {busy ? <Loader2 className="animate-spin" /> : <X />}
-              {busy ? "Cancelling…" : "Cancel booking"}
+              {busy ? (
+                <Loader2 className="animate-spin" />
+              ) : mode === "cancel" ? (
+                <X />
+              ) : (
+                <TriangleAlert />
+              )}
+              {busy
+                ? "Ending…"
+                : mode === "cancel"
+                  ? "Cancel booking"
+                  : "Mark no-show"}
             </Button>
             <Button variant="outline" onClick={onClose} disabled={busy}>
               Keep booking

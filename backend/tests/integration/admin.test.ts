@@ -1,5 +1,13 @@
 import request from "supertest";
-import { api, as, createTestAdmin, createTestClient, deleteTestUsers, type TestUser } from "../helpers/api";
+import {
+  api,
+  as,
+  createTestAdmin,
+  createTestClient,
+  createTestConcierge,
+  deleteTestUsers,
+  type TestUser,
+} from "../helpers/api";
 import { connectDb, db, disconnectDb } from "../helpers/db";
 import { ISO, SLOT_BANDS, nextWorkingSlot, useSlotBand } from "../helpers/time";
 

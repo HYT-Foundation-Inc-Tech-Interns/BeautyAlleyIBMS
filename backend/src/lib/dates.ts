@@ -64,3 +64,57 @@ export function branchDay(instant: Date = new Date(), timeZone: string = env.bra
   const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return `${pick("year")}-${pick("month")}-${pick("day")}`;
 }
+
+/** The offset of `timeZone` from UTC, in minutes, at a given instant. */
+function offsetMinutes(instant: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(instant);
+
+  const pick = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wallClock = Date.UTC(
+    pick("year"),
+    pick("month") - 1,
+    pick("day"),
+    pick("hour") % 24,
+    pick("minute"),
+    pick("second")
+  );
+  return (wallClock - instant.getTime()) / 60000;
+}
+
+/**
+ * The instant a branch day begins.
+ *
+ * `branchDay()` answers "which day is this instant in"; this is the inverse,
+ * and it is the one a date filter needs. Filtering `start_time` against
+ * `${day}T00:00:00Z` uses UTC's midnight, so in Manila every appointment
+ * before 08:00 local sits on the previous UTC day and falls outside "today" -
+ * a 07:00 booking disappears from the day it belongs to and reappears in the
+ * one before it. The day is the salon's, so the boundary has to be the
+ * salon's too.
+ *
+ * Two passes, because the offset at UTC midnight is not necessarily the offset
+ * at the instant we are looking for. Manila has no daylight saving and one
+ * pass would do, but a helper that only works in one timezone is a trap.
+ */
+export function branchDayStart(day: string, timeZone: string = env.branchTimezone): Date {
+  const utcMidnight = new Date(`${day}T00:00:00Z`);
+  const first = offsetMinutes(utcMidnight, timeZone);
+  const guess = new Date(utcMidnight.getTime() - first * 60000);
+  const second = offsetMinutes(guess, timeZone);
+  return new Date(utcMidnight.getTime() - second * 60000);
+}
+
+/** The branch day after `day`, as `YYYY-MM-DD`. */
+export function nextBranchDay(day: string): string {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date + 1)).toISOString().slice(0, 10);
+}

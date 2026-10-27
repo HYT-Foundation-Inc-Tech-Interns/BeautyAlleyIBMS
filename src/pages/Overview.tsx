@@ -943,7 +943,19 @@ function NewRequests({ onChanged }: { onChanged: () => void }) {
             Booked online with a stylist chosen for them. Change it, then confirm.
           </p>
         </div>
-        <Button variant="ghost" size="sm" className="ml-auto" onClick={pending.reload}>
+        {/*
+          * This panel asks for pending bookings with no upper date bound, so it
+          * can name a request that Bookings' default seven-day window does not
+          * contain. The link carries both the status and "all dates", so the
+          * record it points at is on the page when it opens.
+          */}
+        <Link
+          to="/app/bookings?status=PENDING&range=all"
+          className="ml-auto text-[12px] font-medium text-primary hover:underline"
+        >
+          All requests →
+        </Link>
+        <Button variant="ghost" size="sm" onClick={pending.reload}>
           <RefreshCw className="size-3.5" />
           Refresh
         </Button>

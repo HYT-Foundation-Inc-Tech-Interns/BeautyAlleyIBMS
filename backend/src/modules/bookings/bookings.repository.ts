@@ -1,4 +1,5 @@
 import { requireServiceRole } from "../../db/supabase";
+import { branchDayStart, nextBranchDay } from "../../lib/dates";
 import { toRange, type Pagination } from "../../lib/pagination";
 import type { ListBookingsQuery, MyBookingsQuery } from "./bookings.schemas";
 
@@ -144,8 +145,14 @@ export const bookingsRepository = {
     // used to be validated and then dropped on the floor, so a caller asking
     // for one treatment silently got every booking.
     if (query.serviceId) q = q.contains("service_ids", [query.serviceId]);
-    if (query.from) q = q.gte("start_time", `${query.from}T00:00:00Z`);
-    if (query.to) q = q.lte("start_time", `${query.to}T23:59:59Z`);
+    /*
+     * A day in the filter is the salon's day, not UTC's. Comparing against
+     * `${day}T00:00:00Z` put every appointment before 08:00 Manila on the
+     * previous UTC day, so the 07:00 chair was missing from "today" and a
+     * booking made for tomorrow morning appeared in today's list.
+     */
+    if (query.from) q = q.gte("start_time", branchDayStart(query.from).toISOString());
+    if (query.to) q = q.lt("start_time", branchDayStart(nextBranchDay(query.to)).toISOString());
     if (query.q) {
       const safe = query.q.replace(/[%_\\]/g, (m) => `\\${m}`);
 
