@@ -260,6 +260,11 @@ function moveTo(items: WidgetItem[], id: string, index: number) {
 const sameOrder = (a: WidgetItem[], b: WidgetItem[]) =>
   a.length === b.length && a.every((item, i) => item.id === b[i].id);
 
+/** Same tiles, in the same order, at the same spans — regardless of identity. */
+const sameArrangement = (a: WidgetItem[], b: WidgetItem[]) =>
+  a.length === b.length &&
+  a.every((item, i) => item.id === b[i].id && item.w === b[i].w && item.h === b[i].h);
+
 /** The tile nearest to `id` in a direction, judged by grid-centre distance. */
 function neighborOf(
   places: Placement[],
@@ -770,6 +775,29 @@ export function DraggableWidgetGrid({
     latest.current.items = next;
     setItems(next);
   }, []);
+
+  /*
+   * Adopt a layout handed down from outside.
+   *
+   * The grid owns the arrangement while it is mounted, so a new `items` prop is
+   * normally just the array this grid emitted a moment ago. But the page can
+   * also replace the layout wholesale — Reset layout sets it back to the
+   * defaults — and that used to do nothing: the prop was copied into state once,
+   * at mount, and never read again, so the button changed the page's state while
+   * the board on screen stayed exactly where it was.
+   *
+   * A prop whose arrangement differs from what is on screen is adopted; one that
+   * matches is ignored, so the parent echoing our own change back down cannot
+   * fight a drag that is still in progress.
+   */
+  const lastProp = useRef(initialItems);
+  useIsoLayoutEffect(() => {
+    if (initialItems === lastProp.current) return;
+    lastProp.current = initialItems;
+    if (!initialItems) return;
+    if (sameArrangement(initialItems, items)) return;
+    commit(initialItems);
+  }, [initialItems, items, commit]);
 
   const toSlot = useCallback(
     (box: Box): Slot => {
