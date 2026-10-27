@@ -29,13 +29,13 @@ const guestSchema = z.object({
 export const createBookingSchema = z
   .object({
     serviceIds: z
-      .array(z.string().uuid())
+      .array(z.guid())
       .min(1, "Choose at least one service")
       .max(10, "A single booking may contain at most 10 services"),
-    employeeId: z.string().uuid().optional(),
+    employeeId: z.guid().optional(),
     startTime: isoInstant,
     /** Staff only - a client booking for themselves must not be able to set this. */
-    clientId: z.string().uuid().optional(),
+    clientId: z.guid().optional(),
     guest: guestSchema.optional(),
     promoCode: z.string().trim().max(64).optional(),
     notes: z.string().trim().max(1000).optional(),
@@ -45,7 +45,7 @@ export const createBookingSchema = z
      * refuses with NO_ROOM_AVAILABLE if there is none. Clients never set this;
      * the service layer drops it for a non-staff caller.
      */
-    roomId: z.string().uuid().optional(),
+    roomId: z.guid().optional(),
   })
   .refine((v) => !v.clientId || !v.guest, {
     message: "Provide either clientId or guest details, not both",
@@ -70,19 +70,19 @@ export const listBookingsQuerySchema = paginationSchema.extend({
   sort: z.enum(BOOKING_SORT_COLUMNS).default("start_time"),
   order: z.enum(["asc", "desc"]).default("desc"),
   status: bookingStatus.optional(),
-  employeeId: z.string().uuid().optional(),
-  clientId: z.string().uuid().optional(),
-  serviceId: z.string().uuid().optional(),
+  employeeId: z.guid().optional(),
+  clientId: z.guid().optional(),
+  serviceId: z.guid().optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   q: z.string().trim().max(100).optional(),
 });
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid booking id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid booking id") });
 
 export const noteParamSchema = z.object({
-  id: z.string().uuid("Not a valid booking id"),
-  noteId: z.string().uuid("Not a valid note id"),
+  id: z.guid("Not a valid booking id"),
+  noteId: z.guid("Not a valid note id"),
 });
 
 /**
@@ -106,7 +106,7 @@ export const createNoteSchema = z.object({
 /** Desk override of a booking's room. */
 export const setRoomSchema = z.object({
   /** Null clears the room - for a service that turns out not to need one. */
-  roomId: z.string().uuid().nullable(),
+  roomId: z.guid().nullable(),
 });
 
 /**
@@ -117,7 +117,7 @@ export const setRoomSchema = z.object({
  * is ever attached to a self-service booking.
  */
 export const assignEmployeeSchema = z.object({
-  employeeId: z.string().uuid("Choose a stylist"),
+  employeeId: z.guid("Choose a stylist"),
 });
 
 export const myBookingsQuerySchema = paginationSchema.extend({

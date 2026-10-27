@@ -9,7 +9,7 @@ export const listEmployeesSchema = paginationSchema.extend({
   order: z.enum(["asc", "desc"]).default("asc"),
   includeInactive: queryBoolean().default(false),
   /** Only employees qualified for this service. */
-  serviceId: z.string().uuid().optional(),
+  serviceId: z.guid().optional(),
 });
 
 export const createEmployeeSchema = z.object({
@@ -17,9 +17,9 @@ export const createEmployeeSchema = z.object({
   title: z.string().trim().max(120).optional(),
   bio: z.string().trim().max(2000).optional(),
   /** Link to an existing account so this person can sign in. */
-  profileId: z.string().uuid().optional(),
+  profileId: z.guid().optional(),
   isActive: z.boolean().default(true),
-  serviceIds: z.array(z.string().uuid()).default([]),
+  serviceIds: z.array(z.guid()).default([]),
 });
 
 export const updateEmployeeSchema = createEmployeeSchema
@@ -28,7 +28,7 @@ export const updateEmployeeSchema = createEmployeeSchema
   .refine((v) => Object.keys(v).length > 0, "Provide at least one field to update");
 
 export const setEmployeeServicesSchema = z.object({
-  serviceIds: z.array(z.string().uuid()).max(100),
+  serviceIds: z.array(z.guid()).max(100),
 });
 
 const timeOfDay = z
@@ -62,7 +62,7 @@ export const timeOffSchema = z
   });
 
 export const availabilityQuerySchema = z.object({
-  serviceId: z.string().uuid("serviceId is required"),
+  serviceId: z.guid("serviceId is required"),
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD")
@@ -70,11 +70,11 @@ export const availabilityQuerySchema = z.object({
     // string is the right input - sending an instant here would be a category
     // error and would break near midnight.
     ,
-  employeeId: z.string().uuid().optional(),
+  employeeId: z.guid().optional(),
   intervalMinutes: z.coerce.number().int().min(5).max(240).default(30),
 });
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid id") });
 
 export const performanceQuerySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

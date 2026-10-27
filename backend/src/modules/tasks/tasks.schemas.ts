@@ -33,7 +33,7 @@ export const TASK_SORT_COLUMNS = ["created_at", "due_at", "priority", "status", 
 export const listTasksSchema = paginationSchema.extend({
   sort: z.enum(TASK_SORT_COLUMNS).default("created_at"),
   order: z.enum(["asc", "desc"]).default("desc"),
-  employeeId: z.string().uuid("Not a valid employee id").optional(),
+  employeeId: z.guid("Not a valid employee id").optional(),
   status: taskStatusSchema.optional(),
   priority: taskPrioritySchema.optional(),
   /** Free-text match on the title and description. */
@@ -54,7 +54,7 @@ export const listTasksSchema = paginationSchema.extend({
 export const createTaskSchema = z.object({
   title: z.string().trim().min(1, "A task needs a title").max(160),
   description: z.string().trim().max(2000).optional(),
-  employeeId: z.string().uuid("Choose who the task is for"),
+  employeeId: z.guid("Choose who the task is for"),
   priority: taskPrioritySchema.default("MEDIUM"),
   /** Omit for a task with no deadline. */
   dueAt: instantSchema.optional(),
@@ -73,7 +73,7 @@ export const updateTaskSchema = z
   .object({
     title: z.string().trim().min(1).max(160).optional(),
     description: z.string().trim().max(2000).nullable().optional(),
-    employeeId: z.string().uuid("Not a valid employee id").optional(),
+    employeeId: z.guid("Not a valid employee id").optional(),
     priority: taskPrioritySchema.optional(),
     status: taskStatusSchema.optional(),
     dueAt: instantSchema.nullable().optional(),
@@ -88,7 +88,7 @@ export const setTaskStatusSchema = z.object({
   completionNotes: z.string().trim().max(2000).optional(),
 });
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid id") });
 
 export type ListTasksQuery = z.infer<typeof listTasksSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;

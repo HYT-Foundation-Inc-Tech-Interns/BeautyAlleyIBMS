@@ -38,7 +38,7 @@ export const listLoyaltyQuerySchema = paginationSchema.extend({
   q: z.string().trim().max(80).optional(),
 });
 
-export const clientIdParamSchema = z.object({ id: z.string().uuid("Not a valid client id") });
+export const clientIdParamSchema = z.object({ id: z.guid("Not a valid client id") });
 
 export type PromoteClientInput = z.infer<typeof promoteClientSchema>;
 export type ListLoyaltyQuery = z.infer<typeof listLoyaltyQuerySchema>;

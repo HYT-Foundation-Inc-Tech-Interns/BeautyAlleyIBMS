@@ -38,7 +38,7 @@ tasksRouter.get(
   "/counts",
   authenticate,
   requireRole(...OPERATIONS),
-  validate({ query: z.object({ employeeId: z.string().uuid().optional() }) }),
+  validate({ query: z.object({ employeeId: z.guid().optional() }) }),
   asyncHandler(tasksController.counts),
 );
 

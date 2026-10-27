@@ -45,7 +45,7 @@ export const listSubcategoriesQuerySchema = z.object({
   includeInactive: queryBoolean().default(false),
 });
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid subcategory id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid subcategory id") });
 
 /** "Brazilian Spa" -> "brazilian-spa". Unicode-safe enough for a salon menu. */
 export function slugify(name: string): string {

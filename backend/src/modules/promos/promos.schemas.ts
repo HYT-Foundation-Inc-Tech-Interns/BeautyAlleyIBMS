@@ -6,7 +6,7 @@ export const PROMO_SORT_COLUMNS = ["code", "created_at", "starts_at", "ends_at"]
 
 export const validatePromoSchema = z.object({
   code: z.string().trim().min(1, "Enter a promo code").max(64),
-  serviceIds: z.array(z.string().uuid()).default([]),
+  serviceIds: z.array(z.guid()).default([]),
   /** Computed by the caller when previewing against a known cart. */
   subtotalCents: z.coerce.number().int().min(0).default(0),
   guestPhone: z.string().trim().max(32).optional(),
@@ -28,7 +28,7 @@ export const createPromoSchema = z
     maxRedemptions: z.coerce.number().int().positive().optional(),
     perClientLimit: z.coerce.number().int().positive().optional(),
     minSpendCents: z.coerce.number().int().min(0).default(0),
-    applicableServiceIds: z.array(z.string().uuid()).optional(),
+    applicableServiceIds: z.array(z.guid()).optional(),
     isActive: z.boolean().default(true),
   })
   .refine((v) => v.type !== "PERCENT" || (v.value >= 1 && v.value <= 100), {
@@ -48,7 +48,7 @@ export const updatePromoSchema = z.object({
   maxRedemptions: z.coerce.number().int().positive().nullable().optional(),
   perClientLimit: z.coerce.number().int().positive().nullable().optional(),
   minSpendCents: z.coerce.number().int().min(0).optional(),
-  applicableServiceIds: z.array(z.string().uuid()).nullable().optional(),
+  applicableServiceIds: z.array(z.guid()).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -73,7 +73,7 @@ export const reviewPromoSchema = z.object({
   note: z.string().trim().max(500).optional(),
 });
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid promo id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid promo id") });
 
 export type CreatePromoInput = z.infer<typeof createPromoSchema>;
 export type ReviewPromoInput = z.infer<typeof reviewPromoSchema>;

@@ -50,7 +50,7 @@ export const createServiceSchema = z.object({
   /** Which kind of room this treatment occupies. Omit for no room. */
   requiredRoomType: roomType.nullable().optional(),
   /** The second catalogue level, e.g. "Deep Tissue" under SPA. */
-  subcategoryId: z.string().uuid().nullable().optional(),
+  subcategoryId: z.guid().nullable().optional(),
   isActive: z.boolean().default(true),
 });
 
@@ -59,7 +59,7 @@ export const updateServiceSchema = createServiceSchema.partial().refine(
   "Provide at least one field to update"
 );
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid id") });
 
 export type CreateServiceInput = z.infer<typeof createServiceSchema>;
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;

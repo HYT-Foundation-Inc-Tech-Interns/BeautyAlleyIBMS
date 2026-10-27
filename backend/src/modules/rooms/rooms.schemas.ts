@@ -62,14 +62,14 @@ export const availableRoomsQuerySchema = z
     end: z.string().datetime({ offset: true }),
     roomType: roomType.optional(),
     /** Ignore this booking when testing an override, so it does not clash with itself. */
-    ignoreBookingId: z.string().uuid().optional(),
+    ignoreBookingId: z.guid().optional(),
   })
   .refine((v) => new Date(v.end) > new Date(v.start), {
     message: "end must be after start",
     path: ["end"],
   });
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid room id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid room id") });
 
 export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type UpdateRoomInput = z.infer<typeof updateRoomSchema>;

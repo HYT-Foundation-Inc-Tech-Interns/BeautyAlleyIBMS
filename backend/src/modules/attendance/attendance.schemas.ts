@@ -29,7 +29,7 @@ export const listAttendanceSchema = paginationSchema.extend({
   /** Inclusive range of branch-local days. */
   from: daySchema.optional(),
   to: daySchema.optional(),
-  employeeId: z.string().uuid("Not a valid employee id").optional(),
+  employeeId: z.guid("Not a valid employee id").optional(),
   status: attendanceStatusSchema.optional(),
 });
 
@@ -42,12 +42,12 @@ export const listAttendanceSchema = paginationSchema.extend({
  * colleague would make the attendance log worthless.
  */
 export const clockInSchema = z.object({
-  employeeId: z.string().uuid("Not a valid employee id").optional(),
+  employeeId: z.guid("Not a valid employee id").optional(),
   remarks: z.string().trim().max(1000).optional(),
 });
 
 export const clockOutSchema = z.object({
-  employeeId: z.string().uuid("Not a valid employee id").optional(),
+  employeeId: z.guid("Not a valid employee id").optional(),
   remarks: z.string().trim().max(1000).optional(),
 });
 
@@ -65,7 +65,7 @@ export const amendAttendanceSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, "Provide at least one field to update");
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid id") });
 
 export type ListAttendanceQuery = z.infer<typeof listAttendanceSchema>;
 export type ClockInInput = z.infer<typeof clockInSchema>;

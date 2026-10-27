@@ -38,13 +38,13 @@ export const updateClientSchema = z
 export const listAuditLogsQuerySchema = paginationSchema.extend({
   action: z.string().trim().max(100).optional(),
   entity: z.string().trim().max(60).optional(),
-  entityId: z.string().uuid().optional(),
-  actorId: z.string().uuid().optional(),
+  entityId: z.guid().optional(),
+  actorId: z.guid().optional(),
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
 });
 
-export const idParamSchema = z.object({ id: z.string().uuid("Not a valid id") });
+export const idParamSchema = z.object({ id: z.guid("Not a valid id") });
 
 export type ListClientsQuery = z.infer<typeof listClientsQuerySchema>;
 export type UpdateClientInput = z.infer<typeof updateClientSchema>;
