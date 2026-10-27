@@ -19,7 +19,7 @@ export const bookingsController = {
   },
 
   async list(req: Request, res: Response) {
-    const result = await bookingsService.list(req.query as never);
+    const result = await bookingsService.list(req.query as never, req.actor);
     res.status(200).json(result);
   },
 

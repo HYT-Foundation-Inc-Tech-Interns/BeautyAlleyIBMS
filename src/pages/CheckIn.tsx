@@ -37,7 +37,8 @@ import {
 } from "lucide-react";
 
 import { branchLongDay, branchTime, branchToday, peso } from "@/lib/utils";
-import { api, ApiError, NEXT_STATUS } from "@/lib/api";
+import { api, ApiError, NEXT_STATUS, STATUS_ACTION } from "@/lib/api";
+import { checkInBooking, isEarlyArrival } from "@/lib/check-in";
 import type { Booking, CheckInResult } from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ import {
 import { Reveal } from "@/components/app/reveal";
 import { PageHeader, Panel, StatTile } from "@/components/app/bits";
 import { CameraScanner } from "@/components/app/camera-scanner";
+import { EarlyArrivalDialog } from "@/components/app/early-arrival-dialog";
 
 /** `YYYY-MM-DD` at the branch -> the UTC instants that bracket it. */
 const ARRIVED: Booking["status"][] = ["CHECKED_IN", "IN_SERVICE", "COMPLETED"];
@@ -181,6 +183,14 @@ function Redeem() {
         {/* Dismissing the error resumes the camera, so a refused pass can be
             re-presented once the desk has read why it failed. */}
         {error && <ErrorNote error={error} onRetry={() => setError(null)} />}
+        {/* A pass this early is a decision, not a refusal — but the override
+            needs the booking, not the code, so it lives in the list below. */}
+        {error && isEarlyArrival(error) && (
+          <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
+            To admit them now, use the arrival list below — the override is recorded against your
+            account.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -287,15 +297,20 @@ function Today() {
 
   const [moving, setMoving] = React.useState<string | null>(null);
   const [moveError, setMoveError] = React.useState<ApiError | null>(null);
+  const [earlyTarget, setEarlyTarget] = React.useState<Booking | null>(null);
 
   async function advance(booking: Booking, status: Booking["status"]) {
     setMoving(booking.id);
     setMoveError(null);
     try {
-      await api.bookings.setStatus(booking.id, status);
+      // The same redemption the door scanner performs; a status write would
+      // leave the pass live and the arrival unrecorded.
+      if (status === "CHECKED_IN") await checkInBooking(booking.id);
+      else await api.bookings.setStatus(booking.id, status);
       list.reload();
     } catch (err) {
-      setMoveError(err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not update"));
+      if (isEarlyArrival(err)) setEarlyTarget(booking);
+      else setMoveError(err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not update"));
     } finally {
       setMoving(null);
     }
@@ -386,12 +401,8 @@ function Today() {
                           >
                             {moving === booking.id ? (
                               <Loader2 className="size-3.5 animate-spin" />
-                            ) : status === "CHECKED_IN" ? (
-                              "Arrived"
-                            ) : status === "COMPLETED" ? (
-                              "Done"
                             ) : (
-                              "No-show"
+                              STATUS_ACTION[status]
                             )}
                           </Button>
                         ))}
@@ -405,6 +416,17 @@ function Today() {
 
         </CardContent>
       </Card>
+
+      {earlyTarget && (
+        <EarlyArrivalDialog
+          booking={earlyTarget}
+          onClose={() => setEarlyTarget(null)}
+          onDone={() => {
+            setEarlyTarget(null);
+            list.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

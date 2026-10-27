@@ -47,12 +47,14 @@ import {
   shortDate,
 } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { checkInBooking, isEarlyArrival } from "@/lib/check-in";
 import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
+import { EarlyArrivalDialog } from "@/components/app/early-arrival-dialog";
 import { useAuth } from "@/auth/AuthProvider";
 
 const RANGE_DAYS = 7;
@@ -852,9 +854,9 @@ function RecentBookings({
  */
 const PRIMARY_MOVE: Partial<Record<BookingStatus, { to: BookingStatus; label: string }>> = {
   PENDING: { to: "CONFIRMED", label: "Confirm" },
-  CONFIRMED: { to: "CHECKED_IN", label: "Arrived" },
-  CHECKED_IN: { to: "IN_SERVICE", label: "Seated" },
-  IN_SERVICE: { to: "COMPLETED", label: "Done" },
+  CONFIRMED: { to: "CHECKED_IN", label: "Check in" },
+  CHECKED_IN: { to: "IN_SERVICE", label: "Seat" },
+  IN_SERVICE: { to: "COMPLETED", label: "Complete" },
 };
 
 /**
@@ -1012,7 +1014,7 @@ function NewRequests({ onChanged }: { onChanged: () => void }) {
 }
 
 function RunSheet({ name }: { name: string }) {
-  const { role } = useAuth();
+  const { role, can } = useAuth();
   const today = branchToday();
 
   const list = useAsync(`overview:runsheet:${today}`, async () =>
@@ -1029,17 +1031,22 @@ function RunSheet({ name }: { name: string }) {
 
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<ApiError | null>(null);
+  const [earlyTarget, setEarlyTarget] = React.useState<Booking | null>(null);
 
   async function advance(booking: Booking, status: BookingStatus) {
     setBusyId(booking.id);
     setActionError(null);
     try {
-      await api.bookings.setStatus(booking.id, status);
+      // Admitting a guest is the pass redemption, not a status write.
+      if (status === "CHECKED_IN") await checkInBooking(booking.id);
+      else await api.bookings.setStatus(booking.id, status);
       list.reload();
     } catch (err) {
-      setActionError(
-        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not move that booking"),
-      );
+      if (isEarlyArrival(err)) setEarlyTarget(booking);
+      else
+        setActionError(
+          err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not move that booking"),
+        );
     } finally {
       setBusyId(null);
     }
@@ -1208,8 +1215,13 @@ function RunSheet({ name }: { name: string }) {
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/80 bg-sand-50 px-5 py-4">
         <p className="text-[12.5px] text-muted-foreground">
           A guest's pass is scanned at the door from{" "}
-          <Link to="/app/check-in" className="font-medium text-primary hover:underline">
-            QR Check-in
+          {/* The desk lost the QR board; the floor kept it. Point each role at
+              the door it actually has rather than at a page it cannot open. */}
+          <Link
+            to={can("check-in") ? "/app/check-in" : "/app/scan-arrivals"}
+            className="font-medium text-primary hover:underline"
+          >
+            {can("check-in") ? "QR Check-in" : "Scan arrival pass"}
           </Link>
           .
         </p>
@@ -1224,6 +1236,17 @@ function RunSheet({ name }: { name: string }) {
           )}
         </div>
       </div>
+
+      {earlyTarget && (
+        <EarlyArrivalDialog
+          booking={earlyTarget}
+          onClose={() => setEarlyTarget(null)}
+          onDone={() => {
+            setEarlyTarget(null);
+            list.reload();
+          }}
+        />
+      )}
     </div>
   );
 }

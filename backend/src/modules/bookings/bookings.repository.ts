@@ -62,6 +62,24 @@ const NOTE_SELECT = "id, booking_id, author_id, body, visible_to_client, created
 const DETAIL_SELECT =
   "id, reference, status, start_time, end_time, employee_id, employee_name, client_id, client_name, guest_name, guest_phone, subtotal_cents, discount_cents, total_cents, promo_code_id, notes, created_at, updated_at, room_id, room_name, room_type, member_discount_percent, service_ids" as const;
 
+/**
+ * Client ids whose name, phone or email contains the term.
+ *
+ * Capped: a two-letter term can match most of the book, and an unbounded
+ * `in.()` would put a URL-sized list on the wire. Fifty is far more than any
+ * one desk search needs to disambiguate.
+ */
+async function clientIdsMatching(term: string, limit = 50): Promise<string[]> {
+  const safe = term.replace(/[%_\\]/g, (m) => `\\${m}`);
+  const { data, error } = await requireServiceRole()
+    .from("clients")
+    .select("id")
+    .or(`full_name.ilike.%${safe}%,phone.ilike.%${safe}%,email.ilike.%${safe}%`)
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []).map((row: { id: string }) => row.id);
+}
+
 export const bookingsRepository = {
   async getById(id: string): Promise<BookingDetailRow | null> {
     const db = requireServiceRole();
@@ -130,7 +148,27 @@ export const bookingsRepository = {
     if (query.to) q = q.lte("start_time", `${query.to}T23:59:59Z`);
     if (query.q) {
       const safe = query.q.replace(/[%_\\]/g, (m) => `\\${m}`);
-      q = q.or(`reference.ilike.%${safe}%,client_name.ilike.%${safe}%,guest_name.ilike.%${safe}%`);
+
+      /*
+       * The bar says "client, guest, or reference" and used to search only the
+       * names on the booking. The desk knows people by the number they rang
+       * from, and by the address they gave when they made an account - neither
+       * of which is on the booking row. So the client book is asked first for
+       * the ids that match, and those ids join the same OR. One extra round
+       * trip, only while a term is typed, and it keeps the search to a single
+       * count so pagination stays correct.
+       */
+      const clauses = [
+        `reference.ilike.%${safe}%`,
+        `client_name.ilike.%${safe}%`,
+        `guest_name.ilike.%${safe}%`,
+        `guest_phone.ilike.%${safe}%`,
+      ];
+      const clientIds = await clientIdsMatching(query.q);
+      // An empty `in.()` is a syntax error, not "no rows".
+      if (clientIds.length > 0) clauses.push(`client_id.in.(${clientIds.join(",")})`);
+
+      q = q.or(clauses.join(","));
     }
 
     const { data, error, count } = await q

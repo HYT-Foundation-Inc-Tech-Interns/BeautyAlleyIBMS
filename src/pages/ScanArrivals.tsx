@@ -44,12 +44,14 @@ import {
 } from "lucide-react";
 
 import { api, ApiError } from "@/lib/api";
-import type { Booking } from "@/lib/api-types";
+import { checkInBooking, isEarlyArrival } from "@/lib/check-in";
+import type { Booking, CheckInResult } from "@/lib/api-types";
 import { branchDay, branchTime, peso } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { PageHeader, Panel } from "@/components/app/bits";
 import { CameraScanner } from "@/components/app/camera-scanner";
+import { EarlyArrivalDialog } from "@/components/app/early-arrival-dialog";
 
 /* ------------------------------------------------------------------ *
  * Reading the code
@@ -226,6 +228,8 @@ function ReservationCard({ booking, verdict }: { booking: Booking; verdict: Verd
 export default function ScanArrivals() {
   const { me } = useAuth();
   const [state, setState] = React.useState<ScanState>({ kind: "idle" });
+  /* A guest who arrived before their pass opened, held for the override. */
+  const [earlyTarget, setEarlyTarget] = React.useState<Booking | null>(null);
   const [manual, setManual] = React.useState("");
   const busy = state.kind === "working";
 
@@ -307,17 +311,7 @@ export default function ScanArrivals() {
     try {
       // Re-issue the pass for this booking, then redeem it. The desk is
       // authorised to do both; the guest's own pass is unaffected.
-      const qr = await api.bookings.qr(booking.id);
-      if (!qr.pass) {
-        setState({
-          kind: "refused",
-          label: "Already Checked In",
-          note: "This reservation has already been checked in — there is no live pass left to redeem.",
-        });
-        return;
-      }
-
-      const result = await api.qr.checkIn(qr.pass);
+      const result = await checkInBooking(booking.id);
       const fresh = await api.bookings.get(booking.id);
       setState({
         kind: "confirmed",
@@ -326,6 +320,12 @@ export default function ScanArrivals() {
         by: me?.fullName || me?.email || "the desk",
       });
     } catch (err) {
+      // Not a refusal: the desk gets to decide whether the window applies.
+      if (isEarlyArrival(err)) {
+        setEarlyTarget(booking);
+        setState({ kind: "reservation", booking, verdict: judge(booking, todayKey()) });
+        return;
+      }
       const code = err instanceof ApiError ? err.code : "";
       const label =
         code === "ALREADY_CHECKED_IN"
@@ -334,9 +334,7 @@ export default function ScanArrivals() {
             ? "Expired or Ineligible"
             : code === "QR_EXPIRED"
               ? "Expired or Ineligible"
-              : code === "QR_TOO_EARLY"
-                ? "Expired or Ineligible"
-                : code === "QR_TOO_LATE"
+              : code === "QR_TOO_LATE"
                   ? "Expired or Ineligible"
                   : code === "QR_INVALID"
                     ? "Invalid QR Code"
@@ -544,6 +542,22 @@ export default function ScanArrivals() {
           </li>
         </ul>
       </Panel>
+
+      {earlyTarget && (
+        <EarlyArrivalDialog
+          booking={earlyTarget}
+          onClose={() => setEarlyTarget(null)}
+          onDone={(result: CheckInResult) => {
+            setEarlyTarget(null);
+            setState({
+              kind: "confirmed",
+              booking: { ...earlyTarget, status: "CHECKED_IN" },
+              checkedInAt: result.checkedInAt,
+              by: me?.fullName || me?.email || "the desk",
+            });
+          }}
+        />
+      )}
     </div>
   );
 }

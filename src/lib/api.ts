@@ -415,6 +415,18 @@ export const api = {
     get: (id: string) => request<Employee>("GET", `/api/v1/employees/${id}`, { auth: false }),
 
     /**
+     * Retire a stylist or bring them back. Admin only — the owner re-rosters.
+     *
+     * Deactivating is a soft delete: the row stays, so every booking they
+     * worked still names them, but the booking engine stops offering them and
+     * the roster hides them unless "Showing deactivated" is on.
+     */
+    update: (
+      id: string,
+      body: { fullName?: string; title?: string; bio?: string; profileId?: string; isActive?: boolean },
+    ) => request<Employee>("PATCH", `/api/v1/employees/${id}`, { body }),
+
+    /**
      * One stylist's progress against the daily quota. `date` is a plain
      * `YYYY-MM-DD` in the branch timezone; omit it for today. OPERATIONS, so a
      * stylist can read their own.
@@ -470,8 +482,12 @@ export const api = {
   qr: {
     branch: () => request<BranchQr>("GET", "/api/v1/qr/branch"),
 
-    checkIn: (pass: string) =>
-      request<CheckInResult>("POST", "/api/v1/qr/check-in", { body: { pass } }),
+    /**
+     * Redeem a pass. `force` admits the guest ahead of the arrival window —
+     * staff only, and recorded in the audit trail as an override.
+     */
+    checkIn: (pass: string, force = false) =>
+      request<CheckInResult>("POST", "/api/v1/qr/check-in", { body: { pass, force } }),
   },
 
   attendance: {
@@ -723,6 +739,24 @@ export const STATUS_LABEL: Record<BookingStatus, string> = {
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
   NO_SHOW: "No show",
+};
+
+/**
+ * What a button that *moves* a booking to a status says.
+ *
+ * A badge reports where the booking is ("Checked in"); a button offers what
+ * happens if you press it ("Check in"). Using the badge wording on the button
+ * reads as though the thing already happened, which is exactly the moment a
+ * person hesitates over whether they still need to do something.
+ */
+export const STATUS_ACTION: Record<BookingStatus, string> = {
+  PENDING: "Mark pending",
+  CONFIRMED: "Confirm",
+  CHECKED_IN: "Check in",
+  IN_SERVICE: "Start service",
+  COMPLETED: "Complete",
+  CANCELLED: "Cancel",
+  NO_SHOW: "No-show",
 };
 
 export type StatusTone = "default" | "secondary" | "outline" | "success" | "warning" | "destructive";

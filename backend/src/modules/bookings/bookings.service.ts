@@ -126,12 +126,45 @@ function toNoteDto(row: BookingNoteRow) {
  * number. Sending a token therefore never *reduces* your rights.
  */
 function canAccessBooking(
-  row: { client_id: string | null },
+  row: { client_id: string | null; employee_id: string },
   actor?: Actor
 ): boolean {
+  /*
+   * The floor reads its own chair, and only its own chair. `isStaff` below
+   * would let an employee open any booking in the branch - that is the desk's
+   * view, not theirs. A stylist has no reason to read a colleague's client and
+   * every reason not to, so the check comes first.
+   */
+  if (actor?.role === "EMPLOYEE") {
+    return Boolean(actor.employeeId) && row.employee_id === actor.employeeId;
+  }
   if (isStaff(actor)) return true;
   if (row.client_id === null) return true; // guest booking - the uuid is the capability
   return !!actor?.clientId && row.client_id === actor.clientId;
+}
+
+/**
+ * The employee filter a caller is allowed to use on the list.
+ *
+ * The desk and the owner read the whole branch; a stylist reads their own
+ * chair. The scope is applied from the token, never trusted from the query
+ * string - `?employeeId=<a colleague>` must not be a one-line way around the
+ * rule - and naming a colleague is refused rather than quietly rewritten, so a
+ * stale id left in a link surfaces as a 403 instead of a page that looks like
+ * "no bookings today".
+ */
+function scopeEmployee(actor: Actor | undefined, requestedId?: string): string | undefined {
+  if (actor?.role !== "EMPLOYEE") return requestedId;
+  if (!actor.employeeId) {
+    throw AppError.forbidden(
+      CODES.FORBIDDEN,
+      "This account is not linked to an employee record, so it has no chair to show"
+    );
+  }
+  if (requestedId && requestedId !== actor.employeeId) {
+    throw AppError.forbidden(CODES.FORBIDDEN, "You can only read your own bookings");
+  }
+  return actor.employeeId;
 }
 
 export const bookingsService = {
@@ -262,8 +295,9 @@ export const bookingsService = {
     return toBookingDto(row, items);
   },
 
-  async list(query: ListBookingsQuery) {
-    const { rows, total } = await bookingsRepository.list(query);
+  async list(query: ListBookingsQuery, actor?: Actor) {
+    const scoped = { ...query, employeeId: scopeEmployee(actor, query.employeeId) };
+    const { rows, total } = await bookingsRepository.list(scoped);
     const items = await bookingsRepository.itemsForMany(rows.map((r) => r.id));
     return paginated(
       rows.map((r) => toBookingDto(r, items.get(r.id) ?? [])),
@@ -421,10 +455,19 @@ export const bookingsService = {
   /**
    * Staff status change. The database trigger owns the legality of the
    * transition - this only checks that the caller is allowed to attempt it.
+   *
+   * "Allowed" is the same rule as reading the booking: the desk and the owner
+   * move any reservation in the branch, an employee moves their own. Without
+   * it, the list scope would be a pane of glass - the floor could not *see* a
+   * colleague's booking but could still advance it if it knew the id.
    */
   async updateStatus(id: string, status: BookingStatus, actor: Actor) {
     const row = await bookingsRepository.getById(id);
     if (!row) throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
+    /* Same 404 as a stranger gets: a guessed id must not confirm it exists. */
+    if (!canAccessBooking(row, actor)) {
+      throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
+    }
 
     // Cancelling is not a status write. It has to stamp `cancelled_at`, revoke
     // the pass, release the promo and write its own audit row - all of which
@@ -485,7 +528,7 @@ export const bookingsService = {
    * database decides. Both steps are required: the signature proves we issued
    * the pass, the row proves it has not been revoked or already used.
    */
-  async checkIn(pass: string, actor: Actor) {
+  async checkIn(pass: string, actor: Actor, force = false) {
     const verified = verifyQrPass(pass);
     if (!verified.ok) {
       const map = {
@@ -500,12 +543,19 @@ export const bookingsService = {
     // to mark themselves arrived would defeat the point of a desk check-in.
     const staffId = actor.employeeId ?? null;
 
+    // `force` follows the same rule as the cancellation override: any member
+    // of staff may use it, because the route already restricts this to
+    // OPERATIONS, and the audit row names the account that did. The person
+    // standing in front of the guest is the one who can judge whether the
+    // window applies — not a role table three files away.
+
     const db = requireServiceRole();
     const { data, error } = await db.rpc("check_in_booking", {
       p_jti: verified.payload.jti,
       p_staff_id: staffId,
       p_actor: actor.id,
       p_window_minutes: env.qrCheckinWindowMinutes,
+      p_force: force,
     });
     if (error) throw error;
 
@@ -520,6 +570,7 @@ export const bookingsService = {
       status: string;
       checkedInAt: string;
       checkinId: string;
+      early: boolean;
     };
     return { ...result, checkedInAt: iso(result.checkedInAt) };
   },

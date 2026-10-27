@@ -90,14 +90,19 @@ export const SCOPE: Record<Role, Area[]> = {
     "board",
   ],
   /*
-   * The desk owns the front of house: the run sheet, the door, the arrival
-   * scanner, and the task board it writes work onto. It proposes promo codes
-   * for the administrator to approve.
+   * The desk owns the front of house: the run sheet, the arrival scanner, and
+   * the task board it writes work onto. It proposes promo codes for the
+   * administrator to approve.
    *
    * It does not get attendance any more: a clock is a person's own record, so
    * only the employee and the administrator (monitoring) see that screen.
+   *
+   * It does not get `check-in` either: recording that a guest has arrived is
+   * the stylist's act, on the chair they are about to work. The desk still has
+   * `scan-arrivals`, which is the deliberate lookup-and-confirm version - see
+   * the note in the EMPLOYEE block below.
    */
-  CONCIERGE: ["overview", "bookings", "promos", "check-in", "scan-arrivals", "tasks"],
+  CONCIERGE: ["overview", "bookings", "promos", "scan-arrivals", "tasks"],
   /*
    * The floor gets its own two screens — the work assigned to it and its own
    * clock — plus the run sheet and the door. It deliberately does NOT get the
@@ -118,7 +123,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const ROLE_BLURB: Record<Role, string> = {
   ADMIN: "Full access — bookings, clients, promos and team",
-  CONCIERGE: "The desk — reception, run sheet and check-in",
+  CONCIERGE: "The desk — reception, the run sheet and client records",
   EMPLOYEE: "The floor — your chair, the run sheet and the door",
   CLIENT: "Your appointments and arrival passes",
 };

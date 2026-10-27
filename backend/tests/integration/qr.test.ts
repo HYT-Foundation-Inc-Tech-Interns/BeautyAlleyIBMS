@@ -191,6 +191,8 @@ describeQr("QR check-in", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe("CHECKED_IN");
+      // Inside the window, so nothing was overridden.
+      expect(res.body.data.early).toBe(false);
 
       const { rows } = await db().query(`select status from public.bookings where id = $1`, [bookingId]);
       expect(rows[0].status).toBe("CHECKED_IN");
@@ -227,6 +229,72 @@ describeQr("QR check-in", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("QR_TOO_EARLY");
+    });
+
+    /*
+     * The desk's exception, and the reason it moved into this function: before
+     * it, admitting an early guest meant writing CHECKED_IN directly, which
+     * left the pass live, wrote no checkins row and recorded nothing about who
+     * decided it. Here the same override goes through the one path that does
+     * all three, so the arrival time and the person behind it are both real.
+     */
+    it("admits an early guest when the desk overrides the window", async () => {
+      const staff = await createTestStaff(EMP_ANA);
+      created.push(staff);
+
+      const { pass, bookingId } = await placeBooking({ startInMinutes: 180 });
+
+      const res = await request(api())
+        .post("/api/v1/qr/check-in")
+        .set(...as(staff.token))
+        .send({ pass, force: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe("CHECKED_IN");
+      expect(res.body.data.early).toBe(true);
+
+      const booking = await db().query(`select status from public.bookings where id = $1`, [
+        bookingId,
+      ]);
+      expect(booking.rows[0].status).toBe("CHECKED_IN");
+
+      const checkins = await db().query(
+        `select staff_id from public.checkins where booking_id = $1`,
+        [bookingId]
+      );
+      expect(checkins.rows).toHaveLength(1);
+      // The check-in names the employee whose account pressed the button; the
+      // audit row names the account itself.
+      expect(checkins.rows[0].staff_id).toBe(EMP_ANA);
+
+      const audit = await db().query(
+        `select metadata from public.audit_logs
+          where action = 'booking.checked_in' and entity_id = $1 and actor_id = $2`,
+        [bookingId, staff.id]
+      );
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0].metadata.early).toBe(true);
+      expect(audit.rows[0].metadata.overridden).toBe(true);
+    });
+
+    /*
+     * Force skips the early check only. A guest who arrives after the
+     * appointment has ended is a no-show, which is a different decision with
+     * its own record - so the flag must not become a skeleton key.
+     */
+    it("does not let the override admit a guest after the appointment ended", async () => {
+      const staff = await createTestStaff(EMP_ANA);
+      created.push(staff);
+
+      const { pass } = await placeBooking({ startInMinutes: -180, durationMinutes: 60 });
+
+      const res = await request(api())
+        .post("/api/v1/qr/check-in")
+        .set(...as(staff.token))
+        .send({ pass, force: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("QR_TOO_LATE");
     });
 
     it("refuses a pass scanned after the appointment has ended", async () => {

@@ -65,9 +65,10 @@ bookingsRouter.post(
 );
 
 // --- the run sheet ---------------------------------------------------------
-// Everyone who works the floor reads it: the desk to answer the phone, the
-// therapist to know what is next. Scoping an employee to only their own rows
-// is a presentation decision the dashboards make, not a gate here.
+// Everyone who works the floor reads it, but not the same rows: the desk and
+// the owner read the branch, and an employee reads their own chair. That scope
+// is applied in the service from the token, not from `?employeeId` - see
+// `scopeEmployee` in bookings.service.ts.
 bookingsRouter.get(
   "/",
   authenticate,
@@ -109,7 +110,12 @@ bookingsRouter.get(
 
 // --- status machine --------------------------------------------------------
 // The desk checks a client in; the therapist starts and finishes the service.
-// Both halves of the same walk-in, so both roles.
+// Both halves of the same walk-in, so both roles - but the therapist only on
+// their own bookings. The gate is in `updateStatus`, where the row is known.
+//
+// `POST /qr/check-in` is deliberately not part of this: admitting a guest at
+// the door is not the same act as progressing work in a chair, and a guest who
+// arrives for a colleague still has to be let in by whoever is at the door.
 bookingsRouter.patch(
   "/:id/status",
   authenticate,

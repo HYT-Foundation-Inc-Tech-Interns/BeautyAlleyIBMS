@@ -27,7 +27,9 @@ import { Link } from "react-router-dom";
 import {
   GripVertical,
   LayoutGrid,
+  Loader2,
   Lock,
+  RefreshCw,
   RotateCcw,
   Sparkles,
   Unlock,
@@ -149,6 +151,9 @@ function useBoardData(days: number): {
   data: BoardData | null;
   error: ApiError | null;
   initial: boolean;
+  loading: boolean;
+  /** When the numbers on screen were last read, as an instant. */
+  updatedAt: string | null;
   reload: () => void;
 } {
   const to = branchToday();
@@ -170,10 +175,22 @@ function useBoardData(days: number): {
     } satisfies BoardData;
   });
 
+  /*
+   * A refresh that finds the same numbers is indistinguishable from a refresh
+   * that never ran, and that is exactly how "Refresh does nothing" gets
+   * reported. The timestamp is the receipt: it moves whenever a read lands.
+   */
+  const [updatedAt, setUpdatedAt] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (state.data) setUpdatedAt(new Date().toISOString());
+  }, [state.data]);
+
   return {
     data: state.data,
     error: state.error,
     initial: state.initial,
+    loading: state.loading,
+    updatedAt,
     reload: state.reload,
   };
 }
@@ -716,6 +733,8 @@ export default function Board() {
   const [editable, setEditable] = React.useState(true);
 
   const board = useBoardData(days);
+  /* Only a re-read counts as "refreshing"; the first load has its own skeleton. */
+  const refreshing = board.loading && board.updatedAt !== null;
 
   const [items, setItems] = React.useState<BoardWidget[]>(() => {
     // Only trust a stored layout whose tiles still exist — a renamed kind
@@ -811,9 +830,23 @@ export default function Board() {
           <Sparkles className="size-4 text-champagne-500" />
           {firstName ? `Good day, ${firstName}` : "Signed in"} · {items.length} tiles
         </span>
-        <Button variant="ghost" size="sm" className="ml-auto h-7" onClick={board.reload}>
-          Refresh
-        </Button>
+        <span className="ml-auto inline-flex items-center gap-3">
+          {board.updatedAt && (
+            <span className="text-[11.5px] text-muted-foreground/80">
+              Updated {branchTime(board.updatedAt)}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7"
+            onClick={board.reload}
+            disabled={board.loading}
+          >
+            {refreshing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+        </span>
       </div>
 
       {board.error ? (

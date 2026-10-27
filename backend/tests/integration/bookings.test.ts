@@ -1,5 +1,14 @@
 import request from "supertest";
-import { api, as, createTestAdmin, createTestClient, createTestConcierge, deleteTestUsers, type TestUser } from "../helpers/api";
+import {
+  api,
+  as,
+  createTestAdmin,
+  createTestClient,
+  createTestConcierge,
+  createTestStaff,
+  deleteTestUsers,
+  type TestUser,
+} from "../helpers/api";
 import { connectDb, db, disconnectDb } from "../helpers/db";
 import { ISO, SLOT_BANDS, nextWorkingSlot, shiftHours, useSlotBand } from "../helpers/time";
 
@@ -517,6 +526,126 @@ describeBookings("bookings", () => {
       expect(res.status).toBe(200);
       expect(res.body.data.booking.status).toBe("CANCELLED");
     });
+
+    /*
+     * The console's Cancel button sends exactly this: a signed-in
+     * administrator, a reason, and `force` — the desk may cancel inside the
+     * window, so the flag is always on. The two tests above cover the window
+     * rule; this one covers the path the button actually takes on an ordinary
+     * future booking, including what is left on the record afterwards.
+     */
+    it("lets an admin cancel a guest's booking and keeps the reason", async () => {
+      const admin = await createTestAdmin();
+      created.push(admin);
+
+      const slot = nextWorkingSlot(20, 10);
+      const placed = await request(api())
+        .post("/api/v1/bookings")
+        .send({
+          serviceIds: [SVC_MASSAGE],
+          employeeId: EMP_ANA,
+          startTime: ISO(slot),
+          guest: { name: "Admin Cancel", phone: "+639170000026" },
+        });
+      expect(placed.status).toBe(201);
+      const bookingId = placed.body.data.id;
+
+      const res = await request(api())
+        .post(`/api/v1/bookings/${bookingId}/cancel`)
+        .set(...as(admin.token))
+        .send({ reason: "Guest called the salon", force: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.booking.status).toBe("CANCELLED");
+
+      // The reason is on the row, not just in the response body.
+      const row = await db().query(
+        `select status, cancellation_reason, cancelled_at
+           from public.bookings where id = $1`,
+        [bookingId]
+      );
+      expect(row.rows[0].status).toBe("CANCELLED");
+      expect(row.rows[0].cancellation_reason).toBe("Guest called the salon");
+      expect(row.rows[0].cancelled_at).not.toBeNull();
+
+      // The trail names the administrator, and records that the window was
+      // overridden — an audit entry that said "cancelled" without saying
+      // "forced" would hide the one fact that matters here.
+      const audit = await db().query(
+        `select metadata from public.audit_logs
+          where action = 'booking.cancelled' and entity_id = $1 and actor_id = $2`,
+        [bookingId, admin.id]
+      );
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0].metadata.forced).toBe(true);
+      expect(audit.rows[0].metadata.reason).toBe("Guest called the salon");
+
+      // And the guest's pass stops working.
+      const qr = await request(api()).get(`/api/v1/bookings/${bookingId}/qr`);
+      expect(qr.status).toBe(400);
+      expect(qr.body.error.code).toBe("QR_INVALID");
+    });
+
+    /*
+     * A stale row in the console is the ordinary way this happens: the desk
+     * cancels, the list has not refreshed, and the button is pressed again.
+     * The second press must be a plain refusal — not a rewrite of the record,
+     * not a second audit entry, and not a 500 out of the state machine.
+     */
+    it("refuses a second admin cancel of the same booking", async () => {
+      const admin = await createTestAdmin();
+      created.push(admin);
+
+      const slot = nextWorkingSlot(21, 10);
+      const placed = await request(api())
+        .post("/api/v1/bookings")
+        .send({
+          serviceIds: [SVC_MASSAGE],
+          employeeId: EMP_ANA,
+          startTime: ISO(slot),
+          guest: { name: "Double Admin Cancel", phone: "+639170000027" },
+        });
+      expect(placed.status).toBe(201);
+      const bookingId = placed.body.data.id;
+
+      const first = await request(api())
+        .post(`/api/v1/bookings/${bookingId}/cancel`)
+        .set(...as(admin.token))
+        .send({ reason: "Guest called the salon", force: true });
+      expect(first.status).toBe(200);
+
+      const before = await db().query(
+        `select cancelled_at from public.bookings where id = $1`,
+        [bookingId]
+      );
+
+      const again = await request(api())
+        .post(`/api/v1/bookings/${bookingId}/cancel`)
+        .set(...as(admin.token))
+        .send({ reason: "pressed twice", force: true });
+
+      expect(again.status).toBe(409);
+      expect(again.body.error.code).toBe("ALREADY_CANCELLED");
+
+      // The first cancellation stands, untouched — the refusal happens before
+      // the row is written, so even the reason keeps its original value.
+      const after = await db().query(
+        `select status, cancellation_reason, cancelled_at
+           from public.bookings where id = $1`,
+        [bookingId]
+      );
+      expect(after.rows[0].status).toBe("CANCELLED");
+      expect(after.rows[0].cancellation_reason).toBe("Guest called the salon");
+      expect(after.rows[0].cancelled_at).toEqual(before.rows[0].cancelled_at);
+
+      // Exactly one trail entry: a refused attempt is not an event.
+      const audit = await db().query(
+        `select count(*)::int as n from public.audit_logs
+          where action = 'booking.cancelled' and entity_id = $1 and actor_id = $2`,
+        [bookingId, admin.id]
+      );
+      expect(audit.rows[0].n).toBe(1);
+    });
   });
 
   describe("rescheduling", () => {
@@ -570,6 +699,52 @@ describeBookings("bookings", () => {
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe("SLOT_TAKEN");
     });
+
+    /*
+     * A cancelled row is a record, not a plan. Moving it would put a live
+     * appointment back on a stylist's chair that nobody asked for — and would
+     * mint a fresh pass for a booking the guest has already been told is gone.
+     */
+    it("refuses to reschedule a cancelled booking", async () => {
+      const slot = nextWorkingSlot(22, 10);
+      const placed = await request(api())
+        .post("/api/v1/bookings")
+        .send({
+          serviceIds: [SVC_MASSAGE],
+          employeeId: EMP_ANA,
+          startTime: ISO(slot),
+          guest: { name: "Cancelled Mover", phone: "+639170000028" },
+        });
+      expect(placed.status).toBe(201);
+      const bookingId = placed.body.data.id;
+
+      const cancelled = await request(api())
+        .post(`/api/v1/bookings/${bookingId}/cancel`)
+        .send({ reason: "guest changed their mind" });
+      expect(cancelled.status).toBe(200);
+
+      const res = await request(api())
+        .post(`/api/v1/bookings/${bookingId}/reschedule`)
+        .send({ startTime: ISO(shiftHours(slot, 2)) });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe("INVALID_STATUS_TRANSITION");
+
+      // Nothing moved, and the pass stayed revoked.
+      const row = await db().query(
+        `select status, start_time from public.bookings where id = $1`,
+        [bookingId]
+      );
+      expect(row.rows[0].status).toBe("CANCELLED");
+      expect(new Date(row.rows[0].start_time).toISOString()).toBe(ISO(slot));
+
+      const live = await db().query(
+        `select count(*)::int as n from public.qr_tokens
+          where booking_id = $1 and revoked_at is null`,
+        [bookingId]
+      );
+      expect(live.rows[0].n).toBe(0);
+    });
   });
 
   describe("status transitions", () => {
@@ -596,6 +771,42 @@ describeBookings("bookings", () => {
 
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe("INVALID_STATUS_TRANSITION");
+    });
+
+    /*
+     * The console offers No-show on a PENDING row, so this is the transition
+     * behind that button. A guest who never arrives is a no-show before anyone
+     * confirms them — requiring a confirmation first would record an
+     * appointment the salon knows did not happen.
+     */
+    it("lets the desk record a no-show on a PENDING booking", async () => {
+      const desk = await createTestConcierge();
+      created.push(desk);
+
+      const slot = nextWorkingSlot(23, 10);
+      const placed = await request(api())
+        .post("/api/v1/bookings")
+        .send({
+          serviceIds: [SVC_MASSAGE],
+          employeeId: EMP_ANA,
+          startTime: ISO(slot),
+          guest: { name: "Never Arrived", phone: "+639170000029" },
+        });
+      expect(placed.status).toBe(201);
+      expect(placed.body.data.status).toBe("PENDING");
+
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${placed.body.data.id}/status`)
+        .set(...as(desk.token))
+        .send({ status: "NO_SHOW" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe("NO_SHOW");
+
+      // The pass stops working the moment the guest is written off.
+      const qr = await request(api()).get(`/api/v1/bookings/${placed.body.data.id}/qr`);
+      expect(qr.status).toBe(400);
+      expect(qr.body.error.code).toBe("QR_INVALID");
     });
 
     it("refuses a status change from a client", async () => {
@@ -669,6 +880,143 @@ describeBookings("bookings", () => {
       // rather than silently booked against the victim.
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("CLIENT_REQUIRED");
+    });
+  });
+
+  describe("an employee's view", () => {
+    /*
+     * The floor reads its own chair. The list used to be one branch-wide query
+     * for everyone in OPERATIONS, so a stylist could scroll every colleague's
+     * clients - the desk's view, handed to the floor.
+     *
+     * The fixtures are this suite's own employee rows: linking an account to a
+     * seeded employee would race the QR suite, which does exactly that with
+     * EMP_ANA.
+     */
+    let floorA = "";
+    let floorB = "";
+    let bookingA = "";
+    let bookingB = "";
+
+    beforeAll(async () => {
+      const emps = await db().query(
+        `insert into public.employees (full_name, title)
+         values ('__bookings_floor_a', 'Therapist'), ('__bookings_floor_b', 'Therapist')
+         returning id`
+      );
+      floorA = emps.rows[0].id;
+      floorB = emps.rows[1].id;
+    });
+
+    /*
+     * Per test, not once: the suite-wide `afterEach` deletes every row in
+     * `rawBookings`, so a booking made in `beforeAll` exists for exactly one
+     * test and every later one reads an empty list.
+     */
+    beforeEach(async () => {
+      const made = await db().query(
+        `insert into public.bookings
+           (reference, guest_name, guest_phone, employee_id, start_time, end_time, status,
+            subtotal_cents, discount_cents, total_cents)
+         values ($1, 'Floor A Guest', '+639170000031', $2, now() + interval '2 hours',
+                 now() + interval '3 hours', 'CONFIRMED', 0, 0, 0),
+                ($3, 'Floor B Guest', '+639170000032', $4, now() + interval '4 hours',
+                 now() + interval '5 hours', 'CONFIRMED', 0, 0, 0)
+         returning id`,
+        [`BA-FLOOR-A-${Date.now()}`, floorA, `BA-FLOOR-B-${Date.now()}`, floorB]
+      );
+      bookingA = made.rows[0].id;
+      bookingB = made.rows[1].id;
+      rawBookings.push(bookingA, bookingB);
+    });
+
+    afterAll(async () => {
+      await db().query(`delete from public.employees where id = any($1::uuid[])`, [[floorA, floorB]]);
+    });
+
+    it("lists only the bookings assigned to the caller", async () => {
+      const ana = await createTestStaff(floorA);
+      created.push(ana);
+
+      const res = await request(api()).get("/api/v1/bookings?limit=100").set(...as(ana.token));
+      expect(res.status).toBe(200);
+
+      const ids = res.body.data.map((b: { id: string }) => b.id);
+      expect(ids).toContain(bookingA);
+      expect(ids).not.toContain(bookingB);
+      expect(
+        res.body.data.every((b: { employee: { id: string } }) => b.employee.id === floorA)
+      ).toBe(true);
+    });
+
+    it("refuses a colleague's id in the filter rather than quietly showing their own", async () => {
+      const ana = await createTestStaff(floorA);
+      const res = await request(api())
+        .get(`/api/v1/bookings?employeeId=${floorB}`)
+        .set(...as(ana.token));
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe("FORBIDDEN");
+    });
+
+    it("404s a colleague's booking by id", async () => {
+      const ana = await createTestStaff(floorA);
+      const res = await request(api()).get(`/api/v1/bookings/${bookingB}`).set(...as(ana.token));
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("BOOKING_NOT_FOUND");
+    });
+
+    it("still gives the desk the whole branch", async () => {
+      const desk = await createTestConcierge("Floor Scope Desk");
+      created.push(desk);
+
+      const res = await request(api()).get("/api/v1/bookings?limit=100").set(...as(desk.token));
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((b: { id: string }) => b.id);
+      expect(ids).toContain(bookingA);
+      expect(ids).toContain(bookingB);
+    });
+
+    /*
+     * Reading is not the only way to leak a booking: without the same gate on
+     * the write, a stylist who knew an id could move a colleague's guest to
+     * IN_SERVICE and the list scope would have been decoration.
+     */
+    it("lets an employee advance their own booking", async () => {
+      const ana = await createTestStaff(floorA);
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${bookingA}/status`)
+        .set(...as(ana.token))
+        .send({ status: "CHECKED_IN" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe("CHECKED_IN");
+    });
+
+    it("refuses to advance a colleague's booking, and changes nothing", async () => {
+      const ana = await createTestStaff(floorA);
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${bookingB}/status`)
+        .set(...as(ana.token))
+        .send({ status: "CHECKED_IN" });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("BOOKING_NOT_FOUND");
+
+      const row = await db().query(`select status from public.bookings where id = $1`, [bookingB]);
+      expect(row.rows[0].status).toBe("CONFIRMED");
+    });
+
+    it("still lets the desk advance any booking", async () => {
+      const desk = await createTestConcierge("Floor Scope Desk");
+      const res = await request(api())
+        .patch(`/api/v1/bookings/${bookingB}/status`)
+        .set(...as(desk.token))
+        .send({ status: "CHECKED_IN" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe("CHECKED_IN");
     });
   });
 
