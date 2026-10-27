@@ -39,6 +39,7 @@ import type {
   ClientRecord,
   CreateBookingInput,
   CreatedClientAccount,
+  CreatedStaffAccount,
   Dashboard,
   Employee,
   Health,
@@ -681,7 +682,10 @@ export const api = {
       password: string;
       fullName: string;
       role: "EMPLOYEE" | "CONCIERGE" | "ADMIN";
-    }) => request<AuthUser>("POST", "/api/v1/admin/users/staff", { body }),
+      /** Written onto the roster row an EMPLOYEE login creates. */
+      title?: string;
+      bio?: string;
+    }) => request<CreatedStaffAccount>("POST", "/api/v1/admin/users/staff", { body }),
 
     /**
      * A client login, made at the desk. Allowed for ADMIN and CONCIERGE — the

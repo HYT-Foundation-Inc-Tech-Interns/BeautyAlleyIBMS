@@ -91,6 +91,15 @@ export interface LoginResult {
   session: Session;
 }
 
+/**
+ * `POST /admin/users/staff` — the login, plus the roster row an EMPLOYEE
+ * login creates with it. CONCIERGE and ADMIN accounts have no employeeId:
+ * they work the desk, not the floor.
+ */
+export interface CreatedStaffAccount extends AuthUser {
+  employeeId?: string;
+}
+
 /** `POST /admin/users/client` — the login plus the client row it was attached to. */
 export interface CreatedClientAccount {
   id: string;

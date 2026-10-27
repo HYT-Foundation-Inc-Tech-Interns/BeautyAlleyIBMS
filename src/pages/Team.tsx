@@ -113,7 +113,9 @@ export default function Team() {
         }
       />
 
-      {inviting && <InviteStaffForm onDone={() => setInviting(false)} onCancel={() => setInviting(false)} />}
+      {inviting && (
+        <InviteStaffForm onDone={roster.reload} onCancel={() => setInviting(false)} />
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatTile
@@ -330,16 +332,22 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [title, setTitle] = React.useState("");
   const [role, setRole] = React.useState<"EMPLOYEE" | "CONCIERGE" | "ADMIN">("EMPLOYEE");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<ApiError | null>(null);
   const [localErrors, setLocalErrors] = React.useState<Record<string, string>>({});
-  const [created, setCreated] = React.useState<string | null>(null);
+  const [created, setCreated] = React.useState<{ email: string; employeeId?: string } | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const next: Record<string, string> = {};
     if (!fullName.trim()) next.fullName = "A name is required";
+    // Checked here as well as on the server: a blank or malformed address came
+    // back as a validation error about a field the form had let through.
+    if (!email.trim()) next.email = "An email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      next.email = "That does not look like an email address";
     if (password.length < 8) next.password = "At least 8 characters";
     if (password.length > 72) next.password = "At most 72 characters";
     setLocalErrors(next);
@@ -348,16 +356,21 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
     setBusy(true);
     setError(null);
     try {
-      await api.admin.createStaff({
+      const account = await api.admin.createStaff({
         email: email.trim(),
         password,
         fullName: fullName.trim(),
         role,
+        title: role === "EMPLOYEE" ? title.trim() || undefined : undefined,
       });
-      setCreated(email.trim());
+      setCreated({ email: account.email ?? email.trim(), employeeId: account.employeeId });
       setFullName("");
       setEmail("");
       setPassword("");
+      setTitle("");
+      // The roster is behind this form and has just changed; reload it now
+      // rather than leaving the admin to wonder why the new name is not there.
+      onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not create the account"));
     } finally {
@@ -389,10 +402,10 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
         <div className="mt-4 flex items-start gap-3 rounded-lg border border-alley-200 bg-alley-50 px-4 py-3">
           <BadgeCheck className="mt-0.5 size-4 shrink-0 text-alley-700" />
           <p className="text-[12.5px] text-alley-700">
-            <span className="font-medium">{created}</span> now has a{" "}
+            <span className="font-medium">{created.email}</span> now has a{" "}
             {ROLE_LABEL[role].toLowerCase()} account.{" "}
-            {role === "EMPLOYEE"
-              ? "Link it to an employee row to attribute check-ins to them."
+            {created.employeeId
+              ? "They are on the roster below — add their qualifications so the booking engine can offer them."
               : "No employee row is needed — a concierge works the desk, not the floor."}
           </p>
         </div>
@@ -448,6 +461,18 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
           </div>
         </div>
       </div>
+
+      {role === "EMPLOYEE" && (
+        <div className="mt-4 max-w-[320px]">
+          <TextField
+            label="Title (optional)"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Senior therapist"
+            error={fieldErrors.title}
+          />
+        </div>
+      )}
 
       <div className="mt-5 flex items-center gap-3">
         <Button type="submit" disabled={busy}>

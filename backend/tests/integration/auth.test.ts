@@ -255,7 +255,13 @@ describeAuth("auth", () => {
       const res = await request(api())
         .post("/api/v1/admin/users/staff")
         .set(...as(admin.token))
-        .send({ email, password: "StaffPass123!", fullName: "New Employee", role: "EMPLOYEE" });
+        .send({
+          email,
+          password: "StaffPass123!",
+          fullName: "New Employee",
+          role: "EMPLOYEE",
+          title: "Therapist",
+        });
 
       expect(res.status).toBe(201);
 
@@ -264,6 +270,24 @@ describeAuth("auth", () => {
       ]);
       expect(rows[0].role).toBe("EMPLOYEE");
 
+      /*
+       * The account is also a roster row. Without it the login exists and
+       * nobody on the floor does: the roster never grew, and the admin who
+       * "created an employee" had in fact created a profile.
+       */
+      expect(res.body.data.employeeId).toEqual(expect.any(String));
+      const employee = await db().query(
+        `select full_name, title, profile_id from public.employees where id = $1`,
+        [res.body.data.employeeId]
+      );
+      expect(employee.rowCount).toBe(1);
+      expect(employee.rows[0]).toMatchObject({
+        full_name: "New Employee",
+        title: "Therapist",
+        profile_id: res.body.data.id,
+      });
+
+      await db().query(`delete from public.employees where id = $1`, [res.body.data.employeeId]);
       await db().query(`delete from auth.users where id = $1`, [res.body.data.id]);
     });
 
@@ -283,6 +307,10 @@ describeAuth("auth", () => {
         res.body.data.id,
       ]);
       expect(rows[0].role).toBe("CONCIERGE");
+
+      // The desk is not the floor: no roster row, so no phantom stylist with
+      // no qualifications turning up in availability.
+      expect(res.body.data.employeeId).toBeUndefined();
 
       await db().query(`delete from auth.users where id = $1`, [res.body.data.id]);
     });

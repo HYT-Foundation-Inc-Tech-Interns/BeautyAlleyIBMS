@@ -9,6 +9,7 @@ import type {
   ResetClientPasswordInput,
 } from "./auth.schemas";
 import { clientsRepository } from "../clients/clients.repository";
+import { employeesRepository } from "../employees/employees.repository";
 import type { Actor } from "../../types/actor";
 
 /**
@@ -200,7 +201,56 @@ export const authService = {
       input.fullName,
       input.role
     );
-    logger.info("auth.staff_created", { userId, role: input.role, by: actor.id });
-    return { id: userId, email: input.email, role: input.role, fullName: input.fullName };
+
+    /*
+     * An EMPLOYEE account is also a roster row.
+     *
+     * The account alone only writes `profiles`, and nothing on the floor reads
+     * that: a stylist who exists only there cannot be rostered, assigned,
+     * qualified or clocked in, so "issue a team login" looked like it had
+     * created nobody - the roster stayed exactly as it was. The row is written
+     * here, linked by profile_id, and if it fails the account goes with it.
+     * That is the same rule the client path follows: a login that leads
+     * nowhere is worse than no login, and the email would be taken by the time
+     * the admin retried.
+     *
+     * CONCIERGE and ADMIN deliberately get no row: they work the desk and the
+     * books, not the floor, and a phantom stylist with no qualifications would
+     * show up in every roster and availability list.
+     */
+    if (input.role !== "EMPLOYEE") {
+      logger.info("auth.staff_created", { userId, role: input.role, by: actor.id });
+      return { id: userId, email: input.email, role: input.role, fullName: input.fullName };
+    }
+
+    try {
+      const employee = await employeesRepository.create(
+        {
+          fullName: input.fullName,
+          title: input.title,
+          bio: input.bio,
+          profileId: userId,
+          isActive: true,
+          serviceIds: [],
+        },
+        actor.id
+      );
+      logger.info("auth.staff_created", {
+        userId,
+        employeeId: employee.id,
+        role: input.role,
+        by: actor.id,
+      });
+      return {
+        id: userId,
+        email: input.email,
+        role: input.role,
+        fullName: input.fullName,
+        employeeId: employee.id,
+      };
+    } catch (err) {
+      await authRepository.deleteUser(userId).catch(() => undefined);
+      throw err;
+    }
   },
 };
