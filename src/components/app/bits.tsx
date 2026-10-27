@@ -199,12 +199,20 @@ export function PageHeader({
       <div className="relative z-10 flex flex-wrap items-start justify-between gap-5">
         <div className="flex min-w-0 items-start gap-4">
           {Icon && (
-            <span className="hidden size-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/[0.08] text-primary-foreground sm:flex">
+            <span className="hidden size-11 shrink-0 items-center justify-center rounded-xl border border-champagne-300/25 bg-white/[0.07] text-champagne-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:flex">
               <Icon className="size-5" />
             </span>
           )}
           <div className="min-w-0">
-            {eyebrow && <p className="eyebrow text-primary-foreground/55">{eyebrow}</p>}
+            {eyebrow && (
+              /* Gold rule then the label — the poster's crest line, one size
+                 down. It costs six pixels and makes the band look composed
+                 rather than like a heading that happens to sit on green. */
+              <p className="flex items-center gap-2.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-champagne-300/85">
+                <span aria-hidden className="h-px w-6 bg-champagne-300/50" />
+                {eyebrow}
+              </p>
+            )}
             <h1 className="mt-1.5 font-display text-[24px] font-semibold leading-tight tracking-tight text-primary-foreground sm:text-[27px]">
               {title}
             </h1>
@@ -218,7 +226,13 @@ export function PageHeader({
         </div>
 
         {actions && (
-          <div className="flex flex-wrap items-center gap-2 sm:mt-1 [&_[data-variant=default]]:bg-primary-foreground [&_[data-variant=default]]:text-sidebar [&_[data-variant=default]]:hover:bg-white [&_[data-variant=ghost]]:text-primary-foreground/75 [&_[data-variant=ghost]]:hover:bg-white/[0.12] [&_[data-variant=ghost]]:hover:text-primary-foreground [&_[data-variant=outline]]:border-white/15 [&_[data-variant=outline]]:bg-white/[0.08] [&_[data-variant=outline]]:text-primary-foreground [&_[data-variant=outline]]:hover:bg-white/[0.15] [&_[data-variant=secondary]]:bg-white/[0.14] [&_[data-variant=secondary]]:text-primary-foreground [&_[data-variant=secondary]]:hover:bg-white/[0.2]">
+          /*
+           * On a green band the primary action is the gold one. A white pill
+           * was legible but generic; champagne is the colour the salon uses
+           * for every "this is the thing to do" in print, and on deep green
+           * it is also the highest-contrast button available.
+           */
+          <div className="flex flex-wrap items-center gap-2 sm:mt-1 [&_[data-variant=default]]:bg-champagne-400 [&_[data-variant=default]]:text-accent-foreground [&_[data-variant=default]]:shadow-[0_1px_0_rgba(255,255,255,0.25)_inset,0_8px_20px_-12px_rgba(0,0,0,0.6)] [&_[data-variant=default]]:hover:bg-champagne-300 [&_[data-variant=ghost]]:text-primary-foreground/75 [&_[data-variant=ghost]]:hover:bg-white/[0.12] [&_[data-variant=ghost]]:hover:text-primary-foreground [&_[data-variant=outline]]:border-white/15 [&_[data-variant=outline]]:bg-white/[0.08] [&_[data-variant=outline]]:text-primary-foreground [&_[data-variant=outline]]:hover:bg-white/[0.15] [&_[data-variant=secondary]]:bg-white/[0.14] [&_[data-variant=secondary]]:text-primary-foreground [&_[data-variant=secondary]]:hover:bg-white/[0.2]">
             {actions}
           </div>
         )}
@@ -252,7 +266,11 @@ export function StatTile({
   tone?: keyof typeof TILE_TONES;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 bg-card p-4 shadow-soft transition-transform duration-300 ease-out-quart hover:-translate-y-0.5">
+    <div className="group relative overflow-hidden rounded-xl border border-border/70 bg-card p-4 shadow-soft transition-[transform,border-color,box-shadow] duration-300 ease-out-quart hover:-translate-y-0.5 hover:border-champagne-300/70 hover:shadow-lift">
+      <span
+        aria-hidden
+        className="absolute inset-x-0 top-0 h-px origin-center scale-x-0 bg-gradient-to-r from-transparent via-champagne-400 to-transparent transition-transform duration-500 ease-out-quart group-hover:scale-x-100"
+      />
       <div className="flex items-start justify-between gap-3">
         <p className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           {label}
@@ -292,7 +310,11 @@ export function SectionHeading({
   return (
     <div className={cn("flex flex-wrap items-end justify-between gap-4", className)}>
       <div className="min-w-0">
-        {eyebrow && <p className="eyebrow mb-2">{eyebrow}</p>}
+        {eyebrow && (
+          /* Gold on ivory: the same label the hero band carries in champagne,
+           * one tone darker so it holds up on paper-white. */
+          <p className="eyebrow-gold mb-2">{eyebrow}</p>
+        )}
         <h2 className="font-display text-[26px] font-semibold leading-tight tracking-tight sm:text-[30px]">
           {title}
         </h2>
@@ -315,7 +337,7 @@ export function Panel({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border/80 bg-card shadow-soft",
+        "rounded-xl border border-border/80 bg-card shadow-soft transition-[border-color,box-shadow] duration-300 ease-out-quart hover:border-border hover:shadow-lift",
         className,
       )}
       {...props}
@@ -338,7 +360,7 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border px-6 py-14 text-center">
-      <span className="mb-4 flex size-12 items-center justify-center rounded-full bg-primary/[0.07] text-primary">
+      <span className="mb-4 flex size-12 items-center justify-center rounded-full bg-champagne-400/[0.14] text-champagne-600 ring-1 ring-champagne-300/40">
         <Icon className="size-5" />
       </span>
       <h3 className="font-display text-xl font-semibold">{title}</h3>

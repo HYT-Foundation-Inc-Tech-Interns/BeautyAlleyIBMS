@@ -18,19 +18,6 @@ export interface ProfileRow {
 }
 
 export const authRepository = {
-  async signUp(email: string, password: string, fullName: string, phone?: string) {
-    // `data` lands in raw_user_meta_data, which the handle_new_auth_user
-    // trigger reads to populate the profile. It is user-controlled, so the
-    // trigger only takes full_name and phone from it - never the role.
-    const { data, error } = await supabasePublic.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName, ...(phone ? { phone } : {}) } },
-    });
-    if (error) throw error;
-    return data;
-  },
-
   async signIn(email: string, password: string) {
     const { data, error } = await supabasePublic.auth.signInWithPassword({ email, password });
     if (error) throw error;
@@ -96,19 +83,51 @@ export const authRepository = {
     email: string,
     password: string,
     fullName: string,
-    role: Role
+    role: Role,
+    phone?: string
   ): Promise<string> {
     const db = requireServiceRole();
+    // `email_confirm: true` is what keeps Supabase from sending a
+    // confirmation mail at all. There is no public sign-up to confirm, and a
+    // link built from the project Site URL is exactly the localhost trap this
+    // used to fall into.
     const { data, error } = await db.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
       app_metadata: { role },
-      user_metadata: { full_name: fullName },
+      user_metadata: { full_name: fullName, ...(phone ? { phone } : {}) },
     });
     if (error) throw error;
     if (!data.user) throw AppError.internal("User creation returned no user");
     return data.user.id;
+  },
+
+  /**
+   * Undo a half-finished account creation.
+   *
+   * Creating a client is two writes - the auth user, then the clients row that
+   * points at it. If the second one fails the first must not be left behind:
+   * an auth user with no client row can log in and see nothing, and the email
+   * is then taken for the retry.
+   */
+  /**
+   * Set a new password for an existing account.
+   *
+   * Admin API, not a reset mail: the desk hands the new password over in
+   * person, and a recovery link would need a Site URL this deployment cannot
+   * be trusted to have right.
+   */
+  async updatePassword(userId: string, password: string) {
+    const db = requireServiceRole();
+    const { error } = await db.auth.admin.updateUserById(userId, { password });
+    if (error) throw error;
+  },
+
+  async deleteUser(id: string) {
+    const db = requireServiceRole();
+    const { error } = await db.auth.admin.deleteUser(id);
+    if (error) throw error;
   },
 
   /** Count failed sign-ins for an email inside the lockout window. */

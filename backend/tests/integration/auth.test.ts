@@ -33,63 +33,21 @@ describeAuth("auth", () => {
   });
 
   describe("POST /api/v1/auth/register", () => {
-    it("creates an account and a profile with the CLIENT role", async () => {
-      const email = `register.${Date.now()}@beautyalley.ph`;
+    /*
+     * The route is gone. It used to mint CLIENT accounts from the open
+     * internet; accounts are now created by an administrator, so the only
+     * correct behaviour from outside is "no such endpoint".
+     */
+    it("does not exist any more", async () => {
       const res = await request(api())
         .post("/api/v1/auth/register")
-        .send({ email, password: "RegisterPass123!", fullName: "Registered User" });
+        .send({
+          email: `register.${Date.now()}@beautyalley.ph`,
+          password: "RegisterPass123!",
+          fullName: "Registered User",
+        });
 
-      // 201 when it works; the project's mailer is rate-limited, so a 429 is a
-      // legitimate environment outcome rather than a code failure.
-      if (res.status === 429) return;
-
-      expect(res.status).toBe(201);
-
-      // The trigger must have mirrored the auth user into profiles.
-      const { rows } = await db().query(
-        `select role, full_name from public.profiles where id = $1`,
-        [res.body.data.user.id]
-      );
-      expect(rows).toHaveLength(1);
-      expect(rows[0].role).toBe("CLIENT");
-      expect(rows[0].full_name).toBe("Registered User");
-
-      // Clean up the account this test created.
-      await db().query(`delete from auth.users where id = $1`, [res.body.data.user.id]);
-    });
-
-    it("ignores a role supplied in the sign-up payload", async () => {
-      const email = `escalate.${Date.now()}@beautyalley.ph`;
-      const res = await request(api())
-        .post("/api/v1/auth/register")
-        .send({ email, password: "Escalate123!", fullName: "Escalator", role: "ADMIN" });
-
-      if (res.status === 429) return;
-      expect(res.status).toBe(201);
-
-      // The trigger reads the role from `app_metadata`, which a sign-up cannot
-      // write - so a self-declared ADMIN must come out as CLIENT.
-      const { rows } = await db().query(`select role from public.profiles where id = $1`, [
-        res.body.data.user.id,
-      ]);
-      expect(rows[0].role).toBe("CLIENT");
-
-      await db().query(`delete from auth.users where id = $1`, [res.body.data.user.id]);
-    });
-
-    it("rejects a short password", async () => {
-      const res = await request(api())
-        .post("/api/v1/auth/register")
-        .send({ email: `short.${Date.now()}@beautyalley.ph`, password: "abc", fullName: "Short" });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("VALIDATION_FAILED");
-    });
-
-    it("rejects a malformed email", async () => {
-      const res = await request(api())
-        .post("/api/v1/auth/register")
-        .send({ email: "not-an-email", password: "ValidPass123!", fullName: "Bad Email" });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
     });
   });
 

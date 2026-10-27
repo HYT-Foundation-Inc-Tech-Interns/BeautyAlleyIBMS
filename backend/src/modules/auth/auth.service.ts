@@ -2,7 +2,13 @@ import { env } from "../../config/env";
 import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { authRepository } from "./auth.repository";
-import type { CreateStaffInput, LoginInput, RegisterInput } from "./auth.schemas";
+import type {
+  CreateClientInput,
+  CreateStaffInput,
+  LoginInput,
+  ResetClientPasswordInput,
+} from "./auth.schemas";
+import { clientsRepository } from "../clients/clients.repository";
 import type { Actor } from "../../types/actor";
 
 /**
@@ -21,40 +27,6 @@ import type { Actor } from "../../types/actor";
  * evaded by rotating IPs. The IP limiter stays as a cheap first line.
  */
 export const authService = {
-  async register(input: RegisterInput, ip: string | null) {
-    const data = await authRepository.signUp(
-      input.email,
-      input.password,
-      input.fullName,
-      input.phone
-    );
-
-    // Supabase obfuscates "this email is taken" by returning a user with an
-    // empty identities array rather than an error. Detecting it here lets us
-    // give an honest 409 instead of a confusing success with no session.
-    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      throw AppError.conflict(CODES.CONFLICT, "An account with that email already exists");
-    }
-
-    logger.info("auth.register", { email: input.email, ip });
-
-    return {
-      user: data.user
-        ? { id: data.user.id, email: data.user.email ?? null, role: "CLIENT" as const }
-        : null,
-      // Null when email confirmation is switched on - the account exists but
-      // cannot sign in until the address is verified.
-      session: data.session
-        ? {
-            accessToken: data.session.access_token,
-            refreshToken: data.session.refresh_token,
-            expiresAt: data.session.expires_at,
-          }
-        : null,
-      requiresEmailConfirmation: !data.session,
-    };
-  },
-
   async login(input: LoginInput, ip: string | null) {
     const failures = await authRepository.countRecentFailures(input.email);
     if (failures >= env.loginMaxAttempts) {
@@ -143,6 +115,84 @@ export const authService = {
    * which is the only path that can write `app_metadata` - so this cannot be
    * reached by a user promoting themselves.
    */
+  /**
+   * Create a CLIENT account at the desk.
+   *
+   * Two writes, in this order: the auth user (which the trigger mirrors into
+   * `profiles`), then the `clients` row that the rest of the system reads a
+   * client from. Without the second one the account can sign in and "My
+   * bookings" is empty forever, because `actor.clientId` is derived from it.
+   *
+   * If the second write fails the first is rolled back, so a failed attempt
+   * does not burn the email address.
+   */
+  async createClientAccount(input: CreateClientInput, actor: Actor) {
+    const userId = await authRepository.adminCreateUser(
+      input.email,
+      input.password,
+      input.fullName,
+      "CLIENT",
+      input.phone
+    );
+
+    let clientId: string;
+    try {
+      clientId = await clientsRepository.linkOrCreateForProfile({
+        profileId: userId,
+        fullName: input.fullName,
+        email: input.email,
+        phone: input.phone,
+      });
+    } catch (err) {
+      await authRepository.deleteUser(userId).catch(() => undefined);
+      throw err;
+    }
+
+    logger.info("auth.client_created", { userId, clientId, by: actor.id });
+    return { id: userId, clientId, email: input.email, role: "CLIENT" as const, fullName: input.fullName };
+  },
+
+  /**
+   * Set a new password for a client login.
+   *
+   * Addressed by *client* id, not profile id, because that is what the desk has
+   * in front of it. The role is checked here rather than trusted from the
+   * caller: a concierge may reset a client password and nothing else, so the
+   * target must resolve to a CLIENT profile or the request is refused.
+   */
+  async resetClientPassword(
+    clientId: string,
+    input: ResetClientPasswordInput,
+    actor: Actor
+  ) {
+    const client = await clientsRepository.accountOf(clientId);
+    if (!client) throw AppError.notFound(CODES.CLIENT_NOT_FOUND, "Client not found");
+    if (!client.profileId) {
+      throw AppError.conflict(
+        CODES.CONFLICT,
+        "That client has no login yet — create an account instead."
+      );
+    }
+
+    const profile = await authRepository.getProfile(client.profileId);
+    if (!profile) throw AppError.notFound(CODES.PROFILE_NOT_FOUND, "Profile not found");
+    if (profile.role !== "CLIENT") {
+      throw AppError.forbidden(
+        CODES.FORBIDDEN,
+        "Only client passwords can be reset here."
+      );
+    }
+
+    await authRepository.updatePassword(client.profileId, input.password);
+    logger.info("auth.client_password_reset", {
+      clientId,
+      userId: client.profileId,
+      by: actor.id,
+    });
+
+    return { clientId, fullName: client.fullName };
+  },
+
   async createStaff(input: CreateStaffInput, actor: Actor) {
     const userId = await authRepository.adminCreateUser(
       input.email,

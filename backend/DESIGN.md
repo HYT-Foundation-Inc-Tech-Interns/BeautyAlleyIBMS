@@ -234,12 +234,14 @@ Auth legend: 🌐 public · 👤 CLIENT · 🧑‍🔧 STAFF · 🛡️ ADMIN
 ### Auth
 | Method | Path | Role |
 |---|---|---|
-| POST | `/auth/register` | 🌐 |
+| ~~POST~~ | ~~`/auth/register`~~ | closed — accounts are created by an admin (`/admin/users/staff`) |
 | POST | `/auth/login` | 🌐 (rate-limited, 5 fails → 15 min lock) |
 | POST | `/auth/refresh` | 🌐 |
 | POST | `/auth/logout` | 👤🧑‍🔧🛡️ |
 | GET | `/auth/me` | 👤🧑‍🔧🛡️ |
 | POST | `/admin/users/staff` | 🛡️ (Supabase admin API) |
+| POST | `/admin/users/client` | 🛡️🧑‍🔧 (client accounts only) |
+| POST | `/admin/users/client/:clientId/password` | 🛡️🧑‍🔧 (client accounts only) |
 
 ### Services
 | Method | Path | Role |

@@ -3,189 +3,16 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * The Beauty Alley brand marks.
+ * The Beauty Alley — brand furniture.
  *
- * These are hand-built SVG interpretations of the salon's badge — a circular
- * seal, a high-contrast "BA" monogram and botanical line-art. They inherit
- * `currentColor`, so they read on ivory, emerald or photography.
+ * This file used to also carry hand-drawn SVG "BA" monograms: a circle with a
+ * B and an A in it, a ring of invented lettering, a pretend botanical crest.
+ * They were placeholders that read as the salon's mark at a glance and as
+ * something else entirely up close — which is exactly the failure mode a
+ * logo must not have. The salon has a real crest, so every place that needs it
+ * now renders `/brand/logo-emerald.png` or `/brand/logo-ivory.png` and this
+ * file keeps only the ornament that was never pretending to be the mark.
  */
-
-/* ------------------------------------------------------------------ *
- * Full circular badge — ring, curved wordmark, monogram.
- * ------------------------------------------------------------------ */
-
-export function AlleyBadge({
-  className,
-  showText = true,
-  ...props
-}: React.SVGProps<SVGSVGElement> & { showText?: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 200 200"
-      role="img"
-      aria-label="The Beauty Alley"
-      className={cn("h-24 w-24", className)}
-      {...props}
-    >
-      <defs>
-        <path id="alley-arc-bottom" d="M 16,100 A 84,84 0 0 0 184,100" />
-      </defs>
-
-      <circle
-        cx="100"
-        cy="100"
-        r="96"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-      />
-      <circle
-        cx="100"
-        cy="100"
-        r="70"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1"
-        opacity="0.55"
-      />
-
-      {showText && (
-        <text
-          fill="currentColor"
-          fontFamily='"Cormorant Garamond", Georgia, serif'
-          fontSize="15.5"
-          fontWeight={600}
-          letterSpacing="3.6"
-        >
-          <textPath
-            href="#alley-arc-bottom"
-            startOffset="50%"
-            textAnchor="middle"
-          >
-            THE BEAUTY ALLEY
-          </textPath>
-        </text>
-      )}
-
-      {/* Monogram — the A's apex leans into the B, as in the original. */}
-      <g fill="currentColor" fontFamily='"Cormorant Garamond", Georgia, serif'>
-        <text x="74" y="122" fontSize="68" fontWeight={600} textAnchor="middle">
-          B
-        </text>
-        <text
-          x="116"
-          y="130"
-          fontSize="68"
-          fontWeight={600}
-          textAnchor="middle"
-          opacity="0.98"
-        >
-          A
-        </text>
-      </g>
-
-      {/* Botanical sprig — a quiet echo of the logo's flower. */}
-      <g
-        stroke="currentColor"
-        strokeWidth="1.5"
-        fill="none"
-        strokeLinecap="round"
-        opacity="0.85"
-      >
-        <path d="M100 46 C 92 54, 88 62, 88 70" />
-        <path d="M100 46 C 108 54, 112 62, 112 70" />
-        <path d="M88 70 C 94 74, 106 74, 112 70" />
-        <path d="M100 40 C 100 46, 100 50, 100 56" />
-      </g>
-    </svg>
-  );
-}
-
-/* ------------------------------------------------------------------ *
- * Compact monogram — for navigation and avatars.
- * ------------------------------------------------------------------ */
-
-export function AlleyMark({
-  className,
-  ...props
-}: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      role="img"
-      aria-label="The Beauty Alley monogram"
-      className={cn("h-9 w-9", className)}
-      {...props}
-    >
-      <circle cx="32" cy="32" r="31" fill="currentColor" opacity="0.1" />
-      <circle
-        cx="32"
-        cy="32"
-        r="30"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        opacity="0.6"
-      />
-      <g fill="currentColor" fontFamily='"Cormorant Garamond", Georgia, serif'>
-        <text x="24" y="42" fontSize="27" fontWeight={600} textAnchor="middle">
-          B
-        </text>
-        <text x="40" y="45" fontSize="27" fontWeight={600} textAnchor="middle">
-          A
-        </text>
-      </g>
-    </svg>
-  );
-}
-
-/* ------------------------------------------------------------------ *
- * Wordmark — monogram + name, for headers and footers.
- * ------------------------------------------------------------------ */
-
-export function LogoLockup({
-  className,
-  tone = "dark",
-  compact = false,
-}: {
-  className?: string;
-  tone?: "dark" | "light";
-  compact?: boolean;
-}) {
-  return (
-    <span className={cn("flex items-center gap-3", className)}>
-      <AlleyMark
-        className={cn(
-          compact ? "h-9 w-9" : "h-11 w-11",
-          tone === "light" ? "text-primary-foreground" : "text-primary",
-        )}
-      />
-      <span className="flex flex-col leading-none">
-        <span
-          className={cn(
-            "font-display font-semibold tracking-tight",
-            compact ? "text-lg" : "text-xl",
-            tone === "light" ? "text-primary-foreground" : "text-foreground",
-          )}
-        >
-          The Beauty Alley
-        </span>
-        {!compact && (
-          <span
-            className={cn(
-              "mt-1 text-[10px] font-semibold uppercase tracking-[0.28em]",
-              tone === "light"
-                ? "text-primary-foreground/55"
-                : "text-muted-foreground",
-            )}
-          >
-            Salon Operating System
-          </span>
-        )}
-      </span>
-    </span>
-  );
-}
 
 /* ------------------------------------------------------------------ *
  * Botanical flourish — used as a watermark and section divider.
@@ -227,5 +54,3 @@ export function AlleySprig({
     </svg>
   );
 }
-
-export default AlleyBadge;

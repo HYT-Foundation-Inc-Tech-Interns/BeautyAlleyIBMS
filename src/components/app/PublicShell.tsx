@@ -14,11 +14,11 @@
 
 import * as React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { LayoutDashboard, LogOut, QrCode, Search, Sparkles } from "lucide-react";
+import { LayoutDashboard, LogOut, MapPin, QrCode, Search, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { AlleyMark, AlleySprig } from "@/components/brand/Logo";
+import { AlleySprig } from "@/components/brand/Logo";
 import { PublicMobileNav, PublicNavLinks } from "@/components/app/PublicNav";
 import { homeFor, ROLE_LABEL, useAuth } from "@/auth/AuthProvider";
 import { CONSOLE_ORIGIN, consoleHref } from "@/lib/console";
@@ -115,6 +115,13 @@ export function PublicShell({
             <PublicMobileNav triggerClassName="md:hidden" />
           </div>
         </div>
+
+        {/* The gold rule the console draws under its header. One pixel, and
+            it is what makes the dark band read as the same stationery. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-champagne-400/35 to-transparent"
+        />
       </header>
 
       <main className={cn("flex-1", className)}>{children}</main>
@@ -123,7 +130,14 @@ export function PublicShell({
         <div className="container grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-3">
-              <AlleyMark className="h-10 w-10 text-primary" />
+              {/* The real crest, not a monogram drawn to look like one. */}
+              <img
+                src="/brand/logo-emerald.png"
+                alt="The Beauty Alley"
+                width={1912}
+                height={1912}
+                className="h-11 w-11 object-contain"
+              />
               <span className="font-display text-[19px] font-semibold tracking-tight">
                 The Beauty Alley
               </span>
@@ -131,6 +145,10 @@ export function PublicShell({
             <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-muted-foreground">
               A downtown atelier for hair, skin, nails and body — run on one
               quietly exact system.
+            </p>
+            <p className="mt-4 inline-flex items-center gap-2 text-[12.5px] text-muted-foreground">
+              <MapPin className="size-3.5 text-champagne-600" />
+              118 Alameda Row, Suite 4 · Open 9:00 – 19:00
             </p>
           </div>
 
@@ -152,16 +170,19 @@ export function PublicShell({
             </ul>
           </div>
 
+          {/*
+            * This column used to offer "Create a client account". Accounts are
+            * made by an administrator now, so the column says what a visitor
+            * actually needs to know instead of advertising a closed door.
+            */}
           <div>
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Your account
+              Good to know
             </h3>
-            <ul className="mt-4 space-y-2.5 text-[13px]">
-              <li>
-                <Link to="/register" className="text-foreground/75 transition-colors hover:text-primary">
-                  Create a client account
-                </Link>
-              </li>
+            <ul className="mt-4 space-y-2.5 text-[13px] text-foreground/75">
+              <li>No account needed to book</li>
+              <li>Arrival pass on the spot</li>
+              <li>Walk-ins welcome until 18:00</li>
             </ul>
           </div>
         </div>
@@ -192,6 +213,10 @@ export function PageHead({
   return (
     <section className="grain relative overflow-hidden bg-alley-900 pb-14 pt-14 text-primary-foreground">
       <AlleySprig className="pointer-events-none absolute -right-20 -top-16 h-[380px] w-[300px] text-white/[0.05]" />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-champagne-400/35 to-transparent"
+      />
       <div className="container relative">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-champagne-300">
           {eyebrow}

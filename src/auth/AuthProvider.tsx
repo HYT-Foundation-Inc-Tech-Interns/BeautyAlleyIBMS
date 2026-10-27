@@ -142,12 +142,6 @@ export interface AuthValue {
   isStaff: boolean;
   can: (area: Area) => boolean;
   login: (email: string, password: string) => Promise<Me>;
-  register: (input: {
-    email: string;
-    password: string;
-    fullName: string;
-    phone?: string;
-  }) => Promise<{ requiresEmailConfirmation: boolean }>;
   logout: () => Promise<void>;
   reload: () => Promise<void>;
 }
@@ -271,26 +265,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [apply],
   );
 
-  const register = React.useCallback(
-    async (input: { email: string; password: string; fullName: string; phone?: string }) => {
-      const result = await api.auth.register(input);
-      if (result.session) {
-        apply(result.session);
-        try {
-          setMe(await api.auth.me());
-          setStatus("authenticated");
-        } catch {
-          // Signed up but the profile read failed — treat as anonymous rather
-          // than claiming a session we cannot describe.
-          apply(null);
-          setStatus("anonymous");
-        }
-      }
-      return { requiresEmailConfirmation: result.requiresEmailConfirmation };
-    },
-    [apply],
-  );
-
   const logout = React.useCallback(async () => {
     try {
       await api.auth.logout();
@@ -325,11 +299,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isStaff: role === "EMPLOYEE" || role === "CONCIERGE" || role === "ADMIN",
       can: (area: Area) => (role ? SCOPE[role].includes(area) : false),
       login,
-      register,
       logout,
       reload,
     };
-  }, [status, me, session, login, register, logout, reload]);
+  }, [status, me, session, login, logout, reload]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

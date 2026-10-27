@@ -576,11 +576,8 @@ export default function Book() {
                     />
                   </div>
                   <p className="text-[12px] leading-relaxed text-muted-foreground">
-                    Booking as a guest?{" "}
-                    <Link to="/register" className="font-medium text-primary hover:underline">
-                      Create an account
-                    </Link>{" "}
-                    instead and keep a history of your visits.
+                    Booking as a guest is fine — your reference and arrival pass
+                    arrive straight away, and the desk keeps the rest.
                   </p>
                 </>
               )}

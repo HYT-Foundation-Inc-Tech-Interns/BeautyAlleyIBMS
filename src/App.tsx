@@ -3,7 +3,7 @@
  *
  * Two halves, and the split is the point of the whole exercise:
  *
- *   **Public** — `/`, `/services`, `/book`, `/pass/:id`, `/login`, `/register`. These render their own shell (`PublicShell` or `AuthLayout`)
+ *   **Public** — `/`, `/services`, `/book`, `/pass/:id`, `/login`. These render their own shell (`PublicShell` or `AuthLayout`)
  *   because a visitor has no sidebar and no session. Booking is reachable
  *   signed out, which is the guest flow the salon actually runs on.
  *
@@ -28,7 +28,6 @@ import Services from "@/pages/Services";
 import Book from "@/pages/Book";
 import Pass from "@/pages/Pass";
 import Login from "@/pages/Login";
-import Register from "@/pages/Register";
 
 import Overview from "@/pages/Overview";
 import Bookings from "@/pages/Bookings";
@@ -69,8 +68,12 @@ export default function App() {
         <Route path="/services" element={<Services />} />
         <Route path="/book" element={<Book />} />
         <Route path="/pass/:id" element={<Pass />} />
+        {/*
+          * No /register. Accounts are created by an administrator inside the
+          * console; a visitor books as a guest and is never offered a door to
+          * make themselves an identity in the salon's system.
+          */}
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
 
         {/* ------------------------------------------------ console */}
         <Route

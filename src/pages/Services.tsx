@@ -651,23 +651,49 @@ export default function Services() {
         </div>
       </section>
 
-      <section className="container py-14">
-        <div className="flex flex-wrap items-center justify-between gap-6 rounded-2xl border border-border/80 bg-card px-8 py-9 shadow-soft">
-          <div className="max-w-lg">
-            <h2 className="font-display text-[clamp(1.5rem,2.6vw,2rem)] font-medium leading-tight tracking-tight">
+      {/* -------------------------------------------------------- closing
+          The page used to end on a white card with a lot of air in it. It ends
+          on the brand band instead — the same deep green the poster uses for
+          its information block, closed with the same gold rule. */}
+      <section className="relative overflow-hidden bg-alley-900 text-primary-foreground">
+        <img
+          src="/brand/logo-ivory.png"
+          alt=""
+          aria-hidden
+          width={1912}
+          height={1912}
+          className="pointer-events-none absolute -right-10 top-1/2 hidden h-[320px] w-[320px] -translate-y-1/2 object-contain opacity-[0.07] md:block"
+        />
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-champagne-400/30 to-transparent"
+        />
+
+        <div className="container relative py-16">
+          <div className="max-w-2xl">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.24em] text-champagne-300">
+              Ready when you are
+            </p>
+            <h2 className="mt-4 font-display text-[clamp(1.9rem,3.6vw,2.8rem)] font-medium leading-[1.05] tracking-tight text-balance">
               Found something you like?
             </h2>
-            <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
+            <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-primary-foreground/65 text-pretty">
               Pick a time and we'll hold the chair. You'll get an arrival pass
               straight away — no account needed.
             </p>
+
+            <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
+              <Button asChild size="lg" variant="champagne" className="h-12">
+                <Link to="/book">
+                  Book an appointment
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+              <p className="text-[12.5px] text-primary-foreground/55">
+                Arrival pass on the spot · No account needed
+              </p>
+            </div>
           </div>
-          <Button asChild size="lg" className="h-12">
-            <Link to="/book">
-              Book an appointment
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
         </div>
       </section>
 

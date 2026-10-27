@@ -2,12 +2,18 @@ import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { AlleyBadge } from "@/components/brand/Logo";
 
 export default function NotFound() {
   return (
     <div className="mx-auto flex max-w-lg flex-col items-center justify-center py-24 text-center">
-      <AlleyBadge className="h-24 w-24 text-primary/25" showText={false} />
+      <img
+        src="/brand/logo-emerald.png"
+        alt=""
+        aria-hidden
+        width={1912}
+        height={1912}
+        className="h-24 w-24 object-contain opacity-20"
+      />
       <p className="eyebrow mt-8">404</p>
       <h1 className="mt-3 font-display text-[34px] font-semibold leading-tight tracking-tight">
         This room is empty.

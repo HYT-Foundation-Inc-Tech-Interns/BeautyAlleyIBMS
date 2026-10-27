@@ -33,8 +33,6 @@ import * as React from "react";
 import {
   AlertTriangle,
   BadgeCheck,
-  Camera,
-  CameraOff,
   CheckCircle2,
   Keyboard,
   QrCode,
@@ -51,6 +49,7 @@ import { branchDay, branchTime, peso } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { PageHeader, Panel } from "@/components/app/bits";
+import { CameraScanner } from "@/components/app/camera-scanner";
 
 /* ------------------------------------------------------------------ *
  * Reading the code
@@ -221,144 +220,6 @@ function ReservationCard({ booking, verdict }: { booking: Booking; verdict: Verd
 }
 
 /* ------------------------------------------------------------------ *
- * Camera
- * ------------------------------------------------------------------ */
-
-function CameraScanner({
-  onCode,
-  paused,
-}: {
-  onCode: (raw: string) => void;
-  paused: boolean;
-}) {
-  const regionId = React.useId().replace(/[^a-zA-Z0-9]/g, "");
-  const [status, setStatus] = React.useState<"starting" | "live" | "blocked" | "unsupported">(
-    "starting",
-  );
-  const [reason, setReason] = React.useState<string>("");
-  const scannerRef = React.useRef<{ stop: () => Promise<void>; clear: () => void } | null>(null);
-  const onCodeRef = React.useRef(onCode);
-  onCodeRef.current = onCode;
-  const pausedRef = React.useRef(paused);
-  pausedRef.current = paused;
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-        setStatus("unsupported");
-        setReason(
-          "This browser does not expose a camera to the page. Most browsers only allow it on https:// or on localhost.",
-        );
-        return;
-      }
-
-      try {
-        // Imported lazily: the library touches `navigator` at load time, and
-        // there is no reason to ship it to anyone who never opens this page.
-        const { Html5Qrcode } = await import("html5-qrcode");
-        if (cancelled) return;
-
-        const scanner = new Html5Qrcode(regionId, { verbose: false });
-        scannerRef.current = scanner;
-
-        await scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 230, height: 230 } },
-          (decoded: string) => {
-            // The library fires on every frame that decodes. Without this guard
-            // one pass in front of the lens would fire dozens of lookups.
-            if (pausedRef.current) return;
-            onCodeRef.current(decoded);
-          },
-          () => {
-            /* per-frame "nothing found" — not an error worth showing */
-          },
-        );
-
-        if (!cancelled) setStatus("live");
-      } catch (err) {
-        if (cancelled) return;
-        const name = (err as { name?: string })?.name ?? "";
-        setStatus("blocked");
-        setReason(
-          name === "NotAllowedError" || name === "PermissionDeniedError"
-            ? "Camera access was denied. Allow it in your browser's address bar, or type the reference below."
-            : name === "NotFoundError" || name === "DevicesNotFoundError"
-              ? "No camera was found on this device. Use the reference box below."
-              : "The camera could not be started. Use the reference box below.",
-        );
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      const scanner = scannerRef.current;
-      scannerRef.current = null;
-      if (!scanner) return;
-      // `stop()` rejects when the scanner never started; swallow that so an
-      // unmount during a failed start does not throw.
-      scanner
-        .stop()
-        .then(() => scanner.clear())
-        .catch(() => undefined);
-    };
-  }, [regionId]);
-
-  return (
-    <div>
-      <div className="relative overflow-hidden rounded-xl border border-border bg-foreground/90">
-        <div id={regionId} className="[&_video]:!w-full [&_video]:!rounded-xl [&_video]:object-cover" />
-
-        {status !== "live" && (
-          <div className="flex aspect-[4/3] flex-col items-center justify-center gap-3 px-6 text-center">
-            {status === "starting" ? (
-              <>
-                <Camera className="size-6 text-background/70" />
-                <p className="text-[12.5px] text-background/70">Starting the camera…</p>
-              </>
-            ) : (
-              <>
-                <CameraOff className="size-6 text-background/70" />
-                <p className="max-w-xs text-[12.5px] leading-relaxed text-background/70">{reason}</p>
-              </>
-            )}
-          </div>
-        )}
-
-        {status === "live" && (
-          // A frame over the live video. It is a guide, not a crop — the
-          // library decodes the whole frame, so a guest holding the pass a
-          // little off-centre is still read.
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <div className="relative size-[230px] max-w-[70%]">
-              {(
-                [
-                  "left-0 top-0 border-l-2 border-t-2 rounded-tl-lg",
-                  "right-0 top-0 border-r-2 border-t-2 rounded-tr-lg",
-                  "left-0 bottom-0 border-b-2 border-l-2 rounded-bl-lg",
-                  "right-0 bottom-0 border-b-2 border-r-2 rounded-br-lg",
-                ] as const
-              ).map((c) => (
-                <span key={c} className={`absolute size-8 border-background/90 ${c}`} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <p className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-muted-foreground">
-        <Camera className="mt-0.5 size-3.5 shrink-0" />
-        {status === "live"
-          ? "Hold the guest's arrival pass inside the frame. The code is read automatically."
-          : "If the camera is unavailable, the reference box below does the same job."}
-      </p>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ *
  * Page
  * ------------------------------------------------------------------ */
 
@@ -503,7 +364,7 @@ export default function ScanArrivals() {
       >
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">
-            <Camera className="size-3.5" />
+            <ScanLine className="size-3.5" />
             Camera or reference lookup
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.07] px-3 py-1.5 text-[11.5px] font-medium text-primary-foreground/80">

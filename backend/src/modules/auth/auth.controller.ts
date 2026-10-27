@@ -8,11 +8,6 @@ function clientIp(req: Request): string | null {
 }
 
 export const authController = {
-  async register(req: Request, res: Response) {
-    const result = await authService.register(req.body, clientIp(req));
-    res.status(201).json({ data: result });
-  },
-
   async login(req: Request, res: Response) {
     const result = await authService.login(req.body, clientIp(req));
     res.status(200).json({ data: result });
@@ -30,6 +25,20 @@ export const authController = {
 
   async me(req: Request, res: Response) {
     const result = await authService.me(req.actor!);
+    res.status(200).json({ data: result });
+  },
+
+  async createClient(req: Request, res: Response) {
+    const result = await authService.createClientAccount(req.body, req.actor as Actor);
+    res.status(201).json({ data: result });
+  },
+
+  async resetClientPassword(req: Request, res: Response) {
+    const result = await authService.resetClientPassword(
+      req.params.clientId,
+      req.body,
+      req.actor as Actor
+    );
     res.status(200).json({ data: result });
   },
 

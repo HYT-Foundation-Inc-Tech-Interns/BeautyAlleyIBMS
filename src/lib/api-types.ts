@@ -91,11 +91,13 @@ export interface LoginResult {
   session: Session;
 }
 
-export interface RegisterResult {
-  user: AuthUser | null;
-  /** Null when email confirmation is switched on. */
-  session: Session | null;
-  requiresEmailConfirmation: boolean;
+/** `POST /admin/users/client` — the login plus the client row it was attached to. */
+export interface CreatedClientAccount {
+  id: string;
+  clientId: string;
+  email: string;
+  role: "CLIENT";
+  fullName: string;
 }
 
 /** `GET /auth/me` — richer than the login payload; carries the row ids. */

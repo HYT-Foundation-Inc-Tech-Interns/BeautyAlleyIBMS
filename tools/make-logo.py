@@ -67,6 +67,26 @@ ivory.save(OUT / "logo-ivory.png")
 # A favicon-sized square of the emerald mark.
 emerald.resize((256, 256), Image.LANCZOS).save(OUT / "logo-mark.png")
 
+# --- 4. the tab icon --------------------------------------------------------
+# The favicon used to be the emerald mark, which is invisible on a dark tab
+# bar (about 1.4:1 against #202124). Champagne gold is the one brand colour
+# that holds on both: roughly 6.6:1 on a dark tab and 1.9:1 on a light one.
+# White was the other candidate and loses on light (1.3:1) - i.e. gone.
+GOLD = (194, 161, 103)  # #C2A167, champagne-500
+
+gold = recolour(GOLD)
+# 64px is the whole range a tab needs: 16px at 4x, and the bookmarks bar at
+# 2x. A 256 copy would be 55 KB of file nobody asks for.
+gold.resize((64, 64), Image.LANCZOS).save(OUT / "favicon-gold.png", optimize=True)
+
+# iOS paints transparency black, so the touch icon gets a plate: the same gold
+# seal on the console's deep emerald.
+TOUCH, MARGIN = 180, 18
+plate = Image.new("RGB", (TOUCH, TOUCH), (18, 51, 42))  # #12332A
+seal = gold.resize((TOUCH - MARGIN * 2, TOUCH - MARGIN * 2), Image.LANCZOS)
+plate.paste(seal, (MARGIN, MARGIN), seal)
+plate.save(OUT / "apple-touch-icon.png", optimize=True)
+
 print("wrote:", emerald.size)
 for f in sorted(OUT.iterdir()):
     print(" ", f.name, f.stat().st_size, "bytes")

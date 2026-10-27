@@ -14,7 +14,7 @@
  * here reimplements that.
  *
  * It is theme-agnostic on purpose — every colour is a token, so the same modal
- * is emerald on the public site and blush inside the console.
+ * is emerald on the public site and the same green, deeper, in the console.
  */
 
 import * as React from "react";

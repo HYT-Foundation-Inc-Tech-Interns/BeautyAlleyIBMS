@@ -40,6 +40,7 @@ import { useAsync } from "@/lib/useAsync";
 import type { Booking, BookingStatus } from "@/lib/api-types";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app/bits";
+import { ClientAccountDialog } from "@/components/app/client-account-dialog";
 import { EmptyNote, ErrorNote, Loading, PersonAvatar, StatusBadge } from "@/components/app/api-bits";
 
 const STATUSES: BookingStatus[] = [
@@ -92,6 +93,8 @@ export default function Bookings() {
    */
   const { role } = useAuth();
   const canCreate = role === "CONCIERGE";
+  /* The desk and the owner can open a client login; the floor cannot. */
+  const canCreateClient = role === "CONCIERGE" || role === "ADMIN";
   /*
    * Seeded from the URL once, on mount, so another page can hand this one a
    * question instead of a bare page: `/app/bookings?range=all&q=BA-1A2B` opens
@@ -168,6 +171,9 @@ export default function Bookings() {
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={list.reload}>
               <RefreshCw className="size-4" />
             </Button>
+            {/* The desk can make a client login here, without leaving the page
+                it already works on. Staff accounts stay with the administrator. */}
+            {canCreateClient && <ClientAccountDialog onChanged={() => list.reload()} />}
             {canCreate && (
               <Button asChild>
                 <Link to="/app/bookings/new">

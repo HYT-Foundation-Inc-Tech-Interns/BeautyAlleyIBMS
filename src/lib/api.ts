@@ -38,6 +38,7 @@ import type {
   ClientHit,
   ClientRecord,
   CreateBookingInput,
+  CreatedClientAccount,
   Dashboard,
   Employee,
   Health,
@@ -50,7 +51,6 @@ import type {
   PromoValidation,
   QrState,
   QuotaProgress,
-  RegisterResult,
   Service,
   ServiceCategory,
   Session,
@@ -362,9 +362,6 @@ export const api = {
         body: { email, password },
       }),
 
-    register: (body: { email: string; password: string; fullName: string; phone?: string }) =>
-      request<RegisterResult>("POST", "/api/v1/auth/register", { auth: false, body }),
-
     refresh: (refreshToken: string) =>
       request<{ session: Session }>("POST", "/api/v1/auth/refresh", {
         auth: false,
@@ -644,6 +641,30 @@ export const api = {
       fullName: string;
       role: "EMPLOYEE" | "CONCIERGE" | "ADMIN";
     }) => request<AuthUser>("POST", "/api/v1/admin/users/staff", { body }),
+
+    /**
+     * A client login, made at the desk. Allowed for ADMIN and CONCIERGE — the
+     * one account a concierge may create. The response carries the client row
+     * id as well as the profile id, because both are needed downstream.
+     */
+    createClientAccount: (body: {
+      email: string;
+      password: string;
+      fullName: string;
+      phone?: string;
+    }) => request<CreatedClientAccount>("POST", "/api/v1/admin/users/client", { body }),
+
+    /**
+     * Set a new password for a client login, addressed by the client row id —
+     * which is what the desk has on screen. The API refuses anything that is
+     * not a CLIENT account.
+     */
+    resetClientPassword: (clientId: string, password: string) =>
+      request<{ clientId: string; fullName: string }>(
+        "POST",
+        `/api/v1/admin/users/client/${clientId}/password`,
+        { body: { password } },
+      ),
 
     /**
      * The CSV endpoint is a plain `text/csv` response behind the same bearer

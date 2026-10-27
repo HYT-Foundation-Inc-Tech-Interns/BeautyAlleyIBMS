@@ -98,7 +98,12 @@
   }
 
   /* ---------------------------------------------------------------- *
-   * The console palette — blush, champagne, ivory, beige, neutral.
+   * The console palette — forest green, champagne gold, warm ivory.
+   *
+   * The same palette the salon prints with: the poster's deep green band, its
+   * gold crest, its cream paper. The console used to run a rosewood/blush
+   * palette of its own, which made the dashboard look like a different product
+   * bolted onto the salon. It no longer does.
    *
    * Applied by adding `.console` to `document.body` while a dashboard route
    * is mounted (see `AppShell`). Everything below is a *variable* override,
@@ -108,89 +113,94 @@
    *
    * Body rather than a wrapper element on purpose — Radix portals the mobile
    * sidebar sheet into `document.body`, and a wrapper-scoped class would leave
-   * that sheet wearing the emerald palette.
+   * that sheet wearing the public site's palette.
    *
-   * The public site is untouched and keeps its emerald + serif identity.
+   * One deliberate departure from the public site: the rail sits a shade
+   * deeper, so the dark band at the top of a page and the rail beside it read
+   * as one continuous surface rather than two greens that nearly match.
    * ---------------------------------------------------------------- */
   .console {
     /* The dashboards are UI, not editorial: the serif steps aside. */
     --font-display: "Plus Jakarta Sans";
-    /* Warm shadow tint, so a card's lift reads as sunlight not bottle-green. */
-    --shadow-color: 43 24 20;
+    /* Green shadow tint, so a card's lift belongs to the same light as the
+     * dark bands sitting above it. */
+    --shadow-color: 14 43 35;
 
-    --background: 24 44% 98%; /* ivory white, a breath of blush */
-    --foreground: 20 15% 15%; /* warm near-black */
+    --background: 40 38% 97%; /* warm ivory — the poster's paper */
+    --foreground: 158 32% 10%; /* deep green-black */
 
-    --card: 0 0% 100%;
-    --card-foreground: 20 15% 15%;
+    --card: 40 46% 99.4%;
+    --card-foreground: 158 32% 10%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 20 15% 15%;
+    --popover: 40 46% 99.4%;
+    --popover-foreground: 158 32% 10%;
 
-    --primary: 343 33% 34%; /* deep rosewood — the action colour */
-    --primary-foreground: 24 50% 98%;
+    --primary: 160 48% 20%; /* deep emerald — the action colour */
+    --primary-foreground: 44 38% 95%;
 
-    --secondary: 32 40% 93%; /* warm beige */
-    --secondary-foreground: 343 28% 26%;
+    --secondary: 42 34% 91%; /* sand */
+    --secondary-foreground: 160 40% 16%;
 
-    --muted: 30 32% 94%;
-    --muted-foreground: 22 11% 43%;
+    --muted: 42 30% 93%;
+    --muted-foreground: 152 11% 38%;
 
-    --accent: 38 46% 60%; /* champagne gold */
-    --accent-foreground: 28 45% 14%;
+    --accent: 36 44% 58%; /* champagne gold */
+    --accent-foreground: 33 44% 14%;
 
-    --destructive: 358 55% 47%;
-    --destructive-foreground: 24 50% 98%;
+    --destructive: 12 58% 44%;
+    --destructive-foreground: 44 38% 96%;
 
-    --success: 152 36% 31%;
-    --success-foreground: 30 42% 96%;
+    --success: 158 42% 29%;
+    --success-foreground: 44 38% 96%;
 
-    --border: 28 26% 88%;
-    --input: 28 26% 86%;
-    --ring: 343 33% 42%;
+    --border: 41 26% 86%;
+    --input: 41 26% 84%;
+    --ring: 160 46% 27%;
 
-    /* The rail keeps the public site's emerald: it is the one surface that is
-     * furniture rather than content, and a second dark colour beside the ivory
-     * body read as a different product bolted onto the salon's own site. */
-    --sidebar: 162 55% 15%;
-    --sidebar-foreground: 44 38% 95%;
-    --sidebar-ring: 152 40% 62%;
+    /* The poster's top band, a shade deeper than the marketing green: the rail
+     * is furniture, and every hero band is built on this same colour. */
+    --sidebar: 163 52% 10%;
+    --sidebar-foreground: 42 32% 94%;
+    --sidebar-ring: 36 44% 60%; /* gold, not a second green */
 
     --radius: 0.85rem;
   }
 
   .console.dark {
-    --background: 340 14% 8%;
-    --foreground: 30 30% 94%;
+    --background: 162 30% 6%;
+    --foreground: 42 30% 94%;
 
-    --card: 340 12% 11%;
-    --card-foreground: 30 30% 94%;
+    --card: 162 26% 9%;
+    --card-foreground: 42 30% 94%;
 
-    --popover: 340 12% 11%;
-    --popover-foreground: 30 30% 94%;
+    --popover: 162 26% 9%;
+    --popover-foreground: 42 30% 94%;
 
-    --primary: 343 40% 62%;
-    --primary-foreground: 340 20% 10%;
+    --primary: 152 38% 58%;
+    --primary-foreground: 162 40% 8%;
 
-    --secondary: 340 12% 17%;
-    --secondary-foreground: 30 30% 92%;
+    --secondary: 162 18% 14%;
+    --secondary-foreground: 42 30% 92%;
 
-    --muted: 340 10% 16%;
-    --muted-foreground: 28 12% 64%;
+    --muted: 162 16% 13%;
+    --muted-foreground: 150 12% 62%;
 
-    --accent: 38 46% 62%;
-    --accent-foreground: 28 45% 10%;
+    --accent: 36 44% 60%;
+    --accent-foreground: 33 44% 10%;
 
-    --destructive: 358 55% 58%;
-    --destructive-foreground: 30 30% 96%;
+    --destructive: 8 62% 55%;
+    --destructive-foreground: 42 30% 96%;
 
-    --border: 340 10% 20%;
-    --input: 340 10% 23%;
-    --ring: 343 40% 58%;
+    --success: 152 38% 52%;
+    --success-foreground: 162 40% 8%;
 
-    --sidebar: 162 30% 8%;
+    --border: 162 14% 18%;
+    --input: 162 14% 21%;
+    --ring: 152 38% 55%;
+
+    --sidebar: 163 40% 7%;
     --sidebar-foreground: 42 30% 94%;
-    --sidebar-ring: 152 40% 55%;
+    --sidebar-ring: 36 44% 60%;
 
     --shadow-color: 0 0 0;
   }
@@ -261,6 +271,24 @@
     @apply text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground;
   }
 
+  /* The same label in the brand's gold — for section openers that should
+   * carry the accent, and for small print on ivory surfaces. */
+  .eyebrow-gold {
+    @apply text-[11px] font-semibold uppercase tracking-[0.22em] text-champagne-700;
+  }
+
+  /* A hairline in champagne, transparent at both ends. Used to close the
+   * rail and to separate a brand block from the content beneath it. */
+  .gold-rule {
+    height: 1px;
+    background-image: linear-gradient(
+      to right,
+      transparent,
+      hsl(36 44% 58% / 0.45),
+      transparent
+    );
+  }
+
   .hairline {
     background-image: linear-gradient(
       to right,
@@ -297,8 +325,9 @@
    * the same palette as the cards sitting on top of it. */
   .console-wash {
     background-image:
-      radial-gradient(58rem 26rem at 10% -10%, hsl(var(--primary) / 0.06), transparent 62%),
-      radial-gradient(46rem 24rem at 95% -8%, hsl(var(--accent) / 0.16), transparent 60%);
+      radial-gradient(58rem 26rem at 10% -10%, hsl(var(--primary) / 0.07), transparent 62%),
+      radial-gradient(46rem 24rem at 95% -8%, hsl(var(--accent) / 0.18), transparent 60%),
+      radial-gradient(40rem 22rem at 50% 115%, hsl(var(--primary) / 0.05), transparent 64%);
     background-repeat: no-repeat;
   }
 
@@ -307,8 +336,9 @@
    * source rather than a flat slab. */
   .sidebar-surface {
     background-image:
-      radial-gradient(26rem 18rem at 0% 0%, hsl(var(--sidebar-ring) / 0.2), transparent 62%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(0, 0, 0, 0.24) 100%);
+      radial-gradient(26rem 18rem at 0% 0%, hsl(var(--sidebar-ring) / 0.24), transparent 62%),
+      radial-gradient(20rem 26rem at 0% 100%, rgba(0, 0, 0, 0.35), transparent 70%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(0, 0, 0, 0.28) 100%);
   }
 
   /* The dashboard hero. Built on the rail's emerald so the two dark surfaces
@@ -317,9 +347,32 @@
   .hero-surface {
     background-color: hsl(var(--sidebar));
     background-image:
-      radial-gradient(42rem 24rem at 100% 0%, rgba(214, 178, 120, 0.24), transparent 58%),
-      radial-gradient(36rem 20rem at 0% 110%, rgba(255, 255, 255, 0.12), transparent 62%),
-      linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(0, 0, 0, 0.12) 55%, rgba(0, 0, 0, 0.32) 100%);
+      radial-gradient(38rem 22rem at 100% -10%, rgba(211, 184, 132, 0.26), transparent 58%),
+      radial-gradient(34rem 20rem at -5% 115%, rgba(143, 182, 167, 0.16), transparent 62%),
+      linear-gradient(150deg, rgba(255, 255, 255, 0.1) 0%, rgba(0, 0, 0, 0.1) 52%, rgba(0, 0, 0, 0.34) 100%);
+  }
+
+  /*
+   * The gold rule along the foot of a band.
+   *
+   * It is the line the poster draws between the photograph and the green
+   * panel, and it is what makes a dark block read as printed stationery
+   * rather than as a dark div. One pixel, gold at the middle, transparent at
+   * both ends — it fades out instead of stopping at the corner radius.
+   */
+  .hero-surface::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 1px;
+    pointer-events: none;
+    background-image: linear-gradient(
+      to right,
+      transparent,
+      rgba(211, 184, 132, 0.55),
+      transparent
+    );
   }
 
   /* A fine grid, faded out towards the bottom — texture without noise. */

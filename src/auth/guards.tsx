@@ -14,14 +14,19 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import { Loader2, ShieldAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { AlleyMark } from "@/components/brand/Logo";
 import { useAuth, type Area } from "./AuthProvider";
 
 /** Shown while the stored session is being checked against `/auth/me`. */
 export function BootScreen({ label = "Checking your session…" }: { label?: string }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
-      <AlleyMark className="h-12 w-12 text-primary" />
+      <img
+        src="/brand/logo-emerald.png"
+        alt="The Beauty Alley"
+        width={1912}
+        height={1912}
+        className="h-14 w-14 object-contain"
+      />
       <p className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
         <Loader2 className="size-4 animate-spin" />
         {label}
