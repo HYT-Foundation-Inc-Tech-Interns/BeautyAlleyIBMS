@@ -56,15 +56,39 @@ export default function Team() {
   // Only needed to turn a service uuid into a readable name.
   const catalogue = useAsync("team:services", async () => (await api.services.list({ limit: 100 })).data);
 
-  const detail = useAsync(`team:detail:${expanded}`, async () => {
-    if (!expanded) return null;
+  const rows = roster.data?.data ?? [];
+
+  /*
+   * The public employee endpoint hides deactivated staff through RLS, so
+   * asking it about a retired record is a 404 rather than an empty answer. The
+   * card says why instead of firing a request that cannot succeed.
+   */
+  const expandedActive = rows.find((p) => p.id === expanded)?.isActive ?? false;
+  const detail = useAsync(`team:detail:${expanded}:${expandedActive}`, async () => {
+    if (!expanded || !expandedActive) return null;
     return api.employees.get(expanded);
   });
 
   const serviceName = (id: string) =>
     catalogue.data?.find((s) => s.id === id)?.name ?? "Unknown service";
 
-  const rows = roster.data?.data ?? [];
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<ApiError | null>(null);
+
+  async function toggleActive(person: Employee) {
+    setBusyId(person.id);
+    setActionError(null);
+    try {
+      await api.employees.update(person.id, { isActive: !person.isActive });
+      roster.reload();
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not update that employee"),
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-7">
@@ -114,7 +138,7 @@ export default function Team() {
         />
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <button
           type="button"
           onClick={() => setIncludeInactive((v) => !v)}
@@ -128,7 +152,13 @@ export default function Team() {
         >
           {includeInactive ? "Showing deactivated" : "Active only"}
         </button>
+        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+          Deactivating retires a stylist from the roster and the booking engine.
+          Their bookings and history stay on record.
+        </p>
       </div>
+
+      {actionError && <ErrorNote error={actionError} />}
 
       {roster.error ? (
         <ErrorNote error={roster.error} onRetry={roster.reload} />
@@ -150,6 +180,8 @@ export default function Team() {
               onToggle={() => setExpanded(expanded === person.id ? null : person.id)}
               detail={expanded === person.id ? detail : null}
               serviceName={serviceName}
+              busy={busyId === person.id}
+              onToggleActive={() => void toggleActive(person)}
             />
           ))}
         </div>
@@ -164,12 +196,16 @@ function EmployeeCard({
   onToggle,
   detail,
   serviceName,
+  busy,
+  onToggleActive,
 }: {
   person: Employee;
   open: boolean;
   onToggle: () => void;
   detail: { data: Employee | null; error: ApiError | null; initial: boolean } | null;
   serviceName: (id: string) => string;
+  busy: boolean;
+  onToggleActive: () => void;
 }) {
   return (
     <article
@@ -192,7 +228,7 @@ function EmployeeCard({
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge variant={person.isActive ? "success" : "secondary"}>
-              {person.isActive ? "Active" : "Inactive"}
+              {person.isActive ? "Active" : "Deactivated"}
             </Badge>
             {person.profileId && (
               <Badge variant="outline" title="Linked to a sign-in account">
@@ -210,7 +246,12 @@ function EmployeeCard({
 
       {open && (
         <div className="mt-4 border-t border-border/70 pt-4">
-          {detail?.error ? (
+          {!person.isActive ? (
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              This record is deactivated. Reactivate it to see the treatments
+              they are qualified for.
+            </p>
+          ) : detail?.error ? (
             <ErrorNote error={detail.error} />
           ) : detail?.initial ? (
             <Loading label="Loading qualifications…" className="py-6" />
@@ -242,17 +283,41 @@ function EmployeeCard({
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="-mx-5 -mb-5 mt-5 flex items-center justify-between gap-2 border-t border-border/70 px-5 py-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-      >
-        {open ? "Hide qualifications" : "Show qualifications"}
-        <ChevronDown
-          className={cn("size-3.5 shrink-0 transition-transform duration-200", open && "rotate-180")}
-        />
-      </button>
+      <div className="-mx-5 -mb-5 mt-5 flex items-center gap-1 border-t border-border/70 px-3 py-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+        >
+          {open ? "Hide qualifications" : "Show qualifications"}
+          <ChevronDown
+            className={cn("size-3.5 shrink-0 transition-transform duration-200", open && "rotate-180")}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleActive}
+          disabled={busy}
+          title={
+            person.isActive
+              ? "Retire this stylist: they leave the roster and the booking engine, and their history is kept."
+              : "Put this stylist back on the roster and the booking engine."
+          }
+          className={cn(
+            "shrink-0 rounded-full px-2.5 py-1.5 text-[11.5px] font-medium transition-colors disabled:opacity-50",
+            person.isActive ? "text-clay hover:bg-clay/10" : "text-primary hover:bg-primary/[0.06]",
+          )}
+        >
+          {busy ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : person.isActive ? (
+            "Deactivate"
+          ) : (
+            "Reactivate"
+          )}
+        </button>
+      </div>
     </article>
   );
 }

@@ -390,6 +390,18 @@ export const api = {
     get: (id: string) => request<Employee>("GET", `/api/v1/employees/${id}`, { auth: false }),
 
     /**
+     * Retire a stylist or bring them back. Admin only — the owner re-rosters.
+     *
+     * Deactivating is a soft delete: the row stays, so every booking they
+     * worked still names them, but the booking engine stops offering them and
+     * the roster hides them unless "Showing deactivated" is on.
+     */
+    update: (
+      id: string,
+      body: { fullName?: string; title?: string; bio?: string; profileId?: string; isActive?: boolean },
+    ) => request<Employee>("PATCH", `/api/v1/employees/${id}`, { body }),
+
+    /**
      * One stylist's progress against the daily quota. `date` is a plain
      * `YYYY-MM-DD` in the branch timezone; omit it for today. OPERATIONS, so a
      * stylist can read their own.
