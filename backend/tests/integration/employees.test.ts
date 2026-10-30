@@ -122,6 +122,53 @@ describeStaff("employee creation", () => {
     expect(ids).toContain(employeeId);
   });
 
+  /*
+   * The failure this guards against, seen on 2026-10-30: a stylist was created
+   * by a build that wrote the roster row and its qualifications but no rota.
+   * `get_available_slots` inner-joins `working_hours`, so she was not "off with
+   * no times" - she was absent from the desk's stylist picker and from every
+   * time grid, with nothing anywhere saying why. The create path is fixed
+   * (migration 43 backfilled the rows it left behind); this pins the rule so a
+   * future create path cannot quietly reintroduce it.
+   */
+  it("hides an active, qualified stylist with no rota - and brings them back", async () => {
+    const admin = await createTestAdmin();
+    created.push(admin);
+
+    const res = await createStaff(admin, { serviceIds: [SVC_COMBINATION] });
+    expect(res.status).toBe(201);
+    const employeeId = res.body.data.employeeId;
+
+    const gridIds = async (): Promise<string[]> => {
+      const slots = await request(api()).get(
+        `/api/v1/availability?serviceId=${SVC_COMBINATION}&date=${MONDAY}&intervalMinutes=60`,
+      );
+      expect(slots.status).toBe(200);
+      return slots.body.data.employees.map((e: { employeeId: string }) => e.employeeId);
+    };
+
+    // An empty rota is a legitimate state, not a validation error.
+    const cleared = await request(api())
+      .put(`/api/v1/employees/${employeeId}/working-hours`)
+      .set(...as(admin.token))
+      .send({ hours: [] });
+    expect(cleared.status).toBe(200);
+    expect(await gridIds()).not.toContain(employeeId);
+
+    const restored = await request(api())
+      .put(`/api/v1/employees/${employeeId}/working-hours`)
+      .set(...as(admin.token))
+      .send({
+        hours: [1, 2, 3, 4, 5, 6].map((weekday) => ({
+          weekday,
+          startTime: "09:00",
+          endTime: "18:00",
+        })),
+      });
+    expect(restored.status).toBe(200);
+    expect(await gridIds()).toContain(employeeId);
+  });
+
   it("puts an unqualified stylist on the roster but not in the booking grid", async () => {
     const admin = await createTestAdmin();
     created.push(admin);
