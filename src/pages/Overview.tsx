@@ -49,7 +49,7 @@ import {
 import { api, ApiError } from "@/lib/api";
 import { checkInBooking, isEarlyArrival } from "@/lib/check-in";
 import { useAsync } from "@/lib/useAsync";
-import type { Booking, BookingStatus } from "@/lib/api-types";
+import type { Booking, BookingStatus, Employee } from "@/lib/api-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader, StatTile } from "@/components/app/bits";
@@ -866,7 +866,9 @@ const PRIMARY_MOVE: Partial<Record<BookingStatus, { to: BookingStatus; label: st
  * server picks at random from the people who are qualified, rostered and free
  * at that time. The client never saw a name, so the desk is the first human to
  * review the match — this card is where they see it, and the select beside
- * each row is how they disagree.
+ * each row is how they disagree. That select offers only stylists the database
+ * would accept for that booking: active, and qualified for every treatment on
+ * it.
  *
  * It renders only when something is waiting. An always-present panel reading
  * "no new requests" trains the eye to skip it, which is the opposite of a
@@ -885,9 +887,53 @@ function NewRequests({ onChanged }: { onChanged: () => void }) {
     ).data,
   );
 
-  const staff = useAsync("overview:requests:staff", async () =>
-    (await api.employees.list({ limit: 50 })).data,
+  /*
+   * Who each request may be moved to.
+   *
+   * Not the whole roster. `reassign_booking_employee` refuses anyone inactive
+   * or not qualified for every treatment on the booking, so offering them was
+   * offering a refusal the concierge could not have predicted.
+   * `/employees?serviceId=` applies the same qualification filter the database
+   * does (`employee_services` + `is_active`), asked once per distinct treatment
+   * in the panel rather than once per row.
+   *
+   * Availability is deliberately not filtered here: no endpoint answers "who
+   * can take this exact booking", and the function owns the rota, leave and
+   * overlap checks anyway. Someone who turns out to be busy is refused with a
+   * sentence, which this panel already shows.
+   */
+  const serviceIds = React.useMemo(
+    () => [...new Set((pending.data ?? []).flatMap((b) => b.items.map((i) => i.serviceId)))].sort(),
+    [pending.data],
   );
+
+  const qualified = useAsync(`overview:requests:qualified:${serviceIds.join(",")}`, async () => {
+    const lists = await Promise.all(
+      serviceIds.map(async (serviceId) => {
+        const page = await api.employees.list({
+          serviceId,
+          limit: 100,
+          sort: "full_name",
+          order: "asc",
+        });
+        return [serviceId, page.data] as const;
+      }),
+    );
+    return new Map(lists);
+  });
+
+  /**
+   * The candidates for one request: everyone qualified for *every* treatment
+   * on it. Intersected here rather than fetched per combination, because the
+   * panel would otherwise need one request per booking.
+   */
+  function candidatesFor(booking: Booking): Employee[] {
+    const lists = booking.items
+      .map((item) => qualified.data?.get(item.serviceId))
+      .filter((list): list is Employee[] => Boolean(list));
+    if (lists.length === 0) return [];
+    return lists.reduce((acc, list) => acc.filter((p) => list.some((q) => q.id === p.id)));
+  }
 
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<ApiError | null>(null);
@@ -966,7 +1012,8 @@ function NewRequests({ onChanged }: { onChanged: () => void }) {
       <ul className="divide-y divide-border/60">
         {rows.map((booking) => {
           const guest = booking.client?.fullName ?? booking.guest?.name ?? "Guest booking";
-          const known = staff.data?.some((person) => person.id === booking.employee.id) ?? true;
+          const candidates = candidatesFor(booking);
+          const known = candidates.some((person) => person.id === booking.employee.id);
           return (
             <li key={booking.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
               <span className="flex min-w-[74px] shrink-0 flex-col leading-tight">
@@ -995,12 +1042,21 @@ function NewRequests({ onChanged }: { onChanged: () => void }) {
                 <select
                   id={`stylist-${booking.id}`}
                   value={booking.employee.id}
-                  disabled={busyId === booking.id || !staff.data}
+                  disabled={busyId === booking.id || !qualified.data}
                   onChange={(e) => void reassign(booking, e.target.value)}
                   className="h-9 max-w-[190px] rounded-lg border border-border bg-card px-2.5 text-[12.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                 >
-                  {!known && <option value={booking.employee.id}>{booking.employee.fullName}</option>}
-                  {staff.data?.map((person) => (
+                  {/* The stylist already on the booking stays visible even if
+                      they are not a candidate any more - they are the answer
+                      to "who has it", and a blank select would read as data
+                      loss rather than "nobody qualified can take it". */}
+                  {!known && (
+                    <option value={booking.employee.id}>
+                      {booking.employee.fullName}
+                      {qualified.data ? " (not a candidate)" : ""}
+                    </option>
+                  )}
+                  {candidates.map((person) => (
                     <option key={person.id} value={person.id}>
                       {person.fullName}
                       {person.title ? ` — ${person.title}` : ""}
