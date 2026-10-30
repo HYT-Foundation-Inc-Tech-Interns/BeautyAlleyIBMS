@@ -6,7 +6,7 @@
  * so running it per-file would wipe data a previously-run suite is still
  * asserting against when jest runs files in band.
  */
-import { assertSeparateDatabase, loadTestEnv } from "./env";
+import { assertSeparateDatabase, isUnitOnlyRun, loadTestEnv } from "./env";
 import { acquireRunLock } from "./helpers/runLock";
 
 export default async function globalSetup() {
@@ -16,14 +16,10 @@ export default async function globalSetup() {
   loadTestEnv();
 
   /*
-   * The unit suite touches no database, so it runs anywhere.
+   * The unit suite touches no database, so it runs anywhere. The teardown asks
+   * the same question, so it can skip its write too - see isUnitOnlyRun.
    */
-  const argv = process.argv.slice(2);
-  const unitOnly =
-    process.env.npm_lifecycle_event === "test:unit" ||
-    (argv.some((a) => a.includes("tests/unit")) &&
-      !argv.some((a) => a.includes("tests/integration")));
-  if (unitOnly) return;
+  if (isUnitOnlyRun()) return;
 
   if (!process.env.DATABASE_URL) {
     // Not fatal: the unit suite does not need a database.
@@ -64,7 +60,12 @@ export default async function globalSetup() {
 
   await client.connect();
   try {
-    await seed(client, { quiet: true });
+    // `confirmed: true` because assertSeparateDatabase() above *is* the
+    // confirmation: it proved this target is not the application's database,
+    // which is a stronger statement than a flag sitting in a file. Without it
+    // the suite would need ALLOW_DESTRUCTIVE_SEED=1 - the exact flag whose
+    // presence in .env.local caused the incident.
+    await seed(client, { quiet: true, confirmed: true });
     // eslint-disable-next-line no-console
     console.log("[globalSetup] database seeded");
   } finally {

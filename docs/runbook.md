@@ -149,10 +149,12 @@ backup.
 
 ```bash
 cd backend
-npm run db:restore -- backups/<file>.json --yes
+npm run db:restore -- backups/<file>.json --yes --force
 ```
 
-Refuses without `--yes`. For a JSON snapshot it truncates and refills every table
+Refuses without `--yes`, and refuses again unless `--force` or
+`ALLOW_DESTRUCTIVE_RESTORE=1` says the target is disposable: `--yes` confirms
+the *file*, not the *database*. For a JSON snapshot it truncates and refills every table
 in the file, inside one transaction, with FK triggers suspended and sequences
 re-synced afterwards; then it compares row counts to the snapshot.
 
@@ -185,14 +187,42 @@ should never be run against the pilot database.
 
 ## Destructive scripts
 
-`npm run db:seed` TRUNCATEs 17 tables. It refuses unless one of these is true:
+Four things in this repository can delete rows. Each one refuses outright under
+`NODE_ENV=production`, and each one needs a second, explicit statement that the
+target is disposable.
 
-- `ALLOW_DESTRUCTIVE_SEED=1` is set in `backend/.env.local`, or
-- the run passes `--force`, or
-- the caller is a program that passes `confirmed: true`.
+| Command | What it does | Needs |
+| --- | --- | --- |
+| `npm run db:seed` | TRUNCATEs 17 tables, rebuilds the catalogue and three demo stylists | `ALLOW_DESTRUCTIVE_SEED=1` or `--force` |
+| `npm run db:restore` | Replaces every table in the snapshot | `--yes` **and** (`ALLOW_DESTRUCTIVE_RESTORE=1` or `--force`) |
+| `node scripts/reset-demo-data.js --apply` | DELETEs every booking and every non-seeded client | `ALLOW_DEMO_RESET=1` or `--force` |
+| `npm test` | Seeds first, via Jest `globalSetup` | a target `tests/env.ts` can prove is not the application's database |
 
-It refuses outright under `NODE_ENV=production`. `npm test` calls the same seed,
-so this guard covers the test suite too.
+**Deployment runs none of them.** `vercel.json`'s build command compiles the
+frontend and the backend; the Dockerfile compiles and prunes; `api/index.js`
+only loads the compiled app. There is no `postinstall`, no start-up migration or
+seed, and no scheduled SQL job. A redeploy cannot change a row.
+
+### Why `npm test` is on that list
+
+The suite's `globalSetup` calls `scripts/seed.js`, which TRUNCATEs 17 tables -
+so a test run pointed at the pilot database deletes every client, booking,
+employee, task and attendance row in it, and rebuilds the three demo stylists.
+That is what happened on 2026-10-30: `.env.local` pointed `DATABASE_URL` at the
+pilot project *and* carried `ALLOW_DESTRUCTIVE_SEED=1`, so the seed's guard
+answered "disposable" on behalf of a database that was not. Every `npm test`
+wiped it; the symptom looked like the deployed app losing records.
+
+The guard is now positive rather than permissive. `tests/env.ts` refuses the run
+unless it can prove the target is separate:
+
+- `DATABASE_URL` must differ from the one in `backend/.env.local`, **and**
+- where `.env.local` does not exist (CI), `TEST_DB_HOST` must equal the hostname
+  in `DATABASE_URL`. A swapped `TEST_DATABASE_URL` secret is refused, not obeyed.
+
+Run the integration suite from `backend/.env.test.local` pointing at a second
+Supabase project. The unit suite (`npm run test:unit`) needs no database and
+never touches one - including in teardown.
 
 ---
 

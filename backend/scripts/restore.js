@@ -41,6 +41,52 @@ const file = argv.find((a) => !a.startsWith("--"));
 
 const BATCH = 500;
 
+/**
+ * Destructive-operation guard, the same shape as `seed.js`'s.
+ *
+ * ## Why `--yes` alone is not enough
+ *
+ * `--yes` answers "did you mean this file?". It says nothing about "did you mean
+ * this database", and this script always writes to whatever `DATABASE_URL`
+ * says - which in this checkout is the Supabase project the application serves.
+ * A restore there replaces every row with the snapshot's, so anything entered
+ * after the backup disappears. That is indistinguishable, from the outside,
+ * from "the app is losing my records".
+ *
+ * So the run needs a second, environment-level statement that the target is
+ * disposable: `ALLOW_DESTRUCTIVE_RESTORE=1` in the environment, or `--force` on
+ * the command line. `NODE_ENV=production` is refused outright - a container or
+ * server shell has that set, and no flag should make overwriting production
+ * data a one-word decision.
+ */
+function assertRestoreAllowed({ argv = process.argv, env = process.env } = {}) {
+  let host = "(DATABASE_URL missing or unparseable)";
+  try {
+    host = new URL(env.DATABASE_URL).host;
+  } catch {
+    /* keep the placeholder */
+  }
+
+  if (env.NODE_ENV === "production") {
+    throw new Error(
+      `restore.js REPLACES every table in ${host} and refuses to run with NODE_ENV=production.\n` +
+        "Fix forward, or restore into a disposable database."
+    );
+  }
+
+  if (argv.includes("--force")) return;
+  if (env.ALLOW_DESTRUCTIVE_RESTORE === "1") return;
+
+  throw new Error(
+    `restore.js REPLACES the data in ${host} with a snapshot.\n\n` +
+      "If that database is disposable, either:\n" +
+      "  - set ALLOW_DESTRUCTIVE_RESTORE=1 for this one command, or\n" +
+      "  - re-run with --yes --force.\n\n" +
+      "If it is the pilot or production database, stop: rows written after the\n" +
+      "snapshot was taken are not in it, and this script has no undo."
+  );
+}
+
 function target() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set (see backend/.env.example).");
@@ -194,6 +240,9 @@ async function main() {
     process.exitCode = 1;
     return;
   }
+
+  // `--yes` answered "this file"; this asks "this database". Both are needed.
+  assertRestoreAllowed();
 
   if (isDump) {
     const bin = findPgRestore();

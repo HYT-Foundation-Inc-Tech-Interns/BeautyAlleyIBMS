@@ -109,9 +109,11 @@ jobs:
       QR_SIGNING_SECRET: ${{ secrets.TEST_QR_SIGNING_SECRET }}
       NODE_ENV: test
       LOG_LEVEL: error
-      # The seed truncates. This is the explicit "this database is disposable"
-      # statement that scripts/seed.js requires.
-      ALLOW_DESTRUCTIVE_SEED: "1"
+      # The seed truncates, so the suite refuses to start unless the target is
+      # declared: TEST_DB_HOST must equal the hostname in TEST_DATABASE_URL.
+      # That check is what stops a swapped secret from wiping the pilot project
+      # - on a runner there is no backend/.env.local to compare against.
+      TEST_DB_HOST: ${{ secrets.TEST_DB_HOST }}
     steps:
       - uses: actions/checkout@v4
 

@@ -49,9 +49,53 @@ const path = require("node:path");
 const SEEDED_CLIENT_PREFIX = "33333333-"; // see IDS in scripts/seed.js
 const APPLY = process.argv.includes("--apply");
 
+/**
+ * Destructive-operation guard.
+ *
+ * `--apply` deletes every booking and every client that is not one of the two
+ * seeded rows. That is right for a demo database and wrong for a live one: real
+ * bookings and real customers are exactly what it calls "junk". The script
+ * reads whatever `DATABASE_URL` points at, so the only reliable statement that
+ * the target is disposable is an explicit one - `ALLOW_DEMO_RESET=1`, or
+ * `--force` on the command line.
+ *
+ * `NODE_ENV=production` is refused outright, for the same reason `seed.js`
+ * refuses it: no flag should make deleting production rows a one-word decision.
+ */
+function assertDemoResetAllowed({ argv = process.argv, env = process.env } = {}) {
+  let host = "(DATABASE_URL missing or unparseable)";
+  try {
+    host = new URL(env.DATABASE_URL).host;
+  } catch {
+    /* keep the placeholder */
+  }
+
+  if (env.NODE_ENV === "production") {
+    throw new Error(
+      `reset-demo-data.js DELETEs every booking in ${host} and refuses to run\n` +
+        "with NODE_ENV=production. Restore a backup instead, or fix forward."
+    );
+  }
+
+  if (argv.includes("--force")) return;
+  if (env.ALLOW_DEMO_RESET === "1") return;
+
+  throw new Error(
+    `reset-demo-data.js DELETEs every booking and every non-seeded client in ${host}.\n\n` +
+      "If that database is disposable, either:\n" +
+      "  - set ALLOW_DEMO_RESET=1 for this one command, or\n" +
+      "  - re-run with --apply --force.\n\n" +
+      "If it is the pilot database, stop: those are real bookings and customers."
+  );
+}
+
 const c = { red: "\x1b[31m", green: "\x1b[32m", dim: "\x1b[2m", reset: "\x1b[0m" };
 
 (async () => {
+  // Before connecting: a run that is not allowed to delete has no business
+  // reading the database either.
+  if (APPLY) assertDemoResetAllowed();
+
   const db = new Client({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
