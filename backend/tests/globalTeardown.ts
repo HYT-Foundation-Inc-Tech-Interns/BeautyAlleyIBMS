@@ -33,6 +33,7 @@
  */
 import path from "path";
 import dotenv from "dotenv";
+import { releaseRunLock } from "./helpers/runLock";
 
 export default async function globalTeardown() {
   // Same precedence as globalSetup: `.env.local` holds the real credentials.
@@ -72,5 +73,7 @@ export default async function globalTeardown() {
     );
   } finally {
     await client.end().catch(() => undefined);
+    // Last thing the run does: a lock left behind would block the next one.
+    releaseRunLock();
   }
 }

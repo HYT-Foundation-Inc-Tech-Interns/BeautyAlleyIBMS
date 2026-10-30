@@ -8,6 +8,7 @@
  */
 import path from "path";
 import dotenv from "dotenv";
+import { acquireRunLock } from "./helpers/runLock";
 
 export default async function globalSetup() {
   // .env.local first: it holds the real credentials and wins over the tracked
@@ -25,6 +26,11 @@ export default async function globalSetup() {
     console.warn("[globalSetup] DATABASE_URL not set - skipping seed");
     return;
   }
+
+  // Refuse to start when another run is live. Two concurrent runs share this
+  // database and the seed below TRUNCATEs it, so the second run corrupts the
+  // first one's fixtures. See tests/helpers/runLock.ts.
+  acquireRunLock();
 
   // scripts/seed.js is CommonJS and takes a pg Client.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
