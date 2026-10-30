@@ -699,6 +699,14 @@ export const api = {
       /** Written onto the roster row an EMPLOYEE login creates. */
       title?: string;
       bio?: string;
+      /**
+       * What that roster row is qualified for.
+       *
+       * A stylist qualified for nothing is offered by the booking engine
+       * nowhere, so the form asks for this up front rather than leaving the new
+       * person invisible until someone remembers to press Edit.
+       */
+      serviceIds?: string[];
     }) => request<CreatedStaffAccount>("POST", "/api/v1/admin/users/staff", { body }),
 
     /**

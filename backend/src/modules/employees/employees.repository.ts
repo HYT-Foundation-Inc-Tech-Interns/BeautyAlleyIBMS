@@ -34,6 +34,28 @@ export interface TimeOffRow {
 const SELECT =
   "id, profile_id, full_name, title, bio, is_active, created_at, updated_at" as const;
 
+/**
+ * The house schedule: Monday to Saturday, 09:00-18:00 branch time.
+ *
+ * `get_available_slots` **inner-joins** `working_hours`, so an employee with no
+ * rota is not "offered with no times" - they are absent from the booking grid
+ * entirely. Together with a qualification set the console used to hard-code to
+ * empty, that made every stylist created through "issue a team login"
+ * permanently unbookable, with nothing in the UI to say why and no way to fix
+ * it: the public employee endpoint hides hours by design and there is no admin
+ * read for them.
+ *
+ * This is the rota the seed gives all three demo stylists and the branch's
+ * actual opening hours, so it is the right starting point for the common case -
+ * a full-time stylist. `PUT /employees/:id/working-hours` replaces it in one
+ * statement; a part-time or weekend rota belongs there, not here.
+ */
+const HOUSE_HOURS = [1, 2, 3, 4, 5, 6].map((weekday) => ({
+  weekday,
+  startTime: "09:00",
+  endTime: "18:00",
+}));
+
 type EmployeeUpdate = Database["public"]["Tables"]["employees"]["Update"];
 
 export const employeesRepository = {
@@ -149,6 +171,12 @@ export const employeesRepository = {
     if (error) throw error;
 
     const id = data as string;
+
+    // The row and its qualifications are one statement; the rota is the second
+    // write, and it is what makes the stylist reachable by the booking engine
+    // at all. See HOUSE_HOURS.
+    await this.setWorkingHours(id, HOUSE_HOURS);
+
     const row = await this.getById(id);
     if (!row) throw AppError.internal("employee disappeared mid-create");
     return row;

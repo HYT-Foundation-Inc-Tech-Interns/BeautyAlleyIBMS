@@ -177,7 +177,11 @@ export default function Team() {
       />
 
       {inviting && (
-        <InviteStaffForm onDone={roster.reload} onCancel={() => setInviting(false)} />
+        <InviteStaffForm
+          services={catalogue.data ?? []}
+          onDone={roster.reload}
+          onCancel={() => setInviting(false)}
+        />
       )}
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -633,16 +637,41 @@ function Qualifications({
  * Issue a staff login
  * ------------------------------------------------------------------ */
 
-function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+function InviteStaffForm({
+  services,
+  onDone,
+  onCancel,
+}: {
+  services: Service[];
+  onDone: () => void;
+  onCancel: () => void;
+}) {
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [title, setTitle] = React.useState("");
+  /*
+   * Asked here, not afterwards.
+   *
+   * The booking engine only offers a stylist who is qualified for the service,
+   * and the roster row is created in the same request as the login - so a
+   * stylist created without this list exists but is invisible to every
+   * service-filtered list and to the booking grid until someone opens their
+   * card and presses Edit.
+   */
+  const [serviceIds, setServiceIds] = React.useState<string[]>([]);
   const [role, setRole] = React.useState<"EMPLOYEE" | "CONCIERGE" | "ADMIN">("EMPLOYEE");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<ApiError | null>(null);
   const [localErrors, setLocalErrors] = React.useState<Record<string, string>>({});
-  const [created, setCreated] = React.useState<{ email: string; employeeId?: string } | null>(null);
+  const [created, setCreated] = React.useState<{
+    email: string;
+    employeeId?: string;
+    qualified: number;
+  } | null>(null);
+
+  const toggleService = (id: string) =>
+    setServiceIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -667,12 +696,18 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
         fullName: fullName.trim(),
         role,
         title: role === "EMPLOYEE" ? title.trim() || undefined : undefined,
+        serviceIds: role === "EMPLOYEE" ? serviceIds : [],
       });
-      setCreated({ email: account.email ?? email.trim(), employeeId: account.employeeId });
+      setCreated({
+        email: account.email ?? email.trim(),
+        employeeId: account.employeeId,
+        qualified: role === "EMPLOYEE" ? serviceIds.length : 0,
+      });
       setFullName("");
       setEmail("");
       setPassword("");
       setTitle("");
+      setServiceIds([]);
       // The roster is behind this form and has just changed; reload it now
       // rather than leaving the admin to wonder why the new name is not there.
       onDone();
@@ -709,9 +744,11 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
           <p className="text-[12.5px] text-alley-700">
             <span className="font-medium">{created.email}</span> now has a{" "}
             {ROLE_LABEL[role].toLowerCase()} account.{" "}
-            {created.employeeId
-              ? "They are on the roster below — add their qualifications so the booking engine can offer them."
-              : "No employee row is needed — a concierge works the desk, not the floor."}
+            {!created.employeeId
+              ? "No employee row is needed — a concierge works the desk, not the floor."
+              : created.qualified > 0
+                ? `They are on the roster, qualified for ${created.qualified} treatment${created.qualified === 1 ? "" : "s"} — the booking engine can offer them now.`
+                : "They are on the roster below — add their qualifications so the booking engine can offer them."}
           </p>
         </div>
       )}
@@ -751,7 +788,11 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
               <button
                 key={option}
                 type="button"
-                onClick={() => setRole(option)}
+                onClick={() => {
+                  setRole(option);
+                  // Qualifications belong to a roster row; a concierge has none.
+                  if (option !== "EMPLOYEE") setServiceIds([]);
+                }}
                 aria-pressed={role === option}
                 className={cn(
                   "h-10 flex-1 rounded-lg border text-[12.5px] font-medium transition-colors",
@@ -768,15 +809,55 @@ function InviteStaffForm({ onDone, onCancel }: { onDone: () => void; onCancel: (
       </div>
 
       {role === "EMPLOYEE" && (
-        <div className="mt-4 max-w-[320px]">
-          <TextField
-            label="Title (optional)"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Senior therapist"
-            error={fieldErrors.title}
-          />
-        </div>
+        <>
+          <div className="mt-4 max-w-[320px]">
+            <TextField
+              label="Title (optional)"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Senior therapist"
+              error={fieldErrors.title}
+            />
+          </div>
+
+          <div className="mt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Qualified for
+            </p>
+            <div className="mt-1.5 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-border/70 bg-card p-2.5">
+              {services.length === 0 ? (
+                <p className="px-1 py-0.5 text-[11.5px] text-muted-foreground">
+                  No treatments are on the menu yet.
+                </p>
+              ) : (
+                services.map((service) => {
+                  const on = serviceIds.includes(service.id);
+                  return (
+                    <button
+                      key={service.id}
+                      type="button"
+                      onClick={() => toggleService(service.id)}
+                      aria-pressed={on}
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+                        on
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-muted-foreground hover:border-primary/40",
+                      )}
+                    >
+                      {service.name}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+            <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+              The booking engine only offers a stylist who is qualified for the
+              chosen treatment. Leave this empty and they stay on the roster,
+              unbookable, until someone edits their card.
+            </p>
+          </div>
+        </>
       )}
 
       <div className="mt-5 flex items-center gap-3">

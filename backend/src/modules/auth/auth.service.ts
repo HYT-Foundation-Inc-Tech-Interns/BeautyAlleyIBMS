@@ -231,7 +231,7 @@ export const authService = {
           bio: input.bio,
           profileId: userId,
           isActive: true,
-          serviceIds: [],
+          serviceIds: input.serviceIds,
         },
         actor.id
       );

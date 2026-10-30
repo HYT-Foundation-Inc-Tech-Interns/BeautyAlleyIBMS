@@ -62,6 +62,19 @@ export const createStaffSchema = z.object({
   /** Optionally create the linked employees row in the same call. */
   title: z.string().trim().max(120).optional(),
   bio: z.string().trim().max(2000).optional(),
+  /**
+   * What the roster row is qualified to do.
+   *
+   * Without this the console could only ever create stylists qualified for
+   * nothing: `createStaff` passed an empty array, so the new person appeared on
+   * the roster marked "cannot be booked for anything yet" and was absent from
+   * every service-filtered list and from the booking grid - which reads as the
+   * creation having failed. `create_employee` already writes the
+   * qualifications in the same statement as the row.
+   *
+   * Ignored for CONCIERGE and ADMIN, who get no roster row at all.
+   */
+  serviceIds: z.array(z.guid()).max(100).default([]),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
