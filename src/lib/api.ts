@@ -411,7 +411,14 @@ export const api = {
   },
 
   employees: {
-    list: (query: ListQuery & { includeInactive?: boolean; serviceId?: string } = {}) =>
+    /**
+     * The public roster: active staff only.
+     *
+     * There is no `includeInactive` here on purpose - the server does not
+     * accept one. The board reads the whole roster through `admin.employees`,
+     * which is role-checked.
+     */
+    list: (query: ListQuery & { serviceId?: string } = {}) =>
       request<Paginated<Employee>>("GET", "/api/v1/employees", { auth: false, query }),
 
     get: (id: string) => request<Employee>("GET", `/api/v1/employees/${id}`, { auth: false }),

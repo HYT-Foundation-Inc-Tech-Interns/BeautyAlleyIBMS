@@ -48,10 +48,14 @@ function toTimeOffDto(row: TimeOffRow) {
 }
 
 export const employeesService = {
-  async list(query: ListEmployeesQuery) {
+  /**
+   * `includeInactive` is not part of the public query shape - only the admin
+   * list passes it - so the caller has to say so explicitly.
+   */
+  async list(query: ListEmployeesQuery & { includeInactive?: boolean }) {
     const { rows, total } = await employeesRepository.list({
       pagination: { page: query.page, limit: query.limit, sort: query.sort, order: query.order },
-      includeInactive: query.includeInactive,
+      includeInactive: query.includeInactive ?? false,
       serviceId: query.serviceId,
     });
     return paginated(rows.map(toEmployeeDto), total, query.page, query.limit);

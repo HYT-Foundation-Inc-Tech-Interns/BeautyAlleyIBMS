@@ -1,8 +1,27 @@
 import type { Request, Response } from "express";
 import { employeesService } from "./employees.service";
+import type { ListEmployeesQuery } from "./employees.schemas";
 
 export const employeesController = {
+  /**
+   * The public roster: active staff only.
+   *
+   * `includeInactive` is forced here rather than trusted from the query. The
+   * schema no longer carries the key, so a request cannot set it - but the
+   * repository switches to the service role when it is true, and that is a
+   * switch an unauthenticated request must not be able to reach even if the
+   * schema changes again later.
+   */
   async list(req: Request, res: Response) {
+    const result = await employeesService.list({
+      ...(req.query as unknown as ListEmployeesQuery),
+      includeInactive: false,
+    });
+    res.status(200).json(result);
+  },
+
+  /** The roster as the desk and the owner read it, deactivated staff included. */
+  async adminList(req: Request, res: Response) {
     const result = await employeesService.list(req.query as never);
     res.status(200).json(result);
   },

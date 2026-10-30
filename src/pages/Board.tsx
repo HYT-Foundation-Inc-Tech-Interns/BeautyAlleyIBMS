@@ -165,7 +165,9 @@ function useBoardData(days: number): {
     const [summary, today, employees, clients] = await Promise.all([
       api.admin.dashboard(from, to),
       api.bookings.list({ from: to, to, limit: 100, sort: "start_time", order: "asc" }),
-      api.employees.list({ limit: 100, includeInactive: true }),
+      // The roster including retired stylists: one of them can still have
+      // bookings today. Role-checked, unlike the public list.
+      api.admin.employees({ limit: 100, includeInactive: true }),
       api.admin.clients({ limit: 6, sort: "lifetime_value_cents", order: "desc" }),
     ]);
     return {

@@ -4,12 +4,31 @@ import { paginationSchema } from "../../lib/pagination";
 
 export const EMPLOYEE_SORT_COLUMNS = ["full_name", "title", "created_at"] as const;
 
+/**
+ * The public roster.
+ *
+ * No `includeInactive`. The flag used to live here, which made
+ * `GET /employees?includeInactive=true` a public request that the repository
+ * answered with the *service role* - so an anonymous caller could list retired
+ * staff, names, titles and bios included. The route that needs it is the desk's
+ * board, and that is `GET /admin/employees`, behind a role guard.
+ */
 export const listEmployeesSchema = paginationSchema.extend({
   sort: z.enum(EMPLOYEE_SORT_COLUMNS).default("full_name"),
   order: z.enum(["asc", "desc"]).default("asc"),
-  includeInactive: queryBoolean().default(false),
   /** Only employees qualified for this service. */
   serviceId: z.guid().optional(),
+});
+
+/**
+ * The roster as the desk and the owner read it.
+ *
+ * `includeInactive` is honest here: the caller is signed in and allowed to see
+ * the whole roster, and the board needs it because a stylist who retired
+ * yesterday can still have bookings today.
+ */
+export const listAdminEmployeesSchema = listEmployeesSchema.extend({
+  includeInactive: queryBoolean().default(false),
 });
 
 export const createEmployeeSchema = z.object({
@@ -103,3 +122,4 @@ export type QuotaQuery = z.infer<typeof quotaQuerySchema>;
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 export type ListEmployeesQuery = z.infer<typeof listEmployeesSchema>;
+export type ListAdminEmployeesQuery = z.infer<typeof listAdminEmployeesSchema>;

@@ -20,7 +20,7 @@ import { bookingsController } from "../bookings/bookings.controller";
 import { employeesController } from "../employees/employees.controller";
 import { promosController } from "../promos/promos.controller";
 import { listBookingsQuerySchema } from "../bookings/bookings.schemas";
-import { listEmployeesSchema } from "../employees/employees.schemas";
+import { listAdminEmployeesSchema } from "../employees/employees.schemas";
 import { listPromosQuerySchema } from "../promos/promos.schemas";
 
 export const adminRouter = Router();
@@ -28,14 +28,19 @@ export const adminRouter = Router();
 adminRouter.use(authenticate);
 
 /*
- * Two reports are read by the desk as well as the owner.
+ * Three reads are shared with the desk, not just the owner.
  *
  * The monitoring board draws revenue, the day's flow and the best clients from
- * these two, and the board is the concierge's screen as much as the
+ * the first two, and the board is the concierge's screen as much as the
  * administrator's - the desk is the one who needs to see how the week is
- * going. Everything below the guard stays ADMIN: these are the only two
- * routes that are reads of an aggregate, and neither exposes a client's
- * record beyond the row the desk already reads in a booking.
+ * going. Neither exposes a client's record beyond the row the desk already
+ * reads in a booking. Everything below the guard stays ADMIN.
+ *
+ * The roster is the third. The floor board lists every stylist, including one
+ * who retired yesterday and still has bookings today, so it needs
+ * `includeInactive` - which used to be reachable anonymously through the public
+ * `GET /employees`. Behind this guard the same read is authenticated and
+ * role-checked, and the public route no longer carries the flag at all.
  *
  * They are declared before the blanket guard on purpose: Express matches in
  * order, so a route registered above it never passes through it.
@@ -51,6 +56,12 @@ adminRouter.get(
   requireRole(...DESK),
   validate({ query: listClientsQuerySchema }),
   asyncHandler(adminController.listClients)
+);
+adminRouter.get(
+  "/employees",
+  requireRole(...DESK),
+  validate({ query: listAdminEmployeesSchema }),
+  asyncHandler(employeesController.adminList)
 );
 
 adminRouter.use(requireRole("ADMIN"));
@@ -70,7 +81,6 @@ adminRouter.delete("/clients/:id", validate({ params: idParamSchema }), asyncHan
 
 // --- cross-module reporting ------------------------------------------------
 adminRouter.get("/bookings", validate({ query: listBookingsQuerySchema }), asyncHandler(bookingsController.list));
-adminRouter.get("/employees", validate({ query: listEmployeesSchema }), asyncHandler(employeesController.list));
 adminRouter.get("/promos", validate({ query: listPromosQuerySchema }), asyncHandler(promosController.list));
 
 // --- staff logins ----------------------------------------------------------

@@ -4,6 +4,8 @@ import {
   api,
   as,
   createTestAdmin,
+  createTestClient,
+  createTestConcierge,
   deleteTestUsers,
   type TestUser,
 } from "../helpers/api";
@@ -161,6 +163,62 @@ describeStaff("employee creation", () => {
     );
     const ids = slots.body.data.employees.map((e: { employeeId: string }) => e.employeeId);
     expect(ids).not.toContain(employeeId);
+  });
+
+  /*
+   * The roster flag used to be part of the *public* list schema, and the
+   * repository answers it with the service role - so `?includeInactive=true`
+   * on an unauthenticated request returned retired staff, names and bios
+   * included. It now lives on `GET /admin/employees` behind a role guard.
+   */
+  describe("the public roster cannot be widened by a query flag", () => {
+    async function retiredStylist(admin: TestUser): Promise<string> {
+      const res = await createStaff(admin, {
+        fullName: "Retired Rita",
+        serviceIds: [SVC_COMBINATION],
+      });
+      const employeeId = res.body.data.employeeId;
+      const patched = await request(api())
+        .patch(`/api/v1/employees/${employeeId}`)
+        .set(...as(admin.token))
+        .send({ isActive: false });
+      expect(patched.status).toBe(200);
+      return employeeId;
+    }
+
+    it("ignores includeInactive for an anonymous caller", async () => {
+      const admin = await createTestAdmin();
+      created.push(admin);
+      const employeeId = await retiredStylist(admin);
+
+      const res = await request(api()).get("/api/v1/employees?includeInactive=true&limit=100");
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((e: { id: string }) => e.id)).not.toContain(employeeId);
+    });
+
+    it("shows the same roster to the desk, who is allowed to see it", async () => {
+      const admin = await createTestAdmin();
+      created.push(admin);
+      const desk = await createTestConcierge();
+      created.push(desk);
+      const employeeId = await retiredStylist(admin);
+
+      const res = await request(api())
+        .get("/api/v1/admin/employees?includeInactive=true&limit=100")
+        .set(...as(desk.token));
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((e: { id: string }) => e.id)).toContain(employeeId);
+    });
+
+    it("refuses the roster to a client", async () => {
+      const client = await createTestClient();
+      created.push(client);
+
+      const res = await request(api())
+        .get("/api/v1/admin/employees?includeInactive=true")
+        .set(...as(client.token));
+      expect(res.status).toBe(403);
+    });
   });
 
   it("refuses an unknown service id and leaves no roster row behind", async () => {
