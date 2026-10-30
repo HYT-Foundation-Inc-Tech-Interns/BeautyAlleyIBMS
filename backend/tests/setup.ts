@@ -10,18 +10,12 @@
  * single most expensive kind of red herring.
  */
 
-import path from "path";
-import dotenv from "dotenv";
+import { loadTestEnv } from "./env";
 
 // Loaded here as well as in src/config/env.ts, because these assertions run
-// before any src module is imported. .env.local carries the real credentials
-// and is read first; .env is the tracked template and fills in the gaps.
-dotenv.config({
-  path: [
-    path.join(__dirname, "..", ".env.local"),
-    path.join(__dirname, "..", ".env"),
-  ],
-});
+// before any src module is imported. Same precedence as globalSetup: a test
+// project in .env.test.local wins over the application's .env.local.
+loadTestEnv();
 
 // Tests must never accidentally run against production settings.
 process.env.NODE_ENV = "test";

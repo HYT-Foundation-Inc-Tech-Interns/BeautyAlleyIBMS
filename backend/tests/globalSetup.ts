@@ -6,19 +6,24 @@
  * so running it per-file would wipe data a previously-run suite is still
  * asserting against when jest runs files in band.
  */
-import path from "path";
-import dotenv from "dotenv";
+import { assertSeparateDatabase, loadTestEnv } from "./env";
 import { acquireRunLock } from "./helpers/runLock";
 
 export default async function globalSetup() {
-  // .env.local first: it holds the real credentials and wins over the tracked
-  // template. Without this the suite silently skips every credentialed test.
-  dotenv.config({
-    path: [
-      path.join(__dirname, "..", ".env.local"),
-      path.join(__dirname, "..", ".env"),
-    ],
-  });
+  // .env.test.local first, then .env.local: a test project wins, so the suite
+  // can run against its own database without touching the application's
+  // configuration. See tests/env.ts.
+  loadTestEnv();
+
+  /*
+   * The unit suite touches no database, so it runs anywhere.
+   */
+  const argv = process.argv.slice(2);
+  const unitOnly =
+    process.env.npm_lifecycle_event === "test:unit" ||
+    (argv.some((a) => a.includes("tests/unit")) &&
+      !argv.some((a) => a.includes("tests/integration")));
+  if (unitOnly) return;
 
   if (!process.env.DATABASE_URL) {
     // Not fatal: the unit suite does not need a database.
@@ -26,6 +31,14 @@ export default async function globalSetup() {
     console.warn("[globalSetup] DATABASE_URL not set - skipping seed");
     return;
   }
+
+  /*
+   * Everything below this line TRUNCATEs seventeen tables. The target has to be
+   * a database the application does not use - a test run against the app's own
+   * project deletes every client, booking and employee in it, which reads as
+   * "the app is not saving anything". See tests/env.ts.
+   */
+  assertSeparateDatabase();
 
   // Refuse to start when another run is live. Two concurrent runs share this
   // database and the seed below TRUNCATEs it, so the second run corrupts the
