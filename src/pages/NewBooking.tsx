@@ -11,9 +11,12 @@
  *
  * What it deliberately does not do: invent availability. Every time shown comes
  * from `get_available_slots` for the chosen service and day, and the stylist
- * filter narrows those same slots rather than re-deriving them. If a stylist is
- * left on "any", the API assigns a qualified, rostered, free one exactly as the
- * public flow does.
+ * filter narrows those same slots rather than re-deriving them. The picker
+ * itself offers only stylists the backend says can take this booking - active
+ * and qualified for the service (`/employees?serviceId`), rostered and free
+ * that day (`get_available_slots`), and, once a time is chosen, free at that
+ * time. If a stylist is left on "any", the API assigns a qualified, rostered,
+ * free one exactly as the public flow does.
  */
 
 import * as React from "react";
@@ -122,21 +125,58 @@ export default function NewBooking() {
       : rows;
   }, [catalogue.data, term]);
 
-  const employeeNames = useAsync("desk:employees", async () => {
-    const page = await api.employees.list({ limit: 100, sort: "full_name", order: "asc" });
-    return new Map(page.data.map((e) => [e.id, e.fullName]));
+  /*
+   * The picker's population, and the only place it comes from.
+   *
+   * `/employees?serviceId=` is the server's answer to "who can deliver this
+   * treatment": it filters `employee_services` and `is_active`, so an inactive
+   * or unqualified stylist is not in the response at all. Deliberately not
+   * "fetch the whole roster and filter here" - this is the same list the
+   * booking engine would accept.
+   */
+  const roster = useAsync(`desk:roster:${serviceId}`, async () => {
+    if (!serviceId) return null;
+    const page = await api.employees.list({
+      serviceId,
+      limit: 100,
+      sort: "full_name",
+      order: "asc",
+    });
+    return page.data;
   });
 
-  const employeeNameMap = employeeNames.data ?? new Map<string, string>();
+  const employeeNameMap = React.useMemo(
+    () => new Map((roster.data ?? []).map((e) => [e.id, e.fullName])),
+    [roster.data],
+  );
 
-  /* The stylist list comes from the same availability answer, so it can only
-     offer people who are actually free for this service on this day. */
+  /*
+   * Who the desk may actually give this appointment to.
+   *
+   * Three filters, each from the layer that owns the rule:
+   *   1. qualified and active          -> /employees?serviceId
+   *   2. on the rota, not on leave and
+   *      not already booked that day   -> get_available_slots, per employee
+   *   3. free at the chosen time       -> the same answer, narrowed to that start
+   *
+   * Step 3 is what the old list was missing: it offered the whole day's roster
+   * even after a time was picked, so a stylist already booked at 14:00 stayed
+   * selectable for 14:00 - and choosing them then emptied the time grid, which
+   * reads as "the app lost my slot".
+   */
   const stylists = React.useMemo(() => {
-    const groups = slots.data?.employees ?? [];
-    const seen = new Set<string>();
-    for (const group of groups) seen.add(group.employeeId);
-    return [...seen].map((id) => ({ id, name: employeeNameMap.get(id) ?? "Stylist" }));
-  }, [slots.data, employeeNameMap]);
+    const slotsByEmployee = new Map(
+      (slots.data?.employees ?? []).map((group) => [group.employeeId, group.slots]),
+    );
+
+    return (roster.data ?? [])
+      .filter((person) => slotsByEmployee.has(person.id))
+      .filter(
+        (person) =>
+          !startTime || slotsByEmployee.get(person.id)!.some((slot) => slot.start === startTime),
+      )
+      .map((person) => ({ id: person.id, name: person.fullName }));
+  }, [roster.data, slots.data, startTime]);
 
   const times = React.useMemo(() => {
     const groups = slots.data?.employees ?? [];
@@ -155,6 +195,19 @@ export default function NewBooking() {
   React.useEffect(() => {
     setStartTime("");
   }, [serviceId, date, employeeId]);
+
+  /*
+   * A chosen stylist can stop being eligible without the desk touching the
+   * picker: the day changes, or the treatment does. Leaving the id in state
+   * would name someone the list no longer offers and filter the time grid to a
+   * person who cannot take the booking. Both answers have to have settled
+   * first, or a reload would clear a perfectly valid choice.
+   */
+  React.useEffect(() => {
+    if (!employeeId) return;
+    if (roster.loading || slots.loading) return;
+    if (!stylists.some((s) => s.id === employeeId)) setEmployeeId("");
+  }, [employeeId, stylists, roster.loading, slots.loading]);
 
   /*
    * Debounced lookup. The cleanup cancels the in-flight answer as well as the
@@ -549,15 +602,29 @@ export default function NewBooking() {
               <select
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
-                className="mt-1.5 block h-10 w-full rounded-lg border border-border bg-card px-3 text-[13.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                disabled={roster.loading || !serviceId}
+                className="mt-1.5 block h-10 w-full rounded-lg border border-border bg-card px-3 text-[13.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15 disabled:opacity-60"
               >
-                <option value="">Assign the first free stylist</option>
+                <option value="">
+                  {!serviceId
+                    ? "Pick a treatment first"
+                    : roster.initial || slots.initial
+                      ? "Reading the roster…"
+                      : stylists.length === 0
+                        ? startTime
+                          ? "Nobody is free at that time"
+                          : "No stylist is free that day"
+                        : "Assign the first free stylist"}
+                </option>
                 {stylists.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {employeeNameMap.get(s.id) ?? s.name}
+                    {s.name}
                   </option>
                 ))}
               </select>
+              {roster.error && (
+                <ErrorNote error={roster.error} onRetry={roster.reload} className="mt-2" />
+              )}
             </label>
           </Panel>
         </div>
