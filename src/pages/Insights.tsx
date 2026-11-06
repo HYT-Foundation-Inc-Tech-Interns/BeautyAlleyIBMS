@@ -38,7 +38,7 @@ import {
 
 import { branchTime, branchToday, cn, peso, shiftDayKey } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
-import type { Booking, ClientRecord, Dashboard, Employee } from "@/lib/api-types";
+import type { Booking, ClientRecord, Dashboard, Employee, InsightsPayload } from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,8 @@ type Kind =
   | "flow"
   | "topservices"
   | "topclients"
+  | "retention"
+  | "promos"
   | "runsheet"
   | "floor"
   | "arrivals";
@@ -80,6 +82,8 @@ const DEFAULT_LAYOUT: InsightWidget[] = [
   { id: "flow", kind: "flow", w: 2, h: 1, label: "Bookings per day" },
   { id: "topservices", kind: "topservices", w: 2, h: 1, label: "Top treatments" },
   { id: "topclients", kind: "topclients", w: 2, h: 1, label: "Best clients" },
+  { id: "retention", kind: "retention", w: 2, h: 2, label: "Did not rebook" },
+  { id: "promos", kind: "promos", w: 2, h: 1, label: "Promo performance" },
   { id: "runsheet", kind: "runsheet", w: 2, h: 2, label: "Today's run sheet" },
   { id: "floor", kind: "floor", w: 1, h: 2, label: "The floor" },
   { id: "arrivals", kind: "arrivals", w: 1, h: 1, label: "Arrivals today" },
@@ -146,6 +150,7 @@ interface InsightData {
   today: Booking[];
   employees: Employee[];
   clients: ClientRecord[];
+  insights: InsightsPayload | null;
 }
 
 function useInsightData(days: number): {
@@ -162,19 +167,21 @@ function useInsightData(days: number): {
 
   const state = useAsync(`board:${from}:${to}`, async () => {
     // Independent reads, so they go out together rather than in a queue.
-    const [summary, today, employees, clients] = await Promise.all([
+    const [summary, today, employees, clients, insights] = await Promise.all([
       api.admin.dashboard(from, to),
       api.bookings.list({ from: to, to, limit: 100, sort: "start_time", order: "asc" }),
       // The roster including retired stylists: one of them can still have
       // bookings today. Role-checked, unlike the public list.
       api.admin.employees({ limit: 100, includeInactive: true }),
       api.admin.clients({ limit: 6, sort: "lifetime_value_cents", order: "desc" }),
+      api.admin.insights({ days, minDays: 14 }),
     ]);
     return {
       summary,
       today: today.data,
       employees: employees.data,
       clients: clients.data,
+      insights,
     } satisfies InsightData;
   });
 
@@ -599,6 +606,86 @@ function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
                 </li>
               ))}
             </ul>
+          )}
+        </Shell>
+      );
+    }
+
+    case "retention": {
+      const r = data.insights?.retention;
+      const rate = r && r.clientsSeen > 0 ? Math.round((r.rebooked / r.clientsSeen) * 100) : 0;
+      return (
+        <Shell title="Did not rebook" meta={r ? rate + "% rebooked" : undefined}>
+          {!r || r.clientsSeen === 0 ? (
+            <div className="flex flex-1 items-center">
+              <EmptyNote
+                title="No completed visits"
+                description="Rebooking appears once clients complete a visit in this window."
+              />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-2">
+                <Big>{r.didNotRebook}</Big>
+                <span className="text-[11.5px] text-muted-foreground">
+                  of {r.clientsSeen} did not book again
+                </span>
+              </div>
+              <ul className="mt-3 space-y-2.5">
+                {r.clients.slice(0, 5).map((c) => (
+                  <li key={c.clientId} className="flex items-center gap-2.5">
+                    <PersonAvatar name={c.fullName} className="size-7 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-medium">{c.fullName}</p>
+                      <p className="truncate text-[10.5px] text-muted-foreground">
+                        {c.visits} visits · {peso(c.valueCents)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[11px] tabular-nums text-clay">
+                      {c.daysSince}d ago
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Shell>
+      );
+    }
+
+    case "promos": {
+      const promos = data.insights?.promos ?? [];
+      return (
+        <Shell title="Promo performance" meta="completed revenue">
+          {promos.length === 0 ? (
+            <div className="flex flex-1 items-center">
+              <EmptyNote
+                title="No promo redemptions"
+                description="Codes appear here once a booking uses one in this window."
+              />
+            </div>
+          ) : (
+            <div className="mt-1 space-y-2">
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                <span>Code</span>
+                <span className="text-right">Uses</span>
+                <span className="text-right">Discount</span>
+                <span className="text-right">Revenue</span>
+              </div>
+              {promos.slice(0, 5).map((p) => (
+                <div
+                  key={p.code}
+                  className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-x-3 text-[11.5px]"
+                >
+                  <span className="truncate font-mono">{p.code}</span>
+                  <span className="text-right tabular-nums text-muted-foreground">{p.redemptions}</span>
+                  <span className="text-right tabular-nums text-muted-foreground">
+                    {p.discountCents > 0 ? "−" + peso(p.discountCents) : "—"}
+                  </span>
+                  <span className="text-right font-medium tabular-nums">{peso(p.revenueCents)}</span>
+                </div>
+              ))}
+            </div>
           )}
         </Shell>
       );

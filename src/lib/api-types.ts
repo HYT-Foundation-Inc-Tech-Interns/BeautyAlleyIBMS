@@ -415,6 +415,41 @@ export interface Dashboard {
   topServices: { name: string; bookings: number; revenue_cents: number }[];
 }
 
+export interface RetentionClient {
+  clientId: string;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  lastVisit: string;
+  daysSince: number;
+  visits: number;
+  valueCents: number;
+}
+
+export interface RetentionSummary {
+  from: string;
+  to: string;
+  minDays: number;
+  clientsSeen: number;
+  rebooked: number;
+  didNotRebook: number;
+  clients: RetentionClient[];
+}
+
+export interface PromoPerformance {
+  code: string;
+  redemptions: number;
+  discountCents: number;
+  completed: number;
+  revenueCents: number;
+  noShows: number;
+}
+
+export interface InsightsPayload {
+  retention: RetentionSummary;
+  promos: PromoPerformance[];
+}
+
 export interface ClientRecord {
   id: string;
   fullName: string;

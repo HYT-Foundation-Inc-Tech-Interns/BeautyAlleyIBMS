@@ -48,6 +48,7 @@ import type {
   CreatedStaffAccount,
   StaffLogin,
   Dashboard,
+  InsightsPayload,
   Employee,
   Health,
   LoginResult,
@@ -697,6 +698,9 @@ export const api = {
   },
 
   admin: {
+    insights: (query: { days?: number; minDays?: number } = {}) =>
+      request<InsightsPayload>("GET", "/api/v1/admin/insights", { query }),
+
     dashboard: (from: string, to: string) =>
       request<Dashboard>("GET", "/api/v1/admin/dashboard", { query: { from, to } }),
 
