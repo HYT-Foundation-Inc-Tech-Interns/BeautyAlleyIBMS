@@ -61,6 +61,8 @@ export const CODES = {
   TASK_NOT_FOUND: "TASK_NOT_FOUND",
   ATTENDANCE_NOT_FOUND: "ATTENDANCE_NOT_FOUND",
   PROFILE_NOT_FOUND: "PROFILE_NOT_FOUND",
+  /** Migration 54. A leave request that does not exist, or is not this person's. */
+  LEAVE_NOT_FOUND: "LEAVE_NOT_FOUND",
 
   // --- 409 conflict --------------------------------------------------------
   SLOT_TAKEN: "SLOT_TAKEN",
@@ -79,6 +81,8 @@ export const CODES = {
   DUPLICATE_TASK: "DUPLICATE_TASK",
   /** Migration 34. Raised by deactivate_room(); the message carries the count. */
   ROOM_STILL_BOOKED: "ROOM_STILL_BOOKED",
+  /** Someone already answered this leave request - approve and decline cannot both win. */
+  LEAVE_DECIDED: "LEAVE_DECIDED",
   CONFLICT: "CONFLICT",
 
   // --- 429 -----------------------------------------------------------------
@@ -438,6 +442,8 @@ const MESSAGES: Record<string, string> = {
   [CODES.ALREADY_TIMED_OUT]: "You have already timed out today.",
   [CODES.NO_ACTIVE_SESSION]: "There is no open session to time out of. Time in first.",
   [CODES.ATTENDANCE_NOT_FOUND]: "No attendance record for that day.",
+  [CODES.LEAVE_NOT_FOUND]: "No such leave request.",
+  [CODES.LEAVE_DECIDED]: "That leave request has already been answered.",
   [CODES.TASK_NOT_FOUND]: "No such task.",
   [CODES.NOT_TASK_OWNER]: "That task is assigned to someone else.",
   [CODES.TASK_STATUS_TRANSITION]: "That status change is not allowed for this task.",

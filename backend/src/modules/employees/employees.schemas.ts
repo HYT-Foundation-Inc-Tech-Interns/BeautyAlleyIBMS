@@ -80,6 +80,40 @@ export const timeOffSchema = z
     path: ["endsAt"],
   });
 
+/**
+ * The leave board's window.
+ *
+ * A plain date range, because the board is about days rather than instants:
+ * "can we cover Saturday" is answered per local day. Capped at nine weeks so
+ * one call cannot ask for a year of rota, and ordered so the two ends cannot be
+ * sent the wrong way round.
+ */
+export const leaveQuerySchema = z
+  .object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "from must be YYYY-MM-DD"),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "to must be YYYY-MM-DD"),
+  })
+  .refine((v) => v.to >= v.from, { message: "to must not be before from", path: ["to"] })
+  .refine((v) => (Date.parse(v.to) - Date.parse(v.from)) / 86_400_000 <= 62, {
+    message: "Ask for 63 days or fewer",
+    path: ["to"],
+  });
+
+/**
+ * The owner's answer to a request. A note is optional on an approval and
+ * expected on a decline - but "expected" is a matter for the screen, not a
+ * rule the API enforces, so it stays optional here.
+ */
+export const leaveDecisionSchema = z.object({
+  decision: z.enum(["approve", "decline"]),
+  note: z.string().trim().max(300).optional(),
+});
+
+export const leaveParamSchema = z.object({
+  id: z.guid("Not a valid id"),
+  leaveId: z.guid("Not a valid leave id"),
+});
+
 export const availabilityQuerySchema = z.object({
   serviceId: z.guid("serviceId is required"),
   date: z
@@ -118,6 +152,8 @@ export const quotaQuerySchema = z.object({
 });
 
 export type QuotaQuery = z.infer<typeof quotaQuerySchema>;
+export type LeaveQuery = z.infer<typeof leaveQuerySchema>;
+export type LeaveDecisionInput = z.infer<typeof leaveDecisionSchema>;
 
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;

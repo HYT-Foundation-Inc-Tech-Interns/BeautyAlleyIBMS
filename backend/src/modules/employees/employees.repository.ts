@@ -23,16 +23,54 @@ export interface WorkingHourRow {
   end_time: string;
 }
 
+export type TimeOffStatus = "PENDING" | "APPROVED" | "DECLINED";
+
 export interface TimeOffRow {
   id: string;
   employee_id: string;
   starts_at: string;
   ends_at: string;
   reason: string | null;
+  status: TimeOffStatus;
+  decided_at: string | null;
+  decision_note: string | null;
+}
+
+/** One person's leave inside a board day. */
+export interface LeavePerson {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+  status: TimeOffStatus;
+}
+
+export interface LeaveBoardDay {
+  date: string;
+  /** Active stylists whose weekly pattern includes this weekday. */
+  scheduled: number;
+  approvedOff: number;
+  pendingOff: number;
+  /** scheduled minus those of them on approved leave, floored at zero. */
+  available: number;
+  people: LeavePerson[];
+}
+
+export interface LeaveBoard {
+  from: string;
+  to: string;
+  timezone: string;
+  days: LeaveBoardDay[];
+  pending: LeavePerson[];
 }
 
 const SELECT =
   "id, profile_id, full_name, title, bio, is_active, created_at, updated_at" as const;
+
+const TIME_OFF_SELECT =
+  "id, employee_id, starts_at, ends_at, reason, status, decided_at, decision_note" as const;
 
 /**
  * The house schedule: Monday to Saturday, 09:00-18:00 branch time.
@@ -139,7 +177,7 @@ export const employeesRepository = {
     const db = requireServiceRole();
     let query = db
       .from("time_off")
-      .select("id, employee_id, starts_at, ends_at, reason")
+      .select(TIME_OFF_SELECT)
       .eq("employee_id", employeeId)
       .order("starts_at");
     if (from) query = query.gte("ends_at", from);
@@ -260,14 +298,101 @@ export const employeesRepository = {
     return this.workingHoursFor(employeeId);
   },
 
-  async addTimeOff(employeeId: string, startsAt: string, endsAt: string, reason?: string): Promise<TimeOffRow> {
+  /**
+   * A leave row is written with its outcome decided by the caller, because who
+   * is asking changes what the row means: the owner's own entry is already
+   * approved, a stylist's is a request. The service makes that call; this
+   * method only writes it.
+   */
+  async addTimeOff(input: {
+    employeeId: string;
+    startsAt: string;
+    endsAt: string;
+    reason?: string;
+    status: TimeOffStatus;
+    requestedBy: string | null;
+    decidedBy: string | null;
+    decidedAt: string | null;
+  }): Promise<TimeOffRow> {
     const db = requireServiceRole();
     const { data, error } = await db
       .from("time_off")
-      .insert({ employee_id: employeeId, starts_at: startsAt, ends_at: endsAt, reason: reason ?? null })
-      .select("id, employee_id, starts_at, ends_at, reason")
+      .insert({
+        employee_id: input.employeeId,
+        starts_at: input.startsAt,
+        ends_at: input.endsAt,
+        reason: input.reason ?? null,
+        status: input.status,
+        requested_by: input.requestedBy,
+        decided_by: input.decidedBy,
+        decided_at: input.decidedAt,
+      })
+      .select(TIME_OFF_SELECT)
       .single();
     if (error) throw error;
     return data as TimeOffRow;
+  },
+
+  async timeOffById(leaveId: string): Promise<TimeOffRow | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("time_off")
+      .select(TIME_OFF_SELECT)
+      .eq("id", leaveId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as TimeOffRow) ?? null;
+  },
+
+  /**
+   * Answer a request. The pending-status filter is the guard, not a courtesy:
+   * two owners clicking approve at once would otherwise overwrite each other,
+   * and a decline could replace an approval. Returns null when the row was no
+   * longer pending.
+   */
+  async decideTimeOff(
+    leaveId: string,
+    decision: "approve" | "decline",
+    actorId: string,
+    note?: string
+  ): Promise<TimeOffRow | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("time_off")
+      .update({
+        status: decision === "approve" ? "APPROVED" : "DECLINED",
+        decided_by: actorId,
+        decided_at: new Date().toISOString(),
+        decision_note: note ?? null,
+      })
+      .eq("id", leaveId)
+      .eq("status", "PENDING")
+      .select(TIME_OFF_SELECT)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as TimeOffRow) ?? null;
+  },
+
+  async deleteTimeOff(leaveId: string): Promise<boolean> {
+    const db = requireServiceRole();
+    const { error, count } = await db.from("time_off").delete({ count: "exact" }).eq("id", leaveId);
+    if (error) throw error;
+    return (count ?? 0) > 0;
+  },
+
+  /**
+   * The rota view. The counting lives in the get_leave_board function
+   * (migration 54) so the board and any later surface cannot disagree about
+   * what "available" means, or about where a day starts.
+   */
+  async leaveBoard(from: string, to: string): Promise<LeaveBoard> {
+    const db = requireServiceRole();
+    const { data, error } = await db.rpc("get_leave_board", {
+      p_from: from,
+      p_to: to,
+      p_timezone: null,
+    });
+    if (error) throw error;
+    return data as unknown as LeaveBoard;
   },
 };

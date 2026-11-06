@@ -56,10 +56,40 @@ export const employeesController = {
     res.status(200).json({ data: result });
   },
 
-  async addTimeOff(req: Request, res: Response) {
+  /**
+   * Ask for leave. The service decides whether that is a request or a
+   * decision, from the caller's role - not from anything in the body.
+   */
+  async requestTimeOff(req: Request, res: Response) {
     const { startsAt, endsAt, reason } = req.body;
-    const result = await employeesService.addTimeOff(req.params.id, startsAt, endsAt, reason);
+    const result = await employeesService.requestTimeOff(
+      req.params.id,
+      { startsAt, endsAt, reason },
+      req.actor!
+    );
     res.status(201).json({ data: result });
+  },
+
+  async decideTimeOff(req: Request, res: Response) {
+    const result = await employeesService.decideTimeOff(
+      req.params.id,
+      req.params.leaveId,
+      req.body,
+      req.actor!
+    );
+    res.status(200).json({ data: result });
+  },
+
+  async cancelTimeOff(req: Request, res: Response) {
+    const result = await employeesService.cancelTimeOff(req.params.id, req.params.leaveId, req.actor!);
+    res.status(200).json({ data: result });
+  },
+
+  /** The rota board: coverage per day and every request still waiting. */
+  async leaveBoard(req: Request, res: Response) {
+    const { from, to } = req.query as unknown as { from: string; to: string };
+    const result = await employeesService.leaveBoard(from, to);
+    res.status(200).json({ data: result });
   },
 
   async listTimeOff(req: Request, res: Response) {

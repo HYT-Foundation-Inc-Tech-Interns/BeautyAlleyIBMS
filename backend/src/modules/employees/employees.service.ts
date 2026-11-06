@@ -1,5 +1,5 @@
 import { requireServiceRole, supabasePublic } from "../../db/supabase";
-import { iso } from "../../lib/dates";
+import { iso, isoOrNull } from "../../lib/dates";
 import { AppError, CODES } from "../../lib/errors";
 import { paginated } from "../../lib/pagination";
 import {
@@ -10,9 +10,11 @@ import {
 } from "./employees.repository";
 import type {
   CreateEmployeeInput,
+  LeaveDecisionInput,
   ListEmployeesQuery,
   UpdateEmployeeInput,
 } from "./employees.schemas";
+import type { Actor } from "../../types/actor";
 
 export function toEmployeeDto(row: EmployeeRow) {
   return {
@@ -41,9 +43,13 @@ function toWorkingHourDto(row: WorkingHourRow) {
 function toTimeOffDto(row: TimeOffRow) {
   return {
     id: row.id,
+    employeeId: row.employee_id,
     startsAt: iso(row.starts_at),
     endsAt: iso(row.ends_at),
     reason: row.reason,
+    status: row.status,
+    decidedAt: isoOrNull(row.decided_at),
+    decisionNote: row.decision_note,
   };
 }
 
@@ -115,16 +121,91 @@ export const employeesService = {
     return this.getById(id);
   },
 
-  async addTimeOff(id: string, startsAt: string, endsAt: string, reason?: string) {
-    await this.getById(id);
-    const row = await employeesRepository.addTimeOff(id, startsAt, endsAt, reason);
+  /**
+   * Ask for leave.
+   *
+   * Who asks decides what the row means. The owner typing leave for a stylist
+   * is the decision, so it lands APPROVED with them recorded as the decider. A
+   * stylist asking for themselves lands PENDING and waits. Anyone else is
+   * refused: a colleague cannot book your holiday.
+   */
+  async requestTimeOff(
+    id: string,
+    input: { startsAt: string; endsAt: string; reason?: string },
+    actor: Actor
+  ) {
+    const employee = await this.getById(id);
+    const isOwner = actor.role === "ADMIN";
+    if (!isOwner && employee.profileId !== actor.id) {
+      throw AppError.forbidden(
+        CODES.FORBIDDEN,
+        "You can only request leave against your own roster record."
+      );
+    }
+    const now = new Date().toISOString();
+    const row = await employeesRepository.addTimeOff({
+      employeeId: id,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      reason: input.reason,
+      status: isOwner ? "APPROVED" : "PENDING",
+      requestedBy: actor.id,
+      decidedBy: isOwner ? actor.id : null,
+      decidedAt: isOwner ? now : null,
+    });
     return toTimeOffDto(row);
+  },
+
+  async decideTimeOff(id: string, leaveId: string, input: LeaveDecisionInput, actor: Actor) {
+    await this.getById(id);
+    const leave = await employeesRepository.timeOffById(leaveId);
+    if (!leave || leave.employee_id !== id) {
+      throw AppError.notFound(CODES.LEAVE_NOT_FOUND, "No such leave request");
+    }
+    const row = await employeesRepository.decideTimeOff(leaveId, input.decision, actor.id, input.note);
+    if (!row) {
+      // Someone answered it between the read and the write. The filter in the
+      // repository is what makes this race lose safely instead of overwriting.
+      throw AppError.conflict(CODES.LEAVE_DECIDED, "That leave request has already been answered");
+    }
+    return toTimeOffDto(row);
+  },
+
+  /**
+   * Withdraw a request, or delete an entry the owner made. A stylist may only
+   * take back their own *pending* request: once it is approved it is part of
+   * the rota, and cancelling approved leave is the owner's decision.
+   */
+  async cancelTimeOff(id: string, leaveId: string, actor: Actor) {
+    const employee = await this.getById(id);
+    const leave = await employeesRepository.timeOffById(leaveId);
+    if (!leave || leave.employee_id !== id) {
+      throw AppError.notFound(CODES.LEAVE_NOT_FOUND, "No such leave request");
+    }
+    if (actor.role !== "ADMIN") {
+      if (employee.profileId !== actor.id) {
+        throw AppError.forbidden(CODES.FORBIDDEN, "That leave request belongs to someone else.");
+      }
+      if (leave.status !== "PENDING") {
+        throw AppError.conflict(
+          CODES.LEAVE_DECIDED,
+          "Only a pending request can be withdrawn. Ask the owner to change approved leave."
+        );
+      }
+    }
+    await employeesRepository.deleteTimeOff(leaveId);
+    return { id: leaveId, deleted: true };
   },
 
   async timeOff(id: string) {
     await this.getById(id);
     const rows = await employeesRepository.timeOffFor(id);
     return rows.map(toTimeOffDto);
+  },
+
+  /** The rota view: coverage per day, plus every request still waiting. */
+  async leaveBoard(from: string, to: string) {
+    return employeesRepository.leaveBoard(from, to);
   },
 
   async performance(id: string, from: string, to: string) {

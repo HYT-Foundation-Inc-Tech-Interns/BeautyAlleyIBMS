@@ -17,7 +17,7 @@ contract, and `npm run check:roles` fails CI if `SCOPE` and
 | `arrivals` | Scan a pass, confirm the guest, check in | ✓ | ✓ | ✓ | |
 | `tasks` | Assign work and follow it through | ✓ | ✓ | | |
 | `my-tasks` | The floor's own worklist | | | ✓ | |
-| `attendance` | Clock in, clock out, hours worked | ✓ | | ✓ | |
+| `attendance` | Clock in, clock out, hours worked — and your own leave | ✓ | | ✓ | |
 | `insights` | Performance: revenue, utilisation and retention | ✓ | ✓ | | |
 | `settings` | Your own password; payment methods for the owner | ✓ | ✓ | ✓ | ✓ |
 | `my-bookings` | A client's own appointments and passes | | | | ✓ |

@@ -25,12 +25,14 @@
 import * as React from "react";
 import { CalendarClock, Clock, LogIn, LogOut, RefreshCw, Timer, Users } from "lucide-react";
 
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { AttendanceRecord, AttendanceStatus, AttendanceSummary, Employee } from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
 import { useAuth } from "@/auth/AuthProvider";
 import {
   branchDay,
+  branchDayKey,
+  branchInstant,
   branchTime,
   branchToday,
   cn,
@@ -222,6 +224,203 @@ function ClockCard({ onChanged }: { onChanged: () => void }) {
  * A day with no records draws no bar. That is the same rule the table follows,
  * so the chart cannot quietly disagree with the rows beneath it.
  */
+/**
+ * Your own leave: ask for it, watch it, take it back while it is still a
+ * question.
+ *
+ * The form sends branch-local days as instants (start of the first day to the
+ * start of the day after the last), because leave is stored as time, not as a
+ * date range. "All of Friday" has to mean something to the booking engine,
+ * which is checking whether a slot overlaps it.
+ */
+function MyLeave({ employeeId }: { employeeId: string }) {
+  const [from, setFrom] = React.useState(branchToday());
+  const [to, setTo] = React.useState(branchToday());
+  const [reason, setReason] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<ApiError | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const [nonce, setNonce] = React.useState(0);
+
+  const mine = useAsync("attendance:leave:" + employeeId + ":" + nonce, () =>
+    api.employees.timeOff(employeeId),
+  );
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const row = await api.employees.requestTimeOff(employeeId, {
+        startsAt: branchInstant(from, 0),
+        endsAt: branchInstant(shiftDayKey(to, 1), 0),
+        reason: reason.trim() || undefined,
+      });
+      setNotice(
+        row.status === "PENDING"
+          ? "Sent. The owner answers it from the team page."
+          : "Added to the rota.",
+      );
+      setReason("");
+      setNonce((n) => n + 1);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not send that request."),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function withdraw(id: string) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.employees.cancelLeave(employeeId, id);
+      setNotice("Withdrawn.");
+      setNonce((n) => n + 1);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not withdraw that request."),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const today = branchToday();
+  const rows = (mine.data ?? []).filter((row) => branchDayKey(row.endsAt) >= today);
+
+  const inputClass =
+    "mt-1.5 block h-10 w-full rounded-lg border border-border bg-card px-3 text-[13.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15";
+
+  return (
+    <Panel className="px-5 py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="font-display text-[16px] font-semibold tracking-tight">Your leave</h2>
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+            Ask for a day or a run of days. Nothing is taken off the rota until the owner approves it.
+          </p>
+        </div>
+      </div>
+
+      <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="min-w-0">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            From
+          </span>
+          <input
+            type="date"
+            value={from}
+            min={today}
+            max={to}
+            onChange={(e) => setFrom(e.target.value)}
+            className={inputClass}
+            required
+          />
+        </label>
+        <label className="min-w-0">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            To
+          </span>
+          <input
+            type="date"
+            value={to}
+            min={from}
+            onChange={(e) => setTo(e.target.value)}
+            className={inputClass}
+            required
+          />
+        </label>
+        <label className="min-w-[180px] flex-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Reason
+          </span>
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={300}
+            placeholder="Family trip, clinic, training…"
+            className={inputClass}
+          />
+        </label>
+        <Button type="submit" disabled={busy}>
+          {busy ? <RefreshCw className="size-4 animate-spin" /> : <CalendarClock className="size-4" />}
+          Request leave
+        </Button>
+      </form>
+
+      {notice && (
+        <p className="mt-3 rounded-lg border border-primary/20 bg-primary/[0.05] px-3 py-2 text-[11.5px] text-primary">
+          {notice}
+        </p>
+      )}
+      {error && <ErrorNote error={error} className="mt-3" />}
+
+      <div className="mt-4">
+        {mine.error ? (
+          <ErrorNote error={mine.error} onRetry={mine.reload} />
+        ) : mine.initial ? (
+          <Loading label="Reading your leave…" />
+        ) : rows.length === 0 ? (
+          <p className="text-[11.5px] text-muted-foreground">
+            No leave on record from today onward.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {rows.map((row) => (
+              <li
+                key={row.id}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-background/40 px-3 py-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] font-medium">
+                    {branchDay(row.startsAt)} – {branchDay(row.endsAt)}
+                  </p>
+                  <p className="truncate text-[10.5px] text-muted-foreground">
+                    {row.reason || "No reason given"}
+                    {row.status === "DECLINED" && row.decisionNote
+                      ? " · " + row.decisionNote
+                      : ""}
+                  </p>
+                </div>
+                <Badge
+                  variant={
+                    row.status === "APPROVED"
+                      ? "success"
+                      : row.status === "PENDING"
+                        ? "warning"
+                        : "secondary"
+                  }
+                >
+                  {row.status === "APPROVED"
+                    ? "Approved"
+                    : row.status === "PENDING"
+                      ? "Waiting"
+                      : "Declined"}
+                </Badge>
+                {row.status === "PENDING" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void withdraw(row.id)}
+                  >
+                    Withdraw
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
 function PeriodRhythm({ summary }: { summary: AttendanceSummary | null }) {
   /**
    * The API only returns days that have records. Drawn as-is, a fortnight with
@@ -390,6 +589,10 @@ export default function Attendance() {
 
         {isAdmin && <PeriodRhythm summary={summary.data} />}
       </div>
+
+      {/* A request is the person's own act, like the clock above it. Only shown
+          when this account has a roster row to attach it to. */}
+      {me?.employeeId ? <MyLeave employeeId={me.employeeId} /> : null}
 
       {/* --- summary ------------------------------------------------- */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

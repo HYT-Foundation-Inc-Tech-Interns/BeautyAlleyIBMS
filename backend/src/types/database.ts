@@ -259,6 +259,12 @@ export interface Database {
           ends_at: string;
           reason: string | null;
           created_at: string;
+          /** Migration 54: PENDING until the owner answers. */
+          status: string;
+          requested_by: string | null;
+          decided_by: string | null;
+          decided_at: string | null;
+          decision_note: string | null;
         };
         Insert: {
           id?: string;
@@ -266,12 +272,22 @@ export interface Database {
           starts_at: string;
           ends_at: string;
           reason?: string | null;
+          status?: string;
+          requested_by?: string | null;
+          decided_by?: string | null;
+          decided_at?: string | null;
+          decision_note?: string | null;
         };
         Update: {
           employee_id?: string;
           starts_at?: string;
           ends_at?: string;
           reason?: string | null;
+          status?: string;
+          requested_by?: string | null;
+          decided_by?: string | null;
+          decided_at?: string | null;
+          decision_note?: string | null;
         };
         Relationships: [];
       };
@@ -1155,6 +1171,19 @@ export interface Database {
       get_employee_performance: {
         Args: {
           p_employee_id: string;
+          p_from: string;
+          p_to: string;
+          p_timezone?: string | null;
+        };
+        Returns: Json;
+      };
+      /**
+       * Migration 54. Per-day rota coverage: scheduled, off, available, and the
+       * people behind the counts. Shape is `LeaveBoard` in the employees
+       * repository.
+       */
+      get_leave_board: {
+        Args: {
           p_from: string;
           p_to: string;
           p_timezone?: string | null;

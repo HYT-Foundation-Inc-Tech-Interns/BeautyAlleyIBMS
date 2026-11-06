@@ -470,3 +470,40 @@ Settlement rules, applied automatically:
 
 This is the manual half of deposits. Online payment is still the test surface
 above; attaching a gateway checkout to a booking is the next slice.
+
+## Leave and the rota
+
+Leave is a request with an answer, not a row the owner types and forgets.
+`time_off.status` carries the whole model: `PENDING` is a question nobody has
+answered, `APPROVED` and `DECLINED` are answers, and both record who gave it
+and when (`decided_by`, `decided_at`, `decision_note`).
+
+| Who | Can do |
+|---|---|
+| Stylist (EMPLOYEE) | Ask for leave **against their own roster record**; withdraw it while it is still pending; read their own entries. |
+| Front desk (CONCIERGE) | Read the rota board. Cannot ask for someone else's leave, cannot answer one. |
+| Owner (ADMIN) | Everything above for anyone, plus approve or decline. An entry the owner creates is approved on the spot — typing it *is* the decision. |
+
+Where it lives:
+
+- **Team → Leave** (owner): the requests waiting for an answer, then a
+  fourteen-day strip. Each cell reads *available / scheduled*; a day turns clay
+  when approved leave leaves nobody scheduled on the floor.
+- **Attendance → Your leave** (anyone with a roster row): the request form and
+  the status of everything from today onward.
+
+The coverage numbers come from `get_leave_board(from, to)` (migration 54), not
+from subtracting two lists in the browser, so the desk and the owner cannot
+disagree about Thursday. "Available" is the active stylists whose weekly
+pattern includes that weekday, minus those of them on **approved** leave. A
+pending request is counted separately and does not reduce cover until somebody
+answers it.
+
+Endpoints: `GET /employees/leave?from&to` (DESK), `POST
+/employees/:id/time-off` (OPERATIONS, self or owner), `POST
+/employees/:id/time-off/:leaveId/decision` (ADMIN), `DELETE
+/employees/:id/time-off/:leaveId` (OPERATIONS, self-while-pending or owner).
+
+Two things it does not do yet: a request does not email anyone, and approving
+leave does not offer to move the bookings that now clash. Both are visible
+follow-ons rather than hidden gaps.

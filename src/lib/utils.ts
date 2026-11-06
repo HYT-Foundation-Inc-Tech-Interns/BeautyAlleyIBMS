@@ -121,6 +121,22 @@ export function shiftDayKey(day: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * A branch-local day and hour -> the instant it names.
+ *
+ * Leave is stored as instants, so "off on the 14th" has to become a real
+ * moment at the branch. The offset is read from Intl rather than written as
+ * +08:00: Manila has no DST and the constant would work, but a hard-coded
+ * offset is a silent wrong answer the day the branch moves.
+ */
+export function branchInstant(day: string, hour = 0): string {
+  const offset =
+    new Intl.DateTimeFormat("en-US", { timeZone: BRANCH_TZ, timeZoneName: "longOffset" })
+      .formatToParts(new Date(`${day}T12:00:00Z`))
+      .find((part) => part.type === "timeZoneName")?.value.replace("GMT", "") || "+00:00";
+  return new Date(`${day}T${String(hour).padStart(2, "0")}:00:00${offset}`).toISOString();
+}
+
 /* ------------------------------------------------------------------ *
  * Money
  * ------------------------------------------------------------------ */

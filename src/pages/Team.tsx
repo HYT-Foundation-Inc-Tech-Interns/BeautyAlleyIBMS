@@ -37,10 +37,10 @@ import {
   X,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { branchDay, branchToday, cn, shiftDayKey } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import type { Employee, Service, StaffLogin } from "@/lib/api-types";
+import type { Employee, LeavePerson, Service, StaffLogin } from "@/lib/api-types";
 import { ROLE_LABEL } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -159,7 +159,7 @@ export default function Team() {
         eyebrow="Records"
         icon={Scissors}
         title="Team"
-        description="Who works the floor, and what each of them is qualified to do. Qualifications are what the booking engine consults before offering a slot."
+        description="Who works the floor, what each of them is qualified to do, and who is off. Qualifications are what the booking engine consults before offering a slot; leave is what takes a day out of it."
         actions={
           <>
             <Button variant="outline" size="icon" aria-label="Refresh" onClick={roster.reload}>
@@ -206,6 +206,8 @@ export default function Team() {
           tone="accent"
         />
       </div>
+
+      <LeavePanel />
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <button
@@ -260,6 +262,182 @@ export default function Team() {
         </div>
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Leave
+ * ------------------------------------------------------------------ */
+
+/** A `YYYY-MM-DD` key -> "Fri 7", without dragging a timezone into it. */
+function dayLabel(key: string) {
+  return new Date(key + "T12:00:00Z").toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** "Fri 7 Nov" for a single day, "Fri 7 – Sun 9 Nov" for a span. */
+function leaveRange(startsAt: string, endsAt: string) {
+  const first = branchDay(startsAt);
+  const last = branchDay(endsAt);
+  return first === last ? first : first + " – " + last;
+}
+
+/**
+ * The rota, as the owner needs it: who is waiting for an answer, and what each
+ * of the next two weeks has left.
+ *
+ * The counts come from the server (get_leave_board), not from subtracting two
+ * lists here. A day is "covered" when the people scheduled that weekday minus
+ * the ones on approved leave is more than zero - a rule that belongs in one
+ * place, because the desk and the owner must not disagree about Thursday.
+ */
+function LeavePanel() {
+  const from = branchToday();
+  const to = shiftDayKey(from, 13);
+  const [nonce, setNonce] = React.useState(0);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<ApiError | null>(null);
+
+  const board = useAsync("team:leave:" + from + ":" + nonce, () =>
+    api.employees.leave({ from, to }),
+  );
+
+  async function answer(person: LeavePerson, decision: "approve" | "decline") {
+    setBusy(person.id);
+    setError(null);
+    try {
+      await api.employees.decideLeave(person.employeeId, person.id, { decision });
+      board.reload();
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not save that decision."),
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const pending = board.data?.pending ?? [];
+  const days = board.data?.days ?? [];
+
+  return (
+    <section className="rounded-2xl border border-border/70 bg-card/60 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="font-display text-[17px] font-semibold tracking-tight">Leave</h2>
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+            Requests waiting on you, and what each of the next two weeks has left.
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setNonce((n) => n + 1)}
+          disabled={board.loading}
+        >
+          {board.loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          Refresh
+        </Button>
+      </div>
+
+      {error && <ErrorNote error={error} className="mt-3" />}
+
+      {board.error ? (
+        <ErrorNote error={board.error} onRetry={board.reload} className="mt-3" />
+      ) : board.initial ? (
+        <Loading label="Reading the rota…" className="mt-3" />
+      ) : (
+        <>
+          {pending.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-dashed border-border/70 px-3 py-2.5 text-[11.5px] text-muted-foreground">
+              Nothing waiting. A stylist asks for leave from their attendance page.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {pending.map((person) => (
+                <li
+                  key={person.id}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-border/60 bg-background/40 px-3 py-2.5"
+                >
+                  <PersonAvatar name={person.fullName} className="size-7 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12.5px] font-medium">{person.fullName}</p>
+                    <p className="truncate text-[10.5px] text-muted-foreground">
+                      {leaveRange(person.startsAt, person.endsAt)}
+                      {person.reason ? " · " + person.reason : ""}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-1.5">
+                    <Button
+                      size="sm"
+                      onClick={() => void answer(person, "approve")}
+                      disabled={busy === person.id}
+                    >
+                      <Check className="size-3.5" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void answer(person, "decline")}
+                      disabled={busy === person.id}
+                    >
+                      <X className="size-3.5" />
+                      Decline
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4 grid grid-flow-col auto-cols-[minmax(78px,1fr)] gap-2 overflow-x-auto pb-1">
+            {days.map((day) => {
+              const closed = day.scheduled === 0;
+              const uncovered = !closed && day.available === 0;
+              const who = day.people.length
+                ? day.people.map((p) => p.fullName + " (" + p.status.toLowerCase() + ")").join(", ")
+                : "Nobody is off";
+              return (
+                <div
+                  key={day.date}
+                  title={who}
+                  className={cn(
+                    "rounded-xl border px-2 py-2 text-center",
+                    closed && "border-border/50 bg-muted/30",
+                    uncovered && "border-clay/40 bg-clay/[0.06]",
+                    !closed && !uncovered && "border-border/60 bg-background/40",
+                  )}
+                >
+                  <p className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    {dayLabel(day.date)}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-0.5 text-[15px] font-semibold tabular-nums",
+                      closed && "text-muted-foreground",
+                      uncovered && "text-clay",
+                    )}
+                  >
+                    {closed ? "—" : day.available + "/" + day.scheduled}
+                  </p>
+                  <p className="text-[9.5px] text-muted-foreground">
+                    {closed ? "closed" : day.approvedOff > 0 ? day.approvedOff + " off" : "full team"}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-[10.5px] text-muted-foreground">
+            Available of scheduled, from each stylist's weekly hours. A day turns clay when
+            approved leave leaves nobody on the floor.
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 

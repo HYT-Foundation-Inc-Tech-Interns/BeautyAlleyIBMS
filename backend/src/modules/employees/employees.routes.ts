@@ -4,6 +4,9 @@ import {
   availabilityQuerySchema,
   createEmployeeSchema,
   idParamSchema,
+  leaveDecisionSchema,
+  leaveParamSchema,
+  leaveQuerySchema,
   listEmployeesSchema,
   performanceQuerySchema,
   quotaQuerySchema,
@@ -42,6 +45,21 @@ employeesRouter.get(
   asyncHandler(employeesController.quotas)
 );
 
+/**
+ * The leave board. Declared before `/:id` for the same reason as /quotas:
+ * "leave" would otherwise be read as an id and rejected by the uuid check.
+ *
+ * DESK, not OWNER: reception is who gets told "Ana is off Thursday" at the
+ * door, and the board is a read. Approving stays with the owner.
+ */
+employeesRouter.get(
+  "/leave",
+  authenticate,
+  requireRole(...DESK),
+  validate({ query: leaveQuerySchema }),
+  asyncHandler(employeesController.leaveBoard)
+);
+
 employeesRouter.get("/:id", validate({ params: idParamSchema }), asyncHandler(employeesController.getById));
 
 // --- admin -----------------------------------------------------------------
@@ -73,8 +91,7 @@ employeesRouter.put(
 );
 
 // Reading time off is useful to anyone who works here - a stylist wants to
-// see their own leave, the desk wants to know who is out. Writing it stays
-// admin-only.
+// see their own leave, the desk wants to know who is out.
 employeesRouter.get(
   "/:id/time-off",
   authenticate,
@@ -83,11 +100,41 @@ employeesRouter.get(
   asyncHandler(employeesController.listTimeOff)
 );
 
+/**
+ * Ask for leave.
+ *
+ * OPERATIONS rather than OWNER, because the person who needs to ask is the
+ * stylist. The service decides what the row means from the caller's role: the
+ * owner's entry is approved on the spot, a stylist's is a pending request, and
+ * a stylist can only ask for themselves. Keeping that rule in one place is why
+ * the body carries no status.
+ */
 employeesRouter.post(
   "/:id/time-off",
-  ...admin,
+  authenticate,
+  requireRole(...OPERATIONS),
   validate({ params: idParamSchema, body: timeOffSchema }),
-  asyncHandler(employeesController.addTimeOff)
+  asyncHandler(employeesController.requestTimeOff)
+);
+
+/** Answer a request. Approving the rota is the owner's call, not the desk's. */
+employeesRouter.post(
+  "/:id/time-off/:leaveId/decision",
+  ...admin,
+  validate({ params: leaveParamSchema, body: leaveDecisionSchema }),
+  asyncHandler(employeesController.decideTimeOff)
+);
+
+/**
+ * Withdraw a request. The service narrows it: a stylist may take back their
+ * own pending request, the owner may remove any entry.
+ */
+employeesRouter.delete(
+  "/:id/time-off/:leaveId",
+  authenticate,
+  requireRole(...OPERATIONS),
+  validate({ params: leaveParamSchema }),
+  asyncHandler(employeesController.cancelTimeOff)
 );
 
 /**

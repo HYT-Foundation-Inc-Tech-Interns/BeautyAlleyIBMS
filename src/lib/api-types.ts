@@ -216,6 +216,56 @@ export interface Employee {
 }
 
 /**
+ * A leave entry, which is also a request.
+ *
+ * PENDING is a question nobody has answered; APPROVED and DECLINED are
+ * answers. The owner's own entries arrive already approved, so a screen must
+ * not assume PENDING means "new".
+ */
+export type LeaveStatus = "PENDING" | "APPROVED" | "DECLINED";
+
+export interface LeaveRequest {
+  id: string;
+  employeeId: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+  status: LeaveStatus;
+  decidedAt: string | null;
+  decisionNote: string | null;
+}
+
+/** One person's leave inside a board day. */
+export interface LeavePerson {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+  status: LeaveStatus;
+}
+
+export interface LeaveBoardDay {
+  date: string;
+  /** Active stylists whose weekly pattern includes this weekday. */
+  scheduled: number;
+  approvedOff: number;
+  pendingOff: number;
+  /** scheduled minus those of them on approved leave, floored at zero. */
+  available: number;
+  people: LeavePerson[];
+}
+
+export interface LeaveBoard {
+  from: string;
+  to: string;
+  timezone: string;
+  days: LeaveBoardDay[];
+  pending: LeavePerson[];
+}
+
+/**
  * Progress against the daily completed-clients quota.
  *
  * Derived on read from COMPLETED bookings, so it self-corrects when a booking

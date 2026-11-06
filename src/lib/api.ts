@@ -51,6 +51,8 @@ import type {
   InsightsPayload,
   Employee,
   Health,
+  LeaveBoard,
+  LeaveRequest,
   LoginResult,
   Me,
   Paginated,
@@ -470,6 +472,43 @@ export const api = {
     /** The whole active floor at once. DESK only - it is the front desk's board. */
     quotas: (date?: string) =>
       request<QuotaProgress[]>("GET", "/api/v1/employees/quotas", { query: { date } }),
+
+    /**
+     * The rota board: coverage per day, plus every request still waiting.
+     *
+     * One call for the whole window. Asking per day would put fourteen round
+     * trips behind a strip of fourteen cells, and the counts would disagree
+     * with each other while they landed.
+     */
+    leave: (query: { from: string; to: string }) =>
+      request<LeaveBoard>("GET", "/api/v1/employees/leave", { query }),
+
+    timeOff: (id: string) => request<LeaveRequest[]>("GET", `/api/v1/employees/${id}/time-off`),
+
+    /**
+     * Ask for leave. The server decides what the row means from the caller's
+     * role - the owner's entry is approved at once, a stylist's is pending -
+     * so the body carries no status.
+     */
+    requestTimeOff: (id: string, body: { startsAt: string; endsAt: string; reason?: string }) =>
+      request<LeaveRequest>("POST", `/api/v1/employees/${id}/time-off`, { body }),
+
+    /** Answer a pending request. Admin only. */
+    decideLeave: (
+      id: string,
+      leaveId: string,
+      body: { decision: "approve" | "decline"; note?: string },
+    ) =>
+      request<LeaveRequest>("POST", `/api/v1/employees/${id}/time-off/${leaveId}/decision`, {
+        body,
+      }),
+
+    /** Withdraw a request, or remove an entry. A stylist may only take back a pending one. */
+    cancelLeave: (id: string, leaveId: string) =>
+      request<{ id: string; deleted: boolean }>(
+        "DELETE",
+        `/api/v1/employees/${id}/time-off/${leaveId}`,
+      ),
   },
 
   availability: (query: {
