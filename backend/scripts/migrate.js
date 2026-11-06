@@ -102,8 +102,41 @@ function listMigrations() {
     });
 }
 
-function makeClient() {
-  const url = process.env.DATABASE_URL;
+/**
+ * Non-fatal ordering checks.
+ *
+ * The ledger keys on the full version string, so `20261026000041` and
+ * `20261027000041` are two different migrations and neither collides. But the
+ * human-readable suffix repeats, and a future author reading only the last two
+ * digits will assume 42 does not exist. This flags that class of confusion
+ * without blocking a run: an already-applied migration must never be renamed,
+ * because renaming changes its version and the runner would apply it twice.
+ */
+function sequenceWarnings(migrations) {
+  const warnings = [];
+  const seen = new Map();
+  for (const m of migrations) {
+    if (seen.has(m.version)) {
+      warnings.push(`duplicate version ${m.version}: ${seen.get(m.version)} and ${m.file}`);
+    } else {
+      seen.set(m.version, m.file);
+    }
+  }
+  for (let i = 1; i < migrations.length; i++) {
+    const prev = migrations[i - 1];
+    const cur = migrations[i];
+    const a = Number(prev.version.slice(-2));
+    const b = Number(cur.version.slice(-2));
+    if (Number.isFinite(a) && Number.isFinite(b) && cur.version > prev.version && b <= a) {
+      warnings.push(
+        `sequence label not increasing: ${prev.file} (…${a}) is followed by ${cur.file} (…${b})`
+      );
+    }
+  }
+  return warnings;
+}
+
+function makeClient() {  const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
       "DATABASE_URL is not set. Copy .env.example to .env and fill it in."
@@ -196,6 +229,15 @@ async function main() {
   // --- status -------------------------------------------------------------
   if (MODE === "status") {
     process.stdout.write(`${c.bold}Migration status${c.reset}\n`);
+
+    const warnings = sequenceWarnings(migrations);
+    if (warnings.length) {
+      for (const w of warnings) {
+        process.stdout.write(`  ${c.yellow}WARN${c.reset}  ${w}\n`);
+      }
+      process.stdout.write("\n");
+    }
+
     let pending = 0;
     for (const m of migrations) {
       const row = applied.get(m.version);

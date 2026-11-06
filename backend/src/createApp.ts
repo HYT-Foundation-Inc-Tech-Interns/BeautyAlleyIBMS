@@ -161,7 +161,17 @@ export function createApp() {
 
   // A 100kb body cap. The largest legitimate payload is a booking with a
   // handful of service ids - anything bigger is a mistake or an attack.
-  app.use(express.json({ limit: "100kb" }));
+  //
+  // `verify` keeps the exact bytes for webhook signature checks: re-serialising
+  // `req.body` can change key order or whitespace and break the HMAC.
+  app.use(
+    express.json({
+      limit: "100kb",
+      verify: (req, _res, buf) => {
+        (req as Request & { rawBody?: Buffer }).rawBody = buf;
+      },
+    })
+  );
   app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
   app.use(apiLimiter);

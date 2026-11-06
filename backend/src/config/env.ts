@@ -78,6 +78,32 @@ const schema = z.object({
   // Where a scanned QR pass points. Defaults to the branch check-in page.
   QR_CHECKIN_URL: z.string().url().default("https://beautyalley.app/check-in"),
 
+  /*
+   * Outbound mail. Optional: the reminder queue still fills without it, and
+   * the sender marks rows SKIPPED rather than failing. `SMTP_FROM` must be an
+   * address the provider will accept as the envelope sender.
+   */
+  SMTP_HOST: z.string().trim().optional().or(z.literal("")),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_SECURE: z
+    .enum(["true", "false", "1", "0"])
+    .default("false")
+    .transform((v) => v === "true" || v === "1"),
+  SMTP_USER: z.string().trim().optional().or(z.literal("")),
+  SMTP_PASS: z.string().optional().or(z.literal("")),
+  SMTP_FROM: z.string().trim().default("Beauty Alley <no-reply@beautyalley.app>"),
+
+  /*
+   * HitPay. Optional and mock by default: without an API key the deposit test
+   * checkout returns an internal mock page instead of pretending to call a
+   * payment provider. Sandbox and live use the same API on different hosts.
+   */
+  HITPAY_API_KEY: z.string().trim().optional().or(z.literal("")),
+  /** Webhook signature secret. Separate from the API key, same environment. */
+  HITPAY_SALT: z.string().trim().optional().or(z.literal("")),
+  HITPAY_MODE: z.enum(["mock", "sandbox", "live"]).default("mock"),
+  APP_URL: z.string().url().default("https://beautyalleyibms.vercel.app"),
+
   // The walk-in door QR. A different sticker from the desk check-in QR: this
   // one starts a registration, the other redeems an existing pass.
   BRANCH_ID: z.string().trim().min(1).default("beautyalley-main"),
@@ -85,6 +111,13 @@ const schema = z.object({
 
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
+
+  // Requests per minute, per process. On a serverless platform the limiter's
+  // default MemoryStore is per instance, so the effective ceiling is this value
+  // multiplied by the number of warm instances. The variable exists so an
+  // operator can tighten it without a code change, and so the runbook has one
+  // number to point at instead of a constant buried in middleware.
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
 });
 
 type EnvShape = z.infer<typeof schema>;
@@ -122,8 +155,14 @@ const FALLBACK: EnvShape = {
   QR_CHECKIN_URL: "https://beautyalley.app/check-in",
   BRANCH_ID: "beautyalley-main",
   QR_ENTER_URL: "https://beautyalley.app/welcome",
+  SMTP_PORT: 587,
+  SMTP_SECURE: false,
+  SMTP_FROM: "Beauty Alley <no-reply@beautyalley.app>",
+  HITPAY_MODE: "mock",
+  APP_URL: "https://beautyalleyibms.vercel.app",
   LOGIN_MAX_ATTEMPTS: 5,
   LOGIN_LOCKOUT_MINUTES: 15,
+  RATE_LIMIT_MAX: 120,
 };
 
 const parsed = schema.safeParse(process.env);
@@ -204,8 +243,21 @@ export const env = {
   branchId: data.BRANCH_ID,
   qrEnterUrl: data.QR_ENTER_URL,
 
+  smtpHost: data.SMTP_HOST || "",
+  smtpPort: data.SMTP_PORT,
+  smtpSecure: data.SMTP_SECURE,
+  smtpUser: data.SMTP_USER || "",
+  smtpPass: data.SMTP_PASS || "",
+  smtpFrom: data.SMTP_FROM,
+
+  hitpayApiKey: data.HITPAY_API_KEY || "",
+  hitpaySalt: data.HITPAY_SALT || "",
+  hitpayMode: data.HITPAY_MODE,
+  appUrl: data.APP_URL,
+
   loginMaxAttempts: data.LOGIN_MAX_ATTEMPTS,
   loginLockoutMinutes: data.LOGIN_LOCKOUT_MINUTES,
+  rateLimitMax: data.RATE_LIMIT_MAX,
 };
 
 export const hasServiceRoleKey = env.supabaseServiceRoleKey.length > 0;

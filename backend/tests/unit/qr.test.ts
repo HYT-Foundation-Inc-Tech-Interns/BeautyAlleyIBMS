@@ -1,4 +1,4 @@
-import { signQrPass, verifyQrPass, toCheckInUrl, __testing } from "../../src/lib/qr";
+import { passWindow, signQrPass, verifyQrPass, toCheckInUrl, __testing } from "../../src/lib/qr";
 
 /**
  * The QR pass is the only thing standing between a guessed string and a
@@ -85,5 +85,37 @@ describe("QR pass signing", () => {
     const url = toCheckInUrl(pass);
     expect(url).toContain("?pass=");
     expect(new URL(url).searchParams.get("pass")).toBe(pass);
+  });
+});
+
+/**
+ * The pass carries two different time rules and they must not be confused:
+ * admission is [start − window, end], the signature lives until end + 1 day.
+ * The old copy showed only the latter, so a guest was told "valid until
+ * tomorrow" and refused at the door after the service.
+ */
+describe("pass window", () => {
+  const start = "2026-11-04T09:00:00.000Z";
+  const end = "2026-11-04T10:00:00.000Z";
+
+  it("opens one window-length before the start and closes at the end", () => {
+    const w = passWindow(start, end, 60);
+    expect(w.admitFrom).toBe("2026-11-04T08:00:00.000Z");
+    expect(w.admitUntil).toBe(end);
+  });
+
+  it("keeps the signature alive a day past the service, separately", () => {
+    const w = passWindow(start, end, 60);
+    expect(w.expiresAt).toBe("2026-11-05T10:00:00.000Z");
+  });
+
+  it("respects a zero window: admission starts exactly at the booking", () => {
+    const w = passWindow(start, end, 0);
+    expect(w.admitFrom).toBe(start);
+  });
+
+  it("never lets admission outlive the service", () => {
+    const w = passWindow(start, end, 240);
+    expect(new Date(w.admitFrom).getTime()).toBeLessThan(new Date(w.admitUntil).getTime());
   });
 });

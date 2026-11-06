@@ -50,6 +50,41 @@ export function signQrPass(payload: QrPayload): string {
   return `${PREFIX}.${body}.${sign(body)}`;
 }
 
+/**
+ * The three timestamps a pass carries, derived from one booking.
+ *
+ * They answer two different questions, and conflating them is what made the
+ * printed pass say "valid until tomorrow" while the door refused the guest
+ * after the service ended:
+ *
+ *   admitFrom / admitUntil  the window `check_in_booking` actually enforces:
+ *                           [start − window, end]
+ *   expiresAt               the signature's transport guard: end + 1 day, so a
+ *                           guest can still open the pass after the service
+ *
+ * Pure and exported so the rule can be tested without a database.
+ */
+export interface PassWindow {
+  admitFrom: string;
+  admitUntil: string;
+  expiresAt: string;
+}
+
+export function passWindow(
+  startTime: string,
+  endTime: string,
+  windowMinutes: number,
+): PassWindow {
+  const end = new Date(endTime);
+  const from = new Date(new Date(startTime).getTime() - windowMinutes * 60_000);
+  const exp = new Date(end.getTime() + 86_400_000);
+  return {
+    admitFrom: from.toISOString(),
+    admitUntil: end.toISOString(),
+    expiresAt: exp.toISOString(),
+  };
+}
+
 export type QrVerification =
   | { ok: true; payload: QrPayload }
   | { ok: false; reason: "MALFORMED" | "BAD_SIGNATURE" | "EXPIRED" };

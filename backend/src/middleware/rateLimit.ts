@@ -1,5 +1,6 @@
 import rateLimit, { type RateLimitRequestHandler } from "express-rate-limit";
 import type { Request } from "express";
+import { env } from "../config/env";
 import { CODES } from "../lib/errors";
 
 /**
@@ -9,6 +10,14 @@ import { CODES } from "../lib/errors";
  * request storms. The stricter `loginLimiter` is deliberately *not* the
  * brute-force control - see the note in modules/auth for why the real lockout
  * is counted in the database rather than in this process's memory.
+ *
+ * **Serverless caveat.** `express-rate-limit` defaults to a MemoryStore, which
+ * is per process. On Vercel the effective ceiling is `RATE_LIMIT_MAX` times the
+ * number of warm instances, and a cold start resets it. That is acceptable for
+ * a blunt instrument, but it is not a quota: do not build billing or abuse
+ * policy on it. The login lockout is unaffected because it is counted in the
+ * database. If a hard global limit is ever needed, swap the store for a shared
+ * one (Redis/Upstash) rather than raising this number.
  */
 
 const jsonError = {
@@ -20,7 +29,7 @@ const jsonError = {
 
 export const apiLimiter: RateLimitRequestHandler = rateLimit({
   windowMs: 60_000,
-  limit: 120,
+  limit: env.rateLimitMax,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: jsonError,

@@ -31,6 +31,37 @@ export const createClientSchema = z.object({
 /** A new password for an existing client login. Same rule as everywhere else. */
 export const resetClientPasswordSchema = z.object({ password });
 
+/**
+ * Changing your own password.
+ *
+ * The current password is required even though the caller already holds a
+ * valid session. A session can be left open on a shared front-desk terminal;
+ * requiring the old password means the person at the keyboard is the person
+ * who knows it, not merely the person who found the tab.
+ */
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: password,
+  })
+  .refine((v) => v.currentPassword !== v.newPassword, {
+    message: "The new password must be different from the current one",
+    path: ["newPassword"],
+  });
+
+/**
+ * An administrator setting a password for any account.
+ *
+ * Addressed by email because that is what the owner has in front of them in
+ * the demo accounts file and in the team list. The role check is on the route
+ * (ADMIN); the service additionally refuses nothing by role, because the owner
+ * is allowed to reset any account, including another administrator's.
+ */
+export const adminResetPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  newPassword: password,
+});
+
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address"),
   password: z.string().min(1, "Password is required"),
@@ -81,3 +112,5 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export type CreateClientInput = z.infer<typeof createClientSchema>;
 export type ResetClientPasswordInput = z.infer<typeof resetClientPasswordSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;

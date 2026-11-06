@@ -3,6 +3,8 @@ import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { authRepository } from "./auth.repository";
 import type {
+  AdminResetPasswordInput,
+  ChangePasswordInput,
   CreateClientInput,
   CreateStaffInput,
   LoginInput,
@@ -192,6 +194,52 @@ export const authService = {
     });
 
     return { clientId, fullName: client.fullName };
+  },
+
+  /**
+   * Change the caller's own password.
+   *
+   * The old password is verified by actually signing in with it. That is the
+   * only check Supabase offers without a mail link, and it is the right one:
+   * it proves the person knows the current secret, not merely that a browser
+   * session was left open. The failed attempt is not written to
+   * `login_attempts`, because this is an authenticated route already behind
+   * the IP limiter, and counting it would let a user lock themselves out by
+   * mistyping their old password twice.
+   */
+  async changeOwnPassword(actor: Actor, input: ChangePasswordInput) {
+    if (!actor.email) {
+      throw AppError.badRequest(CODES.INVALID_CREDENTIALS, "This account has no email address");
+    }
+
+    try {
+      await authRepository.signIn(actor.email, input.currentPassword);
+    } catch {
+      throw AppError.badRequest(CODES.INVALID_CREDENTIALS, "Current password is incorrect");
+    }
+
+    await authRepository.updatePassword(actor.id, input.newPassword);
+    logger.info("auth.password_changed", { userId: actor.id });
+    return { ok: true };
+  },
+
+  /**
+   * Set a password for any account, by email. ADMIN only.
+   *
+   * This is the owner's escape hatch: the demo accounts, a stylist who forgot
+   * theirs, the concierge on opening day. It is deliberately not a "reset
+   * link" flow — this deployment has no reliable public Site URL for a mail
+   * link to point at, and the owner hands the new password over in person.
+   */
+  async adminResetPassword(input: AdminResetPasswordInput, actor: Actor) {
+    const user = await authRepository.findUserByEmail(input.email);
+    if (!user) {
+      throw AppError.notFound(CODES.PROFILE_NOT_FOUND, "No account with that email address");
+    }
+
+    await authRepository.updatePassword(user.id, input.newPassword);
+    logger.info("auth.password_reset_by_admin", { userId: user.id, by: actor.id });
+    return { ok: true, email: user.email };
   },
 
   async createStaff(input: CreateStaffInput, actor: Actor) {

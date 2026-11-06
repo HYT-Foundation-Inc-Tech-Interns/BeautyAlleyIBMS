@@ -683,6 +683,134 @@ export interface Database {
         };
         Relationships: [];
       };
+      booking_deposits: {
+        Row: {
+          id: string;
+          booking_id: string;
+          amount_cents: number;
+          status: string;
+          provider: string;
+          provider_ref: string | null;
+          paid_at: string | null;
+          marked_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          booking_id: string;
+          amount_cents: number;
+          status?: string;
+          provider?: string;
+          provider_ref?: string | null;
+          paid_at?: string | null;
+          marked_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          booking_id?: string;
+          amount_cents?: number;
+          status?: string;
+          provider?: string;
+          provider_ref?: string | null;
+          paid_at?: string | null;
+          marked_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+
+      test_payment_requests: {
+        Row: {
+          id: string;
+          reference: string;
+          amount_cents: number;
+          currency: string;
+          status: string;
+          created_at: string;
+          paid_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          reference: string;
+          amount_cents: number;
+          currency?: string;
+          status?: string;
+          created_at?: string;
+          paid_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          reference?: string;
+          amount_cents?: number;
+          currency?: string;
+          status?: string;
+          created_at?: string;
+          paid_at?: string | null;
+        };
+        Relationships: [];
+      };
+
+      reminder_outbox: {
+        Row: {
+          id: string;
+          booking_id: string;
+          kind: string;
+          channel: string;
+          send_at: string;
+          status: string;
+          attempts: number;
+          last_error: string | null;
+          sent_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          booking_id: string;
+          kind: string;
+          channel?: string;
+          send_at: string;
+          status?: string;
+          attempts?: number;
+          last_error?: string | null;
+          sent_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          booking_id?: string;
+          kind?: string;
+          channel?: string;
+          send_at?: string;
+          status?: string;
+          attempts?: number;
+          last_error?: string | null;
+          sent_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+
+      app_settings: {
+        Row: {
+          key: string;
+          value: Json;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          key: string;
+          value: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          key?: string;
+          value?: Json;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
     };
 
     Views: {

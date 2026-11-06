@@ -37,9 +37,14 @@ qrRouter.get(
 // --- the scanner -----------------------------------------------------------
 // Any staff device: the descriptor authorises nothing (`authorises: false`),
 // so there is no reason to keep it from a therapist's phone.
-qrRouter.get("/branch", authenticate, requireRole(...OPERATIONS), (_req: Request, res: Response) => {
-  res.status(200).json({ data: qrService.branch() });
-});
+qrRouter.get(
+  "/branch",
+  authenticate,
+  requireRole(...OPERATIONS),
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.status(200).json({ data: await qrService.branch() });
+  })
+);
 
 /**
  * The door sticker itself, for the page that prints it. Signed with the same

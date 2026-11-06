@@ -124,6 +124,22 @@ export const authRepository = {
     if (error) throw error;
   },
 
+  /**
+   * Find an auth user by email.
+   *
+   * GoTrue's admin API has no direct email lookup, so this lists one page and
+   * matches locally. 1000 is the maximum page size and comfortably above the
+   * number of accounts a salon will ever have. If that stops being true, this
+   * becomes a paginated search rather than a bigger page.
+   */
+  async findUserByEmail(email: string): Promise<{ id: string; email: string | null } | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    if (error) throw error;
+    const match = data.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+    return match ? { id: match.id, email: match.email ?? null } : null;
+  },
+
   async deleteUser(id: string) {
     const db = requireServiceRole();
     const { error } = await db.auth.admin.deleteUser(id);

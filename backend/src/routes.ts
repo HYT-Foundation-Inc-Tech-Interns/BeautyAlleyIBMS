@@ -13,6 +13,10 @@ import { attendanceRouter } from "./modules/attendance/attendance.routes";
 import { tasksRouter } from "./modules/tasks/tasks.routes";
 import { adminRouter } from "./modules/admin/admin.routes";
 import { clientsRouter } from "./modules/clients/clients.routes";
+import { settingsRouter } from "./modules/settings/settings.routes";
+import { depositsRouter } from "./modules/deposits/deposits.routes";
+import { depositTestRouter } from "./modules/deposits/deposit-test.routes";
+import { webhooksRouter } from "./modules/deposits/webhook.routes";
 import { buildApiIndex } from "./lib/apiIndex";
 
 /**
@@ -43,6 +47,10 @@ apiRouter.use("/loyalty", loyaltyRouter);
 apiRouter.use("/attendance", attendanceRouter);
 apiRouter.use("/tasks", tasksRouter);
 apiRouter.use("/clients", clientsRouter);
+apiRouter.use("/settings", settingsRouter);
+apiRouter.use("/deposits", depositsRouter);
+apiRouter.use("/deposits/test", depositTestRouter);
+apiRouter.use("/webhooks", webhooksRouter);
 
 /*
  * Order matters here, and it is not cosmetic.

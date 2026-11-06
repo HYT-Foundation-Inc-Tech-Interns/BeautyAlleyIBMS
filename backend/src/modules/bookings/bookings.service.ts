@@ -1,11 +1,11 @@
-import { env } from "../../config/env";
 import { requireServiceRole } from "../../db/supabase";
 import { iso } from "../../lib/dates";
 import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { paginated } from "../../lib/pagination";
-import { signQrPass, toCheckInUrl, verifyQrPass } from "../../lib/qr";
+import { passWindow, signQrPass, toCheckInUrl, verifyQrPass } from "../../lib/qr";
 import { OPERATIONS } from "../../lib/roleGroups";
+import { settingsService } from "../settings/settings.service";
 import type { Actor } from "../../types/actor";
 import type { BookingStatus } from "../../types/database";
 import {
@@ -239,7 +239,7 @@ export const bookingsService = {
       ...(await this.detail(result.bookingId)),
       // The pass is signed here rather than stored, so the secret never
       // touches the database and a dump of qr_tokens yields nothing forgeable.
-      qr: this.passFor(result.bookingId, result.jti, result.endTime),
+      qr: await this.passFor(result.bookingId, result.jti, result.startTime, result.endTime),
     };
   },
 
@@ -262,12 +262,18 @@ export const bookingsService = {
     return data as string;
   },
 
-  passFor(bookingId: string, jti: string, endTime: string) {
-    // The database sets expires_at to end_time + 1 day. Mirroring that here
-    // keeps the signed `exp` and the row in step.
-    const exp = Math.floor(new Date(endTime).getTime() / 1000) + 86_400;
+  async passFor(bookingId: string, jti: string, startTime: string, endTime: string) {
+    // The signature expiry is a transport guard, not the admission window.
+    // The database sets `qr_tokens.expires_at` to end_time + 1 day so a guest
+    // can still open the pass after the service; admission is enforced
+    // separately by `check_in_booking` as [start - window, end]. Both are
+    // returned, so the screen can state the rule the server actually applies
+    // instead of a later timestamp that looks like permission.
+    const rules = await settingsService.getBookingRules();
+    const window = passWindow(startTime, endTime, rules.arrivalWindowMinutes);
+    const exp = Math.floor(new Date(window.expiresAt).getTime() / 1000);
     const pass = signQrPass({ jti, bid: bookingId, exp });
-    return { pass, url: toCheckInUrl(pass), expiresAt: new Date(exp * 1000).toISOString() };
+    return { pass, url: toCheckInUrl(pass), ...window };
   },
 
   async detail(id: string) {
@@ -414,13 +420,17 @@ export const bookingsService = {
     // A client can never force past the cancellation window; only staff can.
     const force = staff && input.force === true;
 
+    // The policy is owner-editable (Settings → Booking rules). The env value
+    // remains the fallback inside the settings service.
+    const rules = await settingsService.getBookingRules();
+
     const db = requireServiceRole();
     const { data, error } = await db.rpc("cancel_booking", {
       p_booking_id: id,
       p_actor: actor?.id ?? null,
       p_reason: input.reason ?? null,
       p_force: force,
-      p_window_hours: env.cancellationWindowHours,
+      p_window_hours: rules.cancellationWindowHours,
     });
     if (error) throw error;
 
@@ -433,6 +443,23 @@ export const bookingsService = {
     if (!row) throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
     if (!canAccessBooking(row, actor)) {
       throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
+    }
+
+    /*
+     * A client may move their own appointment, but not at the last minute.
+     * The same owner-editable cutoff that governs cancellation applies here:
+     * otherwise "reschedule" becomes a way around the cancellation window.
+     * Staff are exempt, because they are the ones who handle the exception.
+     */
+    if (actor?.role === "CLIENT") {
+      const rules = await settingsService.getBookingRules();
+      const hoursUntil = (new Date(row.start_time).getTime() - Date.now()) / 3_600_000;
+      if (hoursUntil < rules.cancellationWindowHours) {
+        throw AppError.badRequest(
+          CODES.CANCELLATION_WINDOW_PASSED,
+          `Appointments can only be moved up to ${rules.cancellationWindowHours} hours before they start. Call the salon if you need help.`
+        );
+      }
     }
 
     const db = requireServiceRole();
@@ -448,7 +475,7 @@ export const bookingsService = {
 
     return {
       ...(await this.detail(id)),
-      qr: this.passFor(id, result.jti, result.endTime),
+      qr: await this.passFor(id, result.jti, result.startTime, result.endTime),
     };
   },
 
@@ -518,7 +545,7 @@ export const bookingsService = {
       return { used: true, checkedInAt: iso(token.used_at), pass: null, url: null };
     }
 
-    return { used: false, ...this.passFor(id, token.jti, row.end_time) };
+    return { used: false, ...(await this.passFor(id, token.jti, row.start_time, row.end_time)) };
   },
 
   /**
@@ -549,12 +576,14 @@ export const bookingsService = {
     // standing in front of the guest is the one who can judge whether the
     // window applies — not a role table three files away.
 
+    const rules = await settingsService.getBookingRules();
+
     const db = requireServiceRole();
     const { data, error } = await db.rpc("check_in_booking", {
       p_jti: verified.payload.jti,
       p_staff_id: staffId,
       p_actor: actor.id,
-      p_window_minutes: env.qrCheckinWindowMinutes,
+      p_window_minutes: rules.arrivalWindowMinutes,
       p_force: force,
     });
     if (error) throw error;

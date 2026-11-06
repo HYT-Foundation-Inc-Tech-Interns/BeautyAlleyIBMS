@@ -4,6 +4,7 @@ import { verifyDoorEntry } from "../../lib/qr";
 import { bookingsService } from "../bookings/bookings.service";
 import { loyaltyRepository } from "../loyalty/loyalty.repository";
 import { subcategoriesService } from "../subcategories/subcategories.service";
+import { settingsService } from "../settings/settings.service";
 import { qrRepository } from "./qr.repository";
 import type { Actor } from "../../types/actor";
 
@@ -69,11 +70,12 @@ export const qrService = {
    * /bookings/:id/qr. Keeping the two apart matters: a static image cannot be
    * revoked, so it must never itself authorise anything.
    */
-  branch() {
+  async branch() {
+    const rules = await settingsService.getBookingRules();
     return {
       label: "Beauty Alley - front desk",
       url: env.qrCheckInUrl,
-      checkInWindowMinutes: env.qrCheckinWindowMinutes,
+      checkInWindowMinutes: rules.arrivalWindowMinutes,
       // Stated explicitly so nobody later mistakes this for an access token.
       authorises: false,
     };

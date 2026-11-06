@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { authController } from "./auth.controller";
 import {
+  adminResetPasswordSchema,
+  changePasswordSchema,
   createClientSchema,
   createStaffSchema,
   loginSchema,
@@ -41,6 +43,22 @@ authRouter.post("/refresh", validate({ body: refreshSchema }), asyncHandler(auth
 authRouter.post("/logout", authenticate, asyncHandler(authController.logout));
 authRouter.get("/me", authenticate, asyncHandler(authController.me));
 
+/*
+ * Self-service password change.
+ *
+ * `loginLimiter` is reused deliberately: this route verifies the current
+ * password, so it is a password-guessing surface for anyone who has stolen a
+ * session. The stricter per-email lockout is not applied here — a user
+ * mistyping their old password should not lock them out of their own account.
+ */
+authRouter.post(
+  "/password",
+  authenticate,
+  loginLimiter,
+  validate({ body: changePasswordSchema }),
+  asyncHandler(authController.changePassword)
+);
+
 export const adminAuthRouter = Router();
 
 /*
@@ -77,4 +95,20 @@ adminAuthRouter.post(
   requireRole("ADMIN"),
   validate({ body: createStaffSchema }),
   asyncHandler(authController.createStaff)
+);
+
+/*
+ * The owner's escape hatch: set a password for any account, by email.
+ *
+ * ADMIN only, and deliberately not a mail-link reset. It covers the demo
+ * accounts, a stylist who forgot theirs, and the first-day concierge without
+ * anyone needing the Supabase dashboard.
+ */
+adminAuthRouter.post(
+  "/users/password",
+  authenticate,
+  requireRole("ADMIN"),
+  loginLimiter,
+  validate({ body: adminResetPasswordSchema }),
+  asyncHandler(authController.adminResetPassword)
 );

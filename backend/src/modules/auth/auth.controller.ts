@@ -42,6 +42,16 @@ export const authController = {
     res.status(200).json({ data: result });
   },
 
+  async changePassword(req: Request, res: Response) {
+    const result = await authService.changeOwnPassword(req.actor as Actor, req.body);
+    res.status(200).json({ data: result });
+  },
+
+  async adminResetPassword(req: Request, res: Response) {
+    const result = await authService.adminResetPassword(req.body, req.actor as Actor);
+    res.status(200).json({ data: result });
+  },
+
   async createStaff(req: Request, res: Response) {
     const result = await authService.createStaff(req.body, req.actor as Actor);
     res.status(201).json({ data: result });
