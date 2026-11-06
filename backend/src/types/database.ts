@@ -1123,6 +1123,21 @@ export interface Database {
           checkinId: string;
         };
       };
+      /** Migration 52. Clients who visited and did not rebook, with the rebook rate. */
+      get_retention_summary: {
+        Args: {
+          p_from: string;
+          p_to: string;
+          p_min_days?: number;
+          p_timezone?: string | null;
+        };
+        Returns: Json;
+      };
+      /** Migration 52. Redemptions, discount cost, revenue and no-shows per promo. */
+      get_promo_performance: {
+        Args: { p_from: string; p_to: string; p_timezone?: string | null };
+        Returns: Json;
+      };
       get_dashboard_summary: {
         Args: { p_from: string; p_to: string; p_timezone?: string | null };
         Returns: Json;

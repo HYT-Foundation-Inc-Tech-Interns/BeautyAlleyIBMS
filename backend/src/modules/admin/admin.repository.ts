@@ -193,4 +193,23 @@ export const adminRepository = {
     if (error) throw error;
     return { rows: data ?? [], total: count ?? 0 };
   },
+
+  async retention(from: string, to: string, minDays: number) {
+    const { data, error } = await requireServiceRole().rpc("get_retention_summary", {
+      p_from: from,
+      p_to: to,
+      p_min_days: minDays,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async promoPerformance(from: string, to: string) {
+    const { data, error } = await requireServiceRole().rpc("get_promo_performance", {
+      p_from: from,
+      p_to: to,
+    });
+    if (error) throw error;
+    return data ?? [];
+  },
 };

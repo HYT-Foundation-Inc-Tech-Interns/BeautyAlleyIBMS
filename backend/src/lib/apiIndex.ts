@@ -232,6 +232,7 @@ export const API_GROUPS: ApiGroup[] = [
       { method: "POST", path: "/api/v1/admin/users/client", auth: "DESK", summary: "Create a CLIENT login and attach it to the client record. The only account the desk may make." },
       { method: "POST", path: "/api/v1/admin/users/client/:clientId/password", auth: "DESK", summary: "Set a new password for a CLIENT login. Refuses any target that is not a client." },
       { method: "GET", path: "/api/v1/admin/dashboard", auth: "DESK", summary: "Totals for a date range. Declared above the blanket ADMIN guard so the desk can read the monitoring board." },
+      { method: "GET", path: "/api/v1/admin/insights", auth: "DESK", summary: "Retention and promo performance: who did not rebook, and what each promo code cost and returned." },
       { method: "GET", path: "/api/v1/admin/clients", auth: "DESK", summary: "Client list with lifetime value. Also above the guard, for the board's aggregates; every write to a client record stays ADMIN." },
       { method: "GET", path: "/api/v1/admin/clients/export.csv", auth: "ADMIN", summary: "The client list as a CSV attachment." },
       { method: "GET", path: "/api/v1/admin/clients/:id", auth: "ADMIN", summary: "One client." },

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { adminService } from "./admin.service";
+import { branchDay } from "../../lib/dates";
 
 export const adminController = {
   async dashboard(req: Request, res: Response) {
@@ -48,5 +49,15 @@ export const adminController = {
   async listAuditLogs(req: Request, res: Response) {
     const result = await adminService.listAuditLogs(req.query as never);
     res.status(200).json(result);
+  },
+
+  async insights(req: Request, res: Response) {
+    const { days, minDays } = req.query as unknown as { days: number; minDays: number };
+    const to = branchDay();
+    const start = new Date(to + "T00:00:00Z");
+    start.setUTCDate(start.getUTCDate() - (days - 1));
+    const from = start.toISOString().slice(0, 10);
+    const result = await adminService.insights(from, to, minDays);
+    res.status(200).json({ data: result });
   },
 };

@@ -183,4 +183,16 @@ export const adminService = {
       query.limit
     );
   },
+
+  /** Retention and promo performance share one range and one request. */
+  async insights(from: string, to: string, minDays: number) {
+    if (new Date(to) < new Date(from)) {
+      throw AppError.badRequest(CODES.VALIDATION_FAILED, "`to` must not be before `from`");
+    }
+    const [retention, promos] = await Promise.all([
+      adminRepository.retention(from, to, minDays),
+      adminRepository.promoPerformance(from, to),
+    ]);
+    return { retention, promos };
+  },
 };

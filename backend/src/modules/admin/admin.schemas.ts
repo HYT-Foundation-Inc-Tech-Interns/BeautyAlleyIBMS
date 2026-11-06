@@ -49,3 +49,13 @@ export const idParamSchema = z.object({ id: z.guid("Not a valid id") });
 export type ListClientsQuery = z.infer<typeof listClientsQuerySchema>;
 export type UpdateClientInput = z.infer<typeof updateClientSchema>;
 export type ListAuditLogsQuery = z.infer<typeof listAuditLogsQuerySchema>;
+
+/**
+ * The Insights window. Days is how far back the page looks; minDays keeps a
+ * client who visited yesterday out of the "did not rebook" list, where they
+ * would be noise rather than a signal.
+ */
+export const insightsQuerySchema = z.object({
+  days: z.coerce.number().int().min(7).max(365).default(90),
+  minDays: z.coerce.number().int().min(0).max(90).default(14),
+});

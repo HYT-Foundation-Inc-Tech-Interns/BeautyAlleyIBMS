@@ -2,6 +2,7 @@ import { Router } from "express";
 import { adminController } from "./admin.controller";
 import {
   dashboardQuerySchema,
+  insightsQuerySchema,
   idParamSchema,
   listAuditLogsQuerySchema,
   listClientsQuerySchema,
@@ -51,6 +52,13 @@ adminRouter.get(
   validate({ query: dashboardQuerySchema }),
   asyncHandler(adminController.dashboard)
 );
+adminRouter.get(
+  "/insights",
+  requireRole(...DESK),
+  validate({ query: insightsQuerySchema }),
+  asyncHandler(adminController.insights)
+);
+
 adminRouter.get(
   "/clients",
   requireRole(...DESK),
