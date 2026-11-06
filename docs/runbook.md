@@ -444,3 +444,29 @@ does not depend on memory. A rotation with no date and no verifier is a rumour.
 |---|---|---|---|
 | _pending_ | `SUPABASE_SERVICE_ROLE_KEY` | — | — |
 | _pending_ | demo account password | — | — |
+
+## Deposit policy
+
+Settings → **Deposit policy** turns the obligation on. It is **off by default**;
+enabling it does not move money, it records a `booking_deposits` row on every
+new booking with status `DUE`, provider `manual`, and reference `DEP-<booking
+reference>`.
+
+| Setting | Meaning |
+|---|---|
+| Amount | One to ten thousand pesos, the same for every booking. |
+| If a booking is cancelled | `refund` returns a held deposit; `forfeit_if_late` keeps it only inside the cancellation window; `forfeit` keeps it. |
+
+Settlement rules, applied automatically:
+
+- A **DUE** deposit blocks check-in and the move to `CHECKED_IN`. The desk sees
+  `DEPOSIT_DUE` until it is settled.
+- **Paid** or **Waive** on the booking row moves a DUE deposit; only a DUE row
+  can move, so a double tap cannot settle twice.
+- A cancellation settles a PAID deposit to `REFUNDED` or `FORFEITED` by the
+  rule above. A staff-forced cancellation always refunds.
+- A **no-show** always forfeits. A DUE row on any ended booking becomes
+  `WAIVED`, because nothing was ever held.
+
+This is the manual half of deposits. Online payment is still the test surface
+above; attaching a gateway checkout to a booking is the next slice.

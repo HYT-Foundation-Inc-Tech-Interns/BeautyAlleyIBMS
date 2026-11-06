@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 
 import { api, ApiError } from "@/lib/api";
-import type { PaymentProviderId, PaymentProviderOption } from "@/lib/api-types";
+import type { DepositCancelRule, PaymentProviderId, PaymentProviderOption } from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
 import { useAuth, ROLE_LABEL } from "@/auth/AuthProvider";
 import { cn } from "@/lib/utils";
@@ -284,6 +284,45 @@ export default function Settings() {
     }
   }
 
+  /* --- deposit policy ----------------------------------------------- */
+  const depositPolicy = useAsync("settings:deposit-policy", () => api.settings.deposits());
+  const [policyEnabled, setPolicyEnabled] = React.useState(false);
+  const [policyAmount, setPolicyAmount] = React.useState("500");
+  const [policyOnCancel, setPolicyOnCancel] = React.useState<DepositCancelRule>("refund");
+  const [policyBusy, setPolicyBusy] = React.useState(false);
+  const [policyError, setPolicyError] = React.useState<string | null>(null);
+  const [policyDone, setPolicyDone] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!depositPolicy.data) return;
+    setPolicyEnabled(depositPolicy.data.enabled);
+    setPolicyAmount(String(depositPolicy.data.amountCents / 100));
+    setPolicyOnCancel(depositPolicy.data.onCancel);
+  }, [depositPolicy.data]);
+
+  async function saveDepositPolicy() {
+    setPolicyError(null);
+    setPolicyDone(false);
+    const pesos = Number(policyAmount);
+    if (!Number.isFinite(pesos) || pesos < 1 || pesos > 10000) {
+      return setPolicyError("Enter an amount between ₱1 and ₱10,000.");
+    }
+    setPolicyBusy(true);
+    try {
+      await api.settings.updateDeposits({
+        enabled: policyEnabled,
+        amountCents: Math.round(pesos * 100),
+        onCancel: policyOnCancel,
+      });
+      setPolicyDone(true);
+      depositPolicy.reload();
+    } catch (err) {
+      setPolicyError(err instanceof ApiError ? err.message : "Could not save the deposit policy.");
+    } finally {
+      setPolicyBusy(false);
+    }
+  }
+
   /* --- reminders ---------------------------------------------------- */
   const reminders = useAsync("settings:reminders", () => api.settings.reminders());
   const [mailBusy, setMailBusy] = React.useState(false);
@@ -527,6 +566,104 @@ export default function Settings() {
               </p>
             )}
             {bookDone && <SuccessNote>Booking rules saved. The next cancellation and pass use them.</SuccessNote>}
+          </div>
+        )}
+      </Panel>
+
+      {/* ------------------------------------------------ deposit policy */}
+      <Panel className="p-5 sm:p-6">
+        <SectionHeading
+          eyebrow="Owner"
+          title="Deposit policy"
+          description="While this is on, every new booking carries a deposit. The desk can mark it paid or waive it; an unpaid deposit blocks check-in."
+          action={
+            isAdmin && depositPolicy.data ? (
+              <Button onClick={saveDepositPolicy} disabled={policyBusy}>
+                {policyBusy ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                {policyBusy ? "Saving…" : "Save"}
+              </Button>
+            ) : undefined
+          }
+        />
+
+        {!isAdmin ? (
+          <div className="mt-6 flex items-start gap-3 rounded-lg border border-border/70 bg-muted/30 px-4 py-4">
+            <Wallet className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+              Deposits are money policy, so only the owner can change them.
+            </p>
+          </div>
+        ) : depositPolicy.loading && !depositPolicy.data ? (
+          <Loading label="Loading the deposit policy…" />
+        ) : depositPolicy.error ? (
+          <ErrorNote error={depositPolicy.error} onRetry={depositPolicy.reload} />
+        ) : (
+          <div className="mt-5 space-y-4">
+            <label className="flex items-start gap-3 rounded-lg border border-border/70 bg-card px-4 py-3">
+              <input
+                type="checkbox"
+                checked={policyEnabled}
+                onChange={(e) => {
+                  setPolicyEnabled(e.target.checked);
+                  setPolicyDone(false);
+                }}
+                className="mt-0.5 size-4 accent-[#1B4D3E]"
+              />
+              <span>
+                <span className="block text-[13px] font-medium">Require a deposit at booking</span>
+                <span className="mt-0.5 block text-[11.5px] leading-relaxed text-muted-foreground">
+                  Off by default. Turning it on does not move money; it records an obligation the desk can settle.
+                </span>
+              </span>
+            </label>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField
+                label="Deposit amount (₱)"
+                type="number"
+                min={1}
+                max={10000}
+                value={policyAmount}
+                onChange={(e) => {
+                  setPolicyAmount(e.target.value);
+                  setPolicyDone(false);
+                }}
+                hint="One to ten thousand pesos. The same amount applies to every booking."
+              />
+              <label className="block">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  If a booking is cancelled
+                </span>
+                <select
+                  value={policyOnCancel}
+                  onChange={(e) => {
+                    setPolicyOnCancel(e.target.value as DepositCancelRule);
+                    setPolicyDone(false);
+                  }}
+                  className="mt-1.5 block h-10 w-full rounded-lg border border-border bg-card px-3 text-[13.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                >
+                  <option value="refund">Refund the deposit</option>
+                  <option value="forfeit_if_late">Keep it inside the cancellation window</option>
+                  <option value="forfeit">Keep it</option>
+                </select>
+                <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                  A no-show always keeps the deposit. A staff-forced cancellation always refunds.
+                </span>
+              </label>
+            </div>
+
+            <p className="text-[11.5px] text-muted-foreground">
+              Current: {depositPolicy.data?.enabled
+                ? "₱" + (depositPolicy.data.amountCents / 100).toFixed(2) + " per booking"
+                : "off"}.
+            </p>
+
+            {policyError && (
+              <p className="rounded-lg border border-clay/25 bg-clay/[0.04] px-3 py-2 text-[12px] text-clay">
+                {policyError}
+              </p>
+            )}
+            {policyDone && <SuccessNote>Deposit policy saved. It applies to new bookings only.</SuccessNote>}
           </div>
         )}
       </Panel>

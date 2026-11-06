@@ -264,6 +264,13 @@ export interface BookingItem {
   durationMinutes: number;
 }
 
+export interface BookingDeposit {
+  amountCents: number;
+  status: "DUE" | "PAID" | "WAIVED" | "REFUNDED" | "FORFEITED";
+  provider: string;
+  paidAt: string | null;
+}
+
 export interface QrPass {
   pass: string;
   url: string;
@@ -298,6 +305,8 @@ export interface Booking {
    */
   serviceIds: string[];
   /** Only returned by create/reschedule — the pass is re-issuable via `/qr`. */
+  /** The obligation attached at booking, when the deposit policy was on. */
+  deposit?: BookingDeposit | null;
   qr?: QrPass;
 }
 
@@ -619,6 +628,14 @@ export interface TestCheckout {
   amountCents: number;
   checkoutUrl: string;
   reference: string;
+}
+
+export type DepositCancelRule = "refund" | "forfeit" | "forfeit_if_late";
+
+export interface DepositPolicy {
+  enabled: boolean;
+  amountCents: number;
+  onCancel: DepositCancelRule;
 }
 
 export interface ReminderStatus {

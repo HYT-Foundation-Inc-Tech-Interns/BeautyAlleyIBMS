@@ -158,6 +158,27 @@ export default function Bookings() {
   /* A guest who arrived before their pass opened, held for the override. */
   const [earlyTarget, setEarlyTarget] = React.useState<Booking | null>(null);
 
+  /* Deposits are settled at the desk, one row at a time. */
+  const isDesk = role === "CONCIERGE" || role === "ADMIN";
+  const [depositBusyId, setDepositBusyId] = React.useState<string | null>(null);
+  const [depositError, setDepositError] = React.useState<ApiError | null>(null);
+
+  async function settleDeposit(booking: Booking, action: "paid" | "waive") {
+    setDepositBusyId(booking.id);
+    setDepositError(null);
+    try {
+      if (action === "paid") await api.bookings.markDepositPaid(booking.id);
+      else await api.bookings.waiveDeposit(booking.id);
+      list.reload();
+    } catch (err) {
+      setDepositError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not settle the deposit"),
+      );
+    } finally {
+      setDepositBusyId(null);
+    }
+  }
+
   async function advance(booking: Booking, next: BookingStatus) {
     setBusyId(booking.id);
     setActionError(null);
@@ -282,6 +303,7 @@ export default function Bookings() {
       </div>
 
       {actionError && <ErrorNote error={actionError} />}
+      {depositError && <ErrorNote error={depositError} />}
 
       {/* --------------------------------------------------------- records */}
       {list.error ? (
@@ -426,6 +448,42 @@ export default function Bookings() {
                 </div>
 
                 <StatusBadge status={booking.status} />
+
+                {booking.deposit && (
+                  <div className="shrink-0 text-right">
+                    <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Deposit
+                    </p>
+                    <p
+                      className={cn(
+                        "text-[12px] font-medium tabular-nums",
+                        booking.deposit.status === "DUE" ? "text-clay" : "text-alley-700",
+                      )}
+                    >
+                      {peso(booking.deposit.amountCents)} · {booking.deposit.status.toLowerCase()}
+                    </p>
+                    {isDesk && booking.deposit.status === "DUE" && (
+                      <div className="mt-1 flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={depositBusyId === booking.id}
+                          onClick={() => settleDeposit(booking, "paid")}
+                        >
+                          Paid
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={depositBusyId === booking.id}
+                          onClick={() => settleDeposit(booking, "waive")}
+                        >
+                          Waive
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                   {visible.length === 0 ? (

@@ -33,6 +33,7 @@ import type {
   Booking,
   BookingStatus,
   BookingRules,
+  DepositPolicy,
   PublicBookingPolicy,
   ReminderStatus,
   TestCheckout,
@@ -513,6 +514,13 @@ export const api = {
     cancel: (id: string, body: { reason?: string; force?: boolean } = {}) =>
       request<{ booking: Booking }>("POST", `/api/v1/bookings/${id}/cancel`, { body }),
 
+    /** Desk only. Only a DUE deposit can move. */
+    markDepositPaid: (id: string) =>
+      request<Booking>("POST", `/api/v1/bookings/${id}/deposit/paid`),
+
+    waiveDeposit: (id: string) =>
+      request<Booking>("POST", `/api/v1/bookings/${id}/deposit/waive`),
+
     reschedule: (id: string, startTime: string) =>
       request<Booking>("POST", `/api/v1/bookings/${id}/reschedule`, { body: { startTime } }),
 
@@ -810,6 +818,11 @@ export const api = {
     }) => request<PaymentProviders>("PUT", "/api/v1/settings/payments", { body }),
 
     booking: () => request<BookingRules>("GET", "/api/v1/settings/booking"),
+
+    deposits: () => request<DepositPolicy>("GET", "/api/v1/settings/deposits"),
+
+    updateDeposits: (body: DepositPolicy) =>
+      request<DepositPolicy>("PUT", "/api/v1/settings/deposits", { body }),
 
     /** No auth: the client-facing cancellation and arrival policy. */
     publicBooking: () =>
