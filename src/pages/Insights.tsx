@@ -135,6 +135,12 @@ function parseStored(raw: string | null, known: Set<string>): InsightWidget[] | 
         h: Math.max(1, Math.min(Math.floor(h) || 1, MAX_ROWS)),
       });
     }
+    // A saved layout predates any tile shipped after it was written. Top up
+    // with the missing defaults rather than hiding them until someone resets.
+    const present = new Set(out.map((widget) => widget.id));
+    for (const widget of DEFAULT_LAYOUT) {
+      if (!present.has(widget.id)) out.push({ ...widget });
+    }
     return out;
   } catch {
     return null;
@@ -613,9 +619,10 @@ function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
 
     case "retention": {
       const r = data.insights?.retention;
-      const rate = r && r.clientsSeen > 0 ? Math.round((r.rebooked / r.clientsSeen) * 100) : 0;
+      const eligible = r?.eligible ?? 0;
+      const rate = r && eligible > 0 ? Math.round((r.rebooked / eligible) * 100) : 0;
       return (
-        <Shell title="Did not rebook" meta={r ? rate + "% rebooked" : undefined}>
+        <Shell title="Did not rebook" meta={r && eligible > 0 ? rate + "% rebooked" : undefined}>
           {!r || r.clientsSeen === 0 ? (
             <div className="flex flex-1 items-center">
               <EmptyNote
@@ -623,14 +630,26 @@ function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
                 description="Rebooking appears once clients complete a visit in this window."
               />
             </div>
+          ) : eligible === 0 ? (
+            <div className="flex flex-1 items-center">
+              <EmptyNote
+                title="Too soon to tell"
+                description={`Every client here visited within the last ${r.minDays} days. The rate lands once they have had time to rebook.`}
+              />
+            </div>
           ) : (
             <>
               <div className="flex items-baseline gap-2">
                 <Big>{r.didNotRebook}</Big>
                 <span className="text-[11.5px] text-muted-foreground">
-                  of {r.clientsSeen} did not book again
+                  of {eligible} did not book again
                 </span>
               </div>
+              {r.tooRecent > 0 && (
+                <p className="mt-1 text-[10.5px] text-muted-foreground">
+                  {r.tooRecent} more visited in the last {r.minDays} days — too soon to count.
+                </p>
+              )}
               <ul className="mt-3 space-y-2.5">
                 {r.clients.slice(0, 5).map((c) => (
                   <li key={c.clientId} className="flex items-center gap-2.5">

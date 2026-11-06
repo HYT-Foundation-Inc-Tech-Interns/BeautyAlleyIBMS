@@ -431,6 +431,8 @@ export interface RetentionSummary {
   to: string;
   minDays: number;
   clientsSeen: number;
+  eligible: number;
+  tooRecent: number;
   rebooked: number;
   didNotRebook: number;
   clients: RetentionClient[];
