@@ -156,7 +156,6 @@ interface InsightData {
   today: Booking[];
   employees: Employee[];
   clients: ClientRecord[];
-  insights: InsightsPayload | null;
 }
 
 function useInsightData(days: number): {
@@ -173,21 +172,19 @@ function useInsightData(days: number): {
 
   const state = useAsync(`board:${from}:${to}`, async () => {
     // Independent reads, so they go out together rather than in a queue.
-    const [summary, today, employees, clients, insights] = await Promise.all([
+    const [summary, today, employees, clients] = await Promise.all([
       api.admin.dashboard(from, to),
       api.bookings.list({ from: to, to, limit: 100, sort: "start_time", order: "asc" }),
       // The roster including retired stylists: one of them can still have
       // bookings today. Role-checked, unlike the public list.
       api.admin.employees({ limit: 100, includeInactive: true }),
       api.admin.clients({ limit: 6, sort: "lifetime_value_cents", order: "desc" }),
-      api.admin.insights({ days, minDays: 14 }),
     ]);
     return {
       summary,
       today: today.data,
       employees: employees.data,
       clients: clients.data,
-      insights,
     } satisfies InsightData;
   });
 
@@ -207,6 +204,28 @@ function useInsightData(days: number): {
     initial: state.initial,
     loading: state.loading,
     updatedAt,
+    reload: state.reload,
+  };
+}
+
+interface InsightAnalytics {
+  payload: InsightsPayload | null;
+  error: ApiError | null;
+  loading: boolean;
+  reload: () => void;
+}
+
+/**
+ * Analytics read on their own. A missing migration or a failing aggregation
+ * should blank the two tiles that need it, not take revenue and the run sheet
+ * down with it — which is what sharing one Promise.all did.
+ */
+function useInsights(days: number): InsightAnalytics {
+  const state = useAsync(`insights:${days}`, () => api.admin.insights({ days, minDays: 14 }));
+  return {
+    payload: state.data,
+    error: state.error,
+    loading: state.loading,
     reload: state.reload,
   };
 }
@@ -362,7 +381,15 @@ function Big({ children, unit }: { children: React.ReactNode; unit?: string }) {
  * Widgets
  * ------------------------------------------------------------------ */
 
-function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
+function WidgetBody({
+  kind,
+  data,
+  insights,
+}: {
+  kind: Kind;
+  data: InsightData;
+  insights: InsightAnalytics;
+}) {
   const totals = data.summary?.totals;
   /**
    * The API returns only the days that had bookings, so a quiet week arrives as
@@ -618,12 +645,16 @@ function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
     }
 
     case "retention": {
-      const r = data.insights?.retention;
+      const r = insights.payload?.retention;
       const eligible = r?.eligible ?? 0;
       const rate = r && eligible > 0 ? Math.round((r.rebooked / eligible) * 100) : 0;
       return (
         <Shell title="Did not rebook" meta={r && eligible > 0 ? rate + "% rebooked" : undefined}>
-          {!r || r.clientsSeen === 0 ? (
+          {insights.error ? (
+            <div className="flex flex-1 items-center">
+              <ErrorNote error={insights.error} onRetry={insights.reload} className="w-full" />
+            </div>
+          ) : !r || r.clientsSeen === 0 ? (
             <div className="flex flex-1 items-center">
               <EmptyNote
                 title="No completed visits"
@@ -642,7 +673,7 @@ function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
               <div className="flex items-baseline gap-2">
                 <Big>{r.didNotRebook}</Big>
                 <span className="text-[11.5px] text-muted-foreground">
-                  of {eligible} did not book again
+                  of {eligible} registered clients did not book again
                 </span>
               </div>
               {r.tooRecent > 0 && (
@@ -673,10 +704,14 @@ function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
     }
 
     case "promos": {
-      const promos = data.insights?.promos ?? [];
+      const promos = insights.payload?.promos ?? [];
       return (
         <Shell title="Promo performance" meta="completed revenue">
-          {promos.length === 0 ? (
+          {insights.error ? (
+            <div className="flex flex-1 items-center">
+              <ErrorNote error={insights.error} onRetry={insights.reload} className="w-full" />
+            </div>
+          ) : promos.length === 0 ? (
             <div className="flex flex-1 items-center">
               <EmptyNote
                 title="No promo redemptions"
@@ -684,27 +719,31 @@ function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
               />
             </div>
           ) : (
-            <div className="mt-1 space-y-2">
-              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 text-[9.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                <span>Code</span>
-                <span className="text-right">Uses</span>
-                <span className="text-right">Discount</span>
-                <span className="text-right">Revenue</span>
-              </div>
-              {promos.slice(0, 5).map((p) => (
-                <div
-                  key={p.code}
-                  className="grid grid-cols-[1fr_auto_auto_auto] items-baseline gap-x-3 text-[11.5px]"
-                >
-                  <span className="truncate font-mono">{p.code}</span>
-                  <span className="text-right tabular-nums text-muted-foreground">{p.redemptions}</span>
-                  <span className="text-right tabular-nums text-muted-foreground">
-                    {p.discountCents > 0 ? "−" + peso(p.discountCents) : "—"}
-                  </span>
-                  <span className="text-right font-medium tabular-nums">{peso(p.revenueCents)}</span>
-                </div>
-              ))}
-            </div>
+            <ul className="mt-1 space-y-2.5">
+              {promos.slice(0, 5).map((p) => {
+                /* Revenue per peso of discount — the question behind the tile. */
+                const back = p.discountCents > 0 ? p.revenueCents / p.discountCents : null;
+                return (
+                  <li key={p.code} className="flex items-baseline justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-[11.5px]">{p.code}</p>
+                      <p className="truncate text-[10.5px] text-muted-foreground">
+                        {p.redemptions} used ·{" "}
+                        {p.discountCents > 0 ? peso(p.discountCents) + " off" : "no discount"} ·{" "}
+                        {p.completed} completed
+                        {p.noShows > 0 ? ` · ${p.noShows} no-show` : ""}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[11.5px] font-medium tabular-nums">{peso(p.revenueCents)}</p>
+                      <p className="text-[10.5px] tabular-nums text-muted-foreground">
+                        {back === null ? "—" : back.toFixed(1) + "× back"}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </Shell>
       );
@@ -858,8 +897,10 @@ export default function Insights() {
   const [editable, setEditable] = React.useState(true);
 
   const board = useInsightData(days);
+  const insights = useInsights(days);
   /* Only a re-read counts as "refreshing"; the first load has its own skeleton. */
-  const refreshing = board.loading && board.updatedAt !== null;
+  const refreshing =
+    (board.loading && board.updatedAt !== null) || (insights.loading && insights.payload !== null);
 
   const [items, setItems] = React.useState<InsightWidget[]>(() => {
     // Only trust a stored layout whose tiles still exist — a renamed kind
@@ -965,8 +1006,11 @@ export default function Insights() {
             variant="ghost"
             size="sm"
             className="h-7"
-            onClick={board.reload}
-            disabled={board.loading}
+            onClick={() => {
+              board.reload();
+              insights.reload();
+            }}
+            disabled={board.loading || insights.loading}
           >
             {refreshing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
             {refreshing ? "Refreshing…" : "Refresh"}
@@ -995,7 +1039,11 @@ export default function Insights() {
           gap={16}
           radius={14}
           renderItem={(item) => (
-            <WidgetBody kind={(item as InsightWidget).kind} data={board.data!} />
+            <WidgetBody
+              kind={(item as InsightWidget).kind}
+              data={board.data!}
+              insights={insights}
+            />
           )}
         />
       )}
