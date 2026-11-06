@@ -32,6 +32,11 @@ import type {
   Availability,
   Booking,
   BookingStatus,
+  BookingRules,
+  PublicBookingPolicy,
+  ReminderStatus,
+  TestCheckout,
+  TestPayment,
   BranchQr,
   CheckInResult,
   ClientDetail,
@@ -47,6 +52,8 @@ import type {
   LoginResult,
   Me,
   Paginated,
+  PaymentProviderId,
+  PaymentProviders,
   Promo,
   PromoStatus,
   PromoType,
@@ -375,6 +382,11 @@ export const api = {
     logout: () => request<void>("POST", "/api/v1/auth/logout"),
 
     me: () => request<Me>("GET", "/api/v1/auth/me"),
+
+    changePassword: (currentPassword: string, newPassword: string) =>
+      request<{ ok: boolean }>("POST", "/api/v1/auth/password", {
+        body: { currentPassword, newPassword },
+      }),
   },
 
   services: {
@@ -465,8 +477,27 @@ export const api = {
     intervalMinutes?: number;
   }) => request<Availability>("GET", "/api/v1/availability", { auth: false, query }),
 
-  bookings: {
-    create: (body: CreateBookingInput) =>
+  deposits: {
+    testCheckout: (body: { amountCents: number }) =>
+      request<TestCheckout>("POST", "/api/v1/deposits/test-checkout", { body }),
+
+    testPayment: (ref: string) =>
+      request<TestPayment>("GET", `/api/v1/deposits/test/${encodeURIComponent(ref)}`, {
+        auth: false,
+      }),
+
+    payTest: (ref: string) =>
+      request<TestPayment>("POST", `/api/v1/deposits/test/${encodeURIComponent(ref)}/pay`, {
+        auth: false,
+      }),
+
+    cancelTest: (ref: string) =>
+      request<TestPayment>("POST", `/api/v1/deposits/test/${encodeURIComponent(ref)}/cancel`, {
+        auth: false,
+      }),
+  },
+
+  bookings: {    create: (body: CreateBookingInput) =>
       request<Booking>("POST", "/api/v1/bookings", { body }),
 
     list: (query: ListQuery & {
@@ -757,6 +788,41 @@ export const api = {
       a.remove();
       URL.revokeObjectURL(url);
     },
+
+    /**
+     * Set any account's password by email. The owner's escape hatch.
+     *
+     * Distinct from the client-only reset above: this one can target any
+     * role, so the route behind it is ADMIN rather than DESK.
+     */
+    resetUserPassword: (email: string, newPassword: string) =>
+      request<{ ok: boolean; email: string | null }>("POST", "/api/v1/admin/users/password", {
+        body: { email, newPassword },
+      }),
+  },
+
+  settings: {
+    payments: () => request<PaymentProviders>("GET", "/api/v1/settings/payments"),
+
+    updatePayments: (body: {
+      default: PaymentProviderId;
+      options: { id: PaymentProviderId; enabled: boolean }[];
+    }) => request<PaymentProviders>("PUT", "/api/v1/settings/payments", { body }),
+
+    booking: () => request<BookingRules>("GET", "/api/v1/settings/booking"),
+
+    /** No auth: the client-facing cancellation and arrival policy. */
+    publicBooking: () =>
+      request<PublicBookingPolicy>("GET", "/api/v1/settings/public", { auth: false }),
+
+    updateBooking: (body: {
+      cancellationWindowHours: number;
+      arrivalWindowMinutes: number;
+    }) => request<BookingRules>("PUT", "/api/v1/settings/booking", { body }),
+
+    reminders: () => request<ReminderStatus>("GET", "/api/v1/settings/reminders"),
+
+    testReminder: () => request<{ to: string }>("POST", "/api/v1/settings/reminders/test"),
   },
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The monitoring board.
+ * Insights — the performance surface.
  *
  * The layout engine is unchanged — it is a real tiling grid with pointer, touch
  * and keyboard dragging, and the arrangement is remembered per device. What
@@ -67,11 +67,11 @@ type Kind =
   | "floor"
   | "arrivals";
 
-interface BoardWidget extends WidgetItem {
+interface InsightWidget extends WidgetItem {
   kind: Kind;
 }
 
-const DEFAULT_BOARD: BoardWidget[] = [
+const DEFAULT_LAYOUT: InsightWidget[] = [
   { id: "revenue", kind: "revenue", w: 2, h: 1, label: "Revenue" },
   { id: "bookings", kind: "bookings", w: 1, h: 1, label: "Bookings" },
   { id: "completed", kind: "completed", w: 1, h: 1, label: "Completion rate" },
@@ -103,15 +103,15 @@ const SIZE_TO_SPAN: Record<string, { w: number; h: number }> = {
  * legacy `{size}` shape. Returns null if anything is untrustworthy, so the
  * caller falls back to the defaults rather than rendering a broken board.
  */
-function parseStored(raw: string | null, known: Set<string>): BoardWidget[] | null {
+function parseStored(raw: string | null, known: Set<string>): InsightWidget[] | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) return null;
-    const out: BoardWidget[] = [];
+    const out: InsightWidget[] = [];
     for (const entry of parsed) {
       if (!entry || typeof entry !== "object") return null;
-      const { id, kind, label } = entry as Partial<BoardWidget>;
+      const { id, kind, label } = entry as Partial<InsightWidget>;
       if (typeof id !== "string" || !known.has(id)) return null;
       let w: number;
       let h: number;
@@ -141,15 +141,15 @@ function parseStored(raw: string | null, known: Set<string>): BoardWidget[] | nu
  * Everything the board reads, in one place
  * ------------------------------------------------------------------ */
 
-interface BoardData {
+interface InsightData {
   summary: Dashboard | null;
   today: Booking[];
   employees: Employee[];
   clients: ClientRecord[];
 }
 
-function useBoardData(days: number): {
-  data: BoardData | null;
+function useInsightData(days: number): {
+  data: InsightData | null;
   error: ApiError | null;
   initial: boolean;
   loading: boolean;
@@ -175,7 +175,7 @@ function useBoardData(days: number): {
       today: today.data,
       employees: employees.data,
       clients: clients.data,
-    } satisfies BoardData;
+    } satisfies InsightData;
   });
 
   /*
@@ -349,7 +349,7 @@ function Big({ children, unit }: { children: React.ReactNode; unit?: string }) {
  * Widgets
  * ------------------------------------------------------------------ */
 
-function WidgetBody({ kind, data }: { kind: Kind; data: BoardData }) {
+function WidgetBody({ kind, data }: { kind: Kind; data: InsightData }) {
   const totals = data.summary?.totals;
   /**
    * The API returns only the days that had bookings, so a quiet week arrives as
@@ -746,19 +746,19 @@ function WidgetBody({ kind, data }: { kind: Kind; data: BoardData }) {
  * Page
  * ------------------------------------------------------------------ */
 
-export default function Board() {
+export default function Insights() {
   const { me } = useAuth();
   const [days, setDays] = React.useState(7);
   const [editable, setEditable] = React.useState(true);
 
-  const board = useBoardData(days);
+  const board = useInsightData(days);
   /* Only a re-read counts as "refreshing"; the first load has its own skeleton. */
   const refreshing = board.loading && board.updatedAt !== null;
 
-  const [items, setItems] = React.useState<BoardWidget[]>(() => {
+  const [items, setItems] = React.useState<InsightWidget[]>(() => {
     // Only trust a stored layout whose tiles still exist — a renamed kind
     // would otherwise render a permanently blank tile.
-    const known = new Set(DEFAULT_BOARD.map((w) => w.id));
+    const known = new Set(DEFAULT_LAYOUT.map((w) => w.id));
     try {
       const fresh = parseStored(localStorage.getItem(STORAGE_KEY), known);
       if (fresh) return fresh;
@@ -772,11 +772,11 @@ export default function Board() {
     } catch {
       /* ignore */
     }
-    return DEFAULT_BOARD;
+    return DEFAULT_LAYOUT;
   });
 
   function update(next: WidgetItem[]) {
-    setItems(next as BoardWidget[]);
+    setItems(next as InsightWidget[]);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -785,7 +785,7 @@ export default function Board() {
   }
 
   function reset() {
-    setItems(DEFAULT_BOARD);
+    setItems(DEFAULT_LAYOUT);
     try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(LEGACY_KEY);
@@ -799,10 +799,10 @@ export default function Board() {
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-8">
       <PageHeader
-        eyebrow="Monitoring board"
+        eyebrow="Insights"
         icon={LayoutGrid}
-        title="Arrange the room you think in."
-        description={`Every tile is live — ${items.length} panels over the last ${days} days, read from the database. Drag to rearrange and drag a corner to resize; the layout is remembered on this device.`}
+        title="How the business is doing."
+        description={`Revenue, utilisation, retention and no-shows over the last ${days} days, read from the database. Drag to rearrange and drag a corner to resize; the layout is remembered on this device.`}
         actions={
           <>
             <div className="flex rounded-full border border-white/15 bg-white/[0.08] p-1">
@@ -889,7 +889,7 @@ export default function Board() {
           gap={16}
           radius={14}
           renderItem={(item) => (
-            <WidgetBody kind={(item as BoardWidget).kind} data={board.data!} />
+            <WidgetBody kind={(item as InsightWidget).kind} data={board.data!} />
           )}
         />
       )}

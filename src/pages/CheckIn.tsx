@@ -75,7 +75,7 @@ function Redeem() {
    * The camera and the text box are the same door, so they share one function.
    * A scan is a deliberate act at the desk (the guest is holding the pass up),
    * so it submits; the arrival-confirmation flow, which does *not* commit on a
-   * scan, lives on /app/scan-arrivals.
+   * scan, lives on the confirm mode of /app/arrivals.
    */
   async function redeem(raw: string) {
     const value = raw.trim();
@@ -435,10 +435,11 @@ function Today() {
  * Page
  * ------------------------------------------------------------------ */
 
-export default function CheckIn() {
+export default function CheckIn({ embedded = false }: { embedded?: boolean } = {}) {
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-8">
-      <PageHeader
+    <div className={embedded ? "space-y-6" : "mx-auto w-full max-w-[1400px] space-y-8"}>
+      {!embedded && (
+        <PageHeader
         eyebrow="QR check-in"
         icon={QrCode}
         title="Arrivals, handled."
@@ -458,6 +459,7 @@ export default function CheckIn() {
           </span>
         </div>
       </PageHeader>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Reveal className="h-full">

@@ -18,12 +18,12 @@ import {
   ClipboardList,
   Clock,
   LayoutDashboard,
-  LayoutGrid,
+  LineChart,
   ListChecks,
   LogOut,
-  QrCode,
   ScanLine,
   Scissors,
+  Settings2,
   Sparkles,
   Tag,
   Ticket,
@@ -67,8 +67,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { area: "overview", to: "/app", label: "Overview", icon: LayoutDashboard },
       { area: "bookings", to: "/app/bookings", label: "Bookings", icon: CalendarDays },
-      { area: "scan-arrivals", to: "/app/scan-arrivals", label: "Scan arrival pass", icon: ScanLine },
-      { area: "check-in", to: "/app/check-in", label: "QR Check-in", icon: QrCode },
+      { area: "arrivals", to: "/app/arrivals", label: "Arrivals", icon: ScanLine },
     ],
   },
   {
@@ -97,12 +96,21 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     ],
   },
   {
-    label: "Insight",
-    items: [{ area: "board", to: "/app/board", label: "Monitoring Board", icon: LayoutGrid }],
+    label: "Performance",
+    items: [{ area: "insights", to: "/app/insights", label: "Insights", icon: LineChart }],
   },
   {
-    label: "You",
-    items: [{ area: "my-bookings", to: "/app/my-bookings", label: "My bookings", icon: Ticket }],
+    /*
+     * The account group. `my-bookings` is a client's own history; `settings`
+     * is everyone's password and, for the owner, the business configuration.
+     * They sit together because they are the two screens that belong to the
+     * person signed in rather than to the shift.
+     */
+    label: "Account",
+    items: [
+      { area: "my-bookings", to: "/app/my-bookings", label: "My bookings", icon: Ticket },
+      { area: "settings", to: "/app/settings", label: "Settings", icon: Settings2 },
+    ],
   },
 ];
 
@@ -113,13 +121,13 @@ const TITLES: Record<string, { title: string; sub: string }> = {
   "/app/promos": { title: "Promo codes", sub: "Discounts, caps and redemptions" },
   "/app/services": { title: "Services", sub: "The menu, its prices and durations" },
   "/app/team": { title: "Employees", sub: "The floor and what they are qualified for" },
-  "/app/check-in": { title: "QR Check-in", sub: "Redeem an arrival pass" },
-  "/app/scan-arrivals": { title: "Scan arrival pass", sub: "Confirm a guest has arrived" },
+  "/app/arrivals": { title: "Arrivals", sub: "Scan, confirm and check in" },
   "/app/tasks": { title: "Task board", sub: "Assign work and follow it through" },
   "/app/my-tasks": { title: "My tasks", sub: "What has been assigned to you" },
   "/app/attendance": { title: "Attendance", sub: "Time in, time out and hours worked" },
-  "/app/board": { title: "Monitoring Board", sub: "Drag to arrange your own view" },
+  "/app/insights": { title: "Insights", sub: "Revenue, utilisation and retention" },
   "/app/my-bookings": { title: "My bookings", sub: "Your appointments and passes" },
+  "/app/settings": { title: "Settings", sub: "Your account and the business configuration" },
 };
 
 /* ------------------------------------------------------------------ *

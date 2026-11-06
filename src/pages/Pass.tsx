@@ -210,11 +210,16 @@ export default function Pass() {
                   Show this at reception. The desk scans it once — it cannot be
                   used twice.
                 </p>
-                {qr.expiresAt && (
+                {qr.admitFrom && qr.admitUntil ? (
                   <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-                    Valid until {branchDay(qr.expiresAt)} · {branchTime(qr.expiresAt)}
+                    Admit {branchTime(qr.admitFrom)} – {branchTime(qr.admitUntil)} ·{" "}
+                    {branchDay(qr.admitUntil)}
                   </p>
-                )}
+                ) : qr.expiresAt ? (
+                  <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+                    Pass expires {branchDay(qr.expiresAt)} · {branchTime(qr.expiresAt)}
+                  </p>
+                ) : null}
               </>
             ) : (
               <div className="flex w-full flex-col items-center rounded-xl border border-dashed border-border px-6 py-12 text-center">

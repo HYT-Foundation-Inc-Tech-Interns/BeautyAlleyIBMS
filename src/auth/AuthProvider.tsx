@@ -43,13 +43,13 @@ export type Area =
   | "promos"
   | "services"
   | "employees"
-  | "check-in"
-  | "scan-arrivals"
+  | "arrivals"
   | "tasks"
   | "my-tasks"
   | "attendance"
-  | "board"
-  | "my-bookings";
+  | "insights"
+  | "my-bookings"
+  | "settings";
 
 /**
  * What each role may open. This mirrors the backend's `requireRole` calls
@@ -59,7 +59,7 @@ export type Area =
  * The four roles, and why they differ:
  *
  *   ADMIN     runs the business — the full record of bookings, clients,
- *             promos and employees, plus the monitoring board.
+ *             promos and employees, plus the Insights.
  *   CONCIERGE runs the desk — reception, the run sheet, check-in, and (from
  *             the transactions work) payments, receipts and loyalty. What
  *             they do NOT get is anything that configures the business:
@@ -85,50 +85,69 @@ export const SCOPE: Record<Role, Area[]> = {
     "promos",
     "services",
     "employees",
-    "check-in",
-    "scan-arrivals",
+    "arrivals",
+    "tasks",
     "attendance",
-    "board",
+    "insights",
+    "settings",
   ],
   /*
    * The desk owns the front of house: the run sheet, the arrival scanner, and
    * the task board it writes work onto. It proposes promo codes for the
    * administrator to approve.
    *
-   * It does not get attendance any more: a clock is a person's own record, so
-   * only the employee and the administrator (monitoring) see that screen.
+   * It does not get `clients`: `Clients.tsx` reads `/admin/clients`, which is
+   * ADMIN. What the desk actually has is a *lookup* - `GET /clients/search` -
+   * used inside booking creation to attach a reservation to an existing
+   * customer. That is a different job from browsing the client record, and the
+   * role blurb says "client lookup" rather than "client records" so the two are
+   * not confused again.
    *
-   * It does not get `check-in` either: recording that a guest has arrived is
-   * the stylist's act, on the chair they are about to work. The desk still has
-   * `scan-arrivals`, which is the deliberate lookup-and-confirm version - see
-   * the note in the EMPLOYEE block below.
+   * It does not get attendance: a clock is a person's own record, so only the
+   * employee and the administrator (monitoring) see that screen.
    *
-   * It does get the monitoring board: the desk is the one who answers "how is
+   * It gets `arrivals`: the merged scanner and check-in surface. The API has
+   * always allowed OPERATIONS to redeem a pass, so the desk and the floor share
+   * one screen; the difference is only which mode they open it in.
+   *
+   * It does get the Insights: the desk is the one who answers "how is
    * the week going" for the owner, and every tile is a read. The two aggregate
    * endpoints behind it are the only admin routes the desk may call.
    */
-  CONCIERGE: ["overview", "bookings", "promos", "scan-arrivals", "tasks", "board"],
+  CONCIERGE: ["overview", "bookings", "promos", "arrivals", "tasks", "insights", "settings"],
   /*
    * The floor gets its own two screens — the work assigned to it and its own
-   * clock — plus the run sheet and the door. It deliberately does NOT get the
-   * task board (`tasks`): that is where work is *assigned*, and an employee
-   * assigning work to a colleague is not a thing this system is for. It gets
-   * `my-tasks` instead, which the API scopes to the caller's own row.
+   * clock — plus the run sheet, the door, and the chair-side check-in. It
+   * deliberately does NOT get the task board (`tasks`): that is where work is
+   * *assigned*, and an employee assigning work to a colleague is not a thing
+   * this system is for. It gets `my-tasks` instead, which the API scopes to the
+   * caller's own row.
+   *
+   * `arrivals` is here because the API has always allowed OPERATIONS to redeem
+   * a pass. The merged screen keeps the careful scan-and-confirm mode as the
+   * default, so a mis-scan cannot check in the wrong guest.
    */
-  EMPLOYEE: ["overview", "bookings", "check-in", "my-tasks", "attendance"],
-  CLIENT: ["my-bookings"],
+  EMPLOYEE: ["overview", "bookings", "arrivals", "my-tasks", "attendance", "settings"],
+  CLIENT: ["my-bookings", "settings"],
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
-  ADMIN: "Administrator",
-  CONCIERGE: "Concierge",
-  EMPLOYEE: "Employee",
+  ADMIN: "Owner",
+  CONCIERGE: "Front desk",
+  EMPLOYEE: "Therapist",
   CLIENT: "Client",
 };
 
+/**
+ * The one-line description under each label.
+ *
+ * These are display names only. The internal codes (`ADMIN`, `CONCIERGE`, …)
+ * and every API guard stay as they are; a label change must never become a
+ * permission change.
+ */
 export const ROLE_BLURB: Record<Role, string> = {
-  ADMIN: "Full access — bookings, clients, promos and team",
-  CONCIERGE: "The desk — reception, the run sheet and client records",
+  ADMIN: "The owner — every record and every setting",
+  CONCIERGE: "The desk — reception, bookings and client lookup",
   EMPLOYEE: "The floor — your chair, the run sheet and the door",
   CLIENT: "Your appointments and arrival passes",
 };

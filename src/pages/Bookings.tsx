@@ -378,7 +378,16 @@ export default function Bookings() {
                 <div className="min-w-[190px] flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2.5">
                     <p className="font-display text-[17px] font-semibold leading-tight tracking-tight">
-                      {who}
+                      {booking.client?.id ? (
+                        <Link
+                          to={`/app/clients?client=${booking.client.id}`}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {who}
+                        </Link>
+                      ) : (
+                        who
+                      )}
                     </p>
                     <span className="font-mono text-[10.5px] text-muted-foreground">
                       {booking.reference}

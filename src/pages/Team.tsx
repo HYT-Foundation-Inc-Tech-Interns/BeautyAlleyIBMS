@@ -745,7 +745,7 @@ function InviteStaffForm({
             <span className="font-medium">{created.email}</span> now has a{" "}
             {ROLE_LABEL[role].toLowerCase()} account.{" "}
             {!created.employeeId
-              ? "No employee row is needed — a concierge works the desk, not the floor."
+              ? "No employee row is needed — front desk staff work reception, not the floor."
               : created.qualified > 0
                 ? `They are on the roster, qualified for ${created.qualified} treatment${created.qualified === 1 ? "" : "s"} — the booking engine can offer them now.`
                 : "They are on the roster below — add their qualifications so the booking engine can offer them."}

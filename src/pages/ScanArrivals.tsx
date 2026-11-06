@@ -225,7 +225,7 @@ function ReservationCard({ booking, verdict }: { booking: Booking; verdict: Verd
  * Page
  * ------------------------------------------------------------------ */
 
-export default function ScanArrivals() {
+export default function ScanArrivals({ embedded = false }: { embedded?: boolean } = {}) {
   const { me } = useAuth();
   const [state, setState] = React.useState<ScanState>({ kind: "idle" });
   /* A guest who arrived before their pass opened, held for the override. */
@@ -353,8 +353,9 @@ export default function ScanArrivals() {
   const paused = state.kind !== "idle";
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-6">
-      <PageHeader
+    <div className={embedded ? "space-y-5" : "mx-auto w-full max-w-[1400px] space-y-6"}>
+      {!embedded && (
+        <PageHeader
         eyebrow="Operate"
         icon={ScanLine}
         title="Scan arrival pass"
@@ -371,6 +372,7 @@ export default function ScanArrivals() {
           </span>
         </div>
       </PageHeader>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         {/* --- scanner -------------------------------------------------- */}

@@ -35,21 +35,7 @@ import { branchDay } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PageHeader, Panel, StatTile } from "@/components/app/bits";
 import { EmptyNote, ErrorNote, Loading, TextField } from "@/components/app/api-bits";
-import { PriorityBadge, TaskStatusBadge } from "@/pages/MyTasks";
-
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  PENDING: "Pending",
-  IN_PROGRESS: "In progress",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-};
-
-const PRIORITY_LABEL: Record<TaskPriority, string> = {
-  LOW: "Low",
-  MEDIUM: "Medium",
-  HIGH: "High",
-  URGENT: "Urgent",
-};
+import { PRIORITY_LABEL, STATUS_LABEL, TaskCard } from "@/components/app/task-card";
 
 const selectClass =
   "mt-1.5 block h-10 w-full rounded-lg border border-border bg-card px-3 text-[13.5px] outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15";
@@ -283,25 +269,18 @@ function TaskRow({
   }
 
   return (
-    <Panel className="px-5 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="tnum rounded-md bg-muted px-2 py-0.5 font-mono text-[11px] font-semibold text-muted-foreground">
-              {task.reference}
-            </span>
-            <TaskStatusBadge status={task.status} overdue={task.overdue} />
-            <PriorityBadge priority={task.priority} />
-          </div>
-          <h3 className="mt-2 font-display text-[16.5px] font-semibold leading-snug">{task.title}</h3>
-          {task.description && (
-            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground text-pretty">
-              {task.description}
-            </p>
-          )}
-        </div>
-
-        <div className="flex shrink-0 gap-2">
+    <TaskCard
+      task={task}
+      instructionsVariant="inline"
+      fields={[
+        { label: "Assigned to", value: task.employeeName },
+        { label: "Assigned by", value: task.assignedBy },
+        { label: "Date assigned", value: branchDay(task.assignedAt) },
+        { label: "Due", value: task.dueAt ? branchDay(task.dueAt) : "No deadline" },
+      ]}
+      error={error}
+      headerActions={
+        <>
           {!terminal && (
             <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)} disabled={busy}>
               {editing ? "Close" : "Edit"}
@@ -319,47 +298,9 @@ function TaskRow({
               Cancel
             </Button>
           )}
-        </div>
-      </div>
-
-      <dl className="mt-3.5 grid gap-x-6 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: "Assigned to", value: task.employeeName },
-          { label: "Assigned by", value: task.assignedBy },
-          { label: "Date assigned", value: branchDay(task.assignedAt) },
-          { label: "Due", value: task.dueAt ? branchDay(task.dueAt) : "No deadline" },
-        ].map((f) => (
-          <div key={f.label} className="min-w-0">
-            <dt className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              {f.label}
-            </dt>
-            <dd className="mt-0.5 truncate text-[13px]">{f.value}</dd>
-          </div>
-        ))}
-      </dl>
-
-      {task.instructions && !editing && (
-        <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
-          <span className="font-semibold text-foreground">Instructions: </span>
-          {task.instructions}
-        </p>
-      )}
-
-      {task.completionNotes && (
-        <div className="mt-3 rounded-lg border border-success/25 bg-success/[0.06] px-3.5 py-2.5">
-          <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-success">
-            Completion notes
-          </p>
-          <p className="mt-1 text-[12.5px] leading-relaxed">{task.completionNotes}</p>
-        </div>
-      )}
-
-      {error && (
-        <p className="mt-3 rounded-lg border border-destructive/25 bg-destructive/[0.06] px-3.5 py-2.5 text-[12.5px] text-destructive">
-          {error}
-        </p>
-      )}
-
+        </>
+      }
+    >
       {editing && (
         <div className="mt-4 space-y-3.5 rounded-xl border border-border/70 bg-muted/30 px-4 py-4">
           <div className="grid gap-3.5 sm:grid-cols-3">
@@ -429,7 +370,7 @@ function TaskRow({
           </div>
         </div>
       )}
-    </Panel>
+    </TaskCard>
   );
 }
 

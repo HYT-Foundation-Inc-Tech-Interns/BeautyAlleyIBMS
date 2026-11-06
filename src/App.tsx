@@ -34,15 +34,16 @@ import Bookings from "@/pages/Bookings";
 import NewBooking from "@/pages/NewBooking";
 import Clients from "@/pages/Clients";
 import Promos from "@/pages/Promos";
-import CheckIn from "@/pages/CheckIn";
-import ScanArrivals from "@/pages/ScanArrivals";
+import Arrivals from "@/pages/Arrivals";
+import DepositMock from "@/pages/DepositMock";
 import Team from "@/pages/Team";
 import ServicesAdmin from "@/pages/ServicesAdmin";
-import Board from "@/pages/Board";
+import Insights from "@/pages/Insights";
 import Tasks from "@/pages/Tasks";
 import MyTasks from "@/pages/MyTasks";
 import Attendance from "@/pages/Attendance";
 import MyBookings from "@/pages/MyBookings";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/NotFound";
 
 /**
@@ -75,6 +76,7 @@ export default function App() {
           * make themselves an identity in the salon's system.
           */}
         <Route path="/login" element={<Login />} />
+        <Route path="/deposit/mock" element={<DepositMock />} />
 
         {/* ------------------------------------------------ console */}
         <Route
@@ -135,22 +137,18 @@ export default function App() {
               </RequireArea>
             }
           />
+          {/* One arrivals surface. The old two routes redirect into the mode
+              they used to be, so bookmarks and the pilot's own links survive. */}
           <Route
-            path="check-in"
+            path="arrivals"
             element={
-              <RequireArea area="check-in">
-                <CheckIn />
+              <RequireArea area="arrivals">
+                <Arrivals />
               </RequireArea>
             }
           />
-          <Route
-            path="scan-arrivals"
-            element={
-              <RequireArea area="scan-arrivals">
-                <ScanArrivals />
-              </RequireArea>
-            }
-          />
+          <Route path="check-in" element={<Navigate to="/app/arrivals?mode=quick" replace />} />
+          <Route path="scan-arrivals" element={<Navigate to="/app/arrivals?mode=confirm" replace />} />
           <Route
             path="tasks"
             element={
@@ -175,19 +173,32 @@ export default function App() {
               </RequireArea>
             }
           />
+          {/* The performance surface. `/app/board` was its old name; the
+              redirect keeps bookmarks and the pilot's own links working. */}
           <Route
-            path="board"
+            path="insights"
             element={
-              <RequireArea area="board">
-                <Board />
+              <RequireArea area="insights">
+                <Insights />
               </RequireArea>
             }
           />
+          <Route path="board" element={<Navigate to="/app/insights" replace />} />
           <Route
             path="my-bookings"
             element={
               <RequireArea area="my-bookings">
                 <MyBookings />
+              </RequireArea>
+            }
+          />
+          {/* One settings page for every role; the sections inside it are
+              gated by role, so a client sees only their own password form. */}
+          <Route
+            path="settings"
+            element={
+              <RequireArea area="settings">
+                <Settings />
               </RequireArea>
             }
           />

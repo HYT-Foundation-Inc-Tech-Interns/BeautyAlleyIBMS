@@ -61,7 +61,7 @@ export function AuthLayout({
 
           <dl className="mt-10 space-y-5">
             {[
-              ["Administrator", "Bookings, clients, promo codes and the team record"],
+              ["Owner", "Bookings, clients, promo codes and the team record"],
               ["Stylist", "Today's run sheet and the door — arrivals, not revenue"],
               ["Client", "Your appointments, and the pass that checks you in"],
             ].map(([role, blurb]) => (

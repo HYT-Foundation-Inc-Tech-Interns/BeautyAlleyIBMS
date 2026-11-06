@@ -316,7 +316,11 @@ export interface QrState {
   used: boolean;
   pass: string | null;
   url: string | null;
+  /** Transport expiry: the signature stops verifying a day after the service. */
   expiresAt?: string;
+  /** The window the server actually admits the guest: [start − window, end]. */
+  admitFrom?: string;
+  admitUntil?: string;
   checkedInAt?: string | null;
 }
 
@@ -565,4 +569,72 @@ export interface TaskCounts {
   inProgress: number;
   overdue: number;
   completed: number;
+}
+
+/**
+ * Payment providers are configuration, not an integration.
+ *
+ * `enabled` means "show this as an option at the desk"; the charge itself
+ * still happens on the terminal. All five ship enabled so the owner can turn
+ * one off without waiting for a deploy.
+ */
+export type PaymentProviderId = "cash" | "gcash" | "maya" | "card" | "bank_transfer";
+
+export interface PaymentProviderOption {
+  id: PaymentProviderId;
+  label: string;
+  enabled: boolean;
+}
+
+export interface PaymentProviders {
+  default: PaymentProviderId;
+  options: PaymentProviderOption[];
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+/**
+ * Booking policy, owner-editable.
+ *
+ * `cancellationWindowHours` is how late a client may cancel before the desk
+ * has to override; `arrivalWindowMinutes` is how early a pass opens. Both used
+ * to be deployment environment variables.
+ */
+export interface BookingRules {
+  cancellationWindowHours: number;
+  arrivalWindowMinutes: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+/** The two numbers a client is allowed to read. */
+export interface PublicBookingPolicy {
+  cancellationWindowHours: number;
+  arrivalWindowMinutes: number;
+}
+
+/** A HitPay (or mock) test checkout. Not attached to a booking. */
+export interface TestCheckout {
+  mode: "mock" | "sandbox" | "live";
+  amountCents: number;
+  checkoutUrl: string;
+  reference: string;
+}
+
+export interface ReminderStatus {
+  configured: boolean;
+  queued: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  nextSendAt: string | null;
+}
+
+export interface TestPayment {
+  reference: string;
+  amountCents: number;
+  currency: string;
+  status: "PENDING" | "PAID" | "CANCELLED" | string;
+  createdAt: string;
+  paidAt: string | null;
 }

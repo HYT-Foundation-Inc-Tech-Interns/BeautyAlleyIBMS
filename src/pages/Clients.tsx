@@ -15,6 +15,7 @@
  */
 
 import * as React from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   Download,
@@ -49,9 +50,12 @@ function useDebounced<T>(value: T, ms = 300) {
 }
 
 export default function Clients() {
+  const [params] = useSearchParams();
   const [term, setTerm] = React.useState("");
   const [includeInactive, setIncludeInactive] = React.useState(false);
-  const [selected, setSelected] = React.useState<string | null>(null);
+  // Seeded from the URL so a booking can deep-link to its client:
+  // `/app/clients?client=<id>` opens that record directly.
+  const [selected, setSelected] = React.useState<string | null>(() => params.get("client"));
   const [exporting, setExporting] = React.useState(false);
   const [exportError, setExportError] = React.useState<ApiError | null>(null);
   const q = useDebounced(term);
@@ -313,6 +317,12 @@ function ClientPanel({
           <h2 className="font-display text-[20px] font-semibold leading-tight tracking-tight">
             {client.fullName}
           </h2>
+          <Link
+            to={`/app/bookings?range=all&q=${encodeURIComponent(client.fullName)}`}
+            className="mt-1.5 inline-flex text-[12px] font-medium text-primary hover:underline"
+          >
+            View bookings
+          </Link>
           <div className="mt-2 space-y-1 text-[12px] text-muted-foreground">
             {client.phone && (
               <p className="flex items-center gap-1.5">
