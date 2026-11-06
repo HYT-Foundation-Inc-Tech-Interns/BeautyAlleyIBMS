@@ -45,6 +45,20 @@ export interface LeavePerson {
   endsAt: string;
   reason: string | null;
   status: TimeOffStatus;
+  /** Live bookings already inside this range, whatever its status. */
+  clashes: number;
+}
+
+/** A booking that sits inside leave somebody has already been granted. */
+export interface AffectedBooking {
+  bookingId: string;
+  reference: string;
+  employeeId: string;
+  employeeName: string;
+  clientName: string | null;
+  startsAt: string;
+  endsAt: string;
+  status: string;
 }
 
 export interface LeaveBoardDay {
@@ -64,6 +78,7 @@ export interface LeaveBoard {
   timezone: string;
   days: LeaveBoardDay[];
   pending: LeavePerson[];
+  affected: AffectedBooking[];
 }
 
 const SELECT =

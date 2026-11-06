@@ -504,6 +504,28 @@ Endpoints: `GET /employees/leave?from&to` (DESK), `POST
 /employees/:id/time-off/:leaveId/decision` (ADMIN), `DELETE
 /employees/:id/time-off/:leaveId` (OPERATIONS, self-while-pending or owner).
 
-Two things it does not do yet: a request does not email anyone, and approving
-leave does not offer to move the bookings that now clash. Both are visible
-follow-ons rather than hidden gaps.
+### What an approval does to the diary
+
+Only **approved** leave closes the calendar. A pending request changes nothing
+about what can be booked — a stylist cannot stop the salon selling their
+Saturday just by asking for it. The four functions that guard the booking
+engine (`create_booking`, `get_available_slots`, `reassign_booking_employee`
+and the `enforce_employee_time_off` trigger) check `status = 'APPROVED'`
+since migration 55.
+
+Approving is never blocked by existing bookings, because the owner's decision
+is the business decision. What happens instead is that the clash is made
+visible, twice:
+
+- The request row carries **"N booked"** before the decision, so the owner can
+  see what approving would cost while there is still time to decline.
+- Anything left inside **approved** leave is listed under *Appointments inside
+  approved leave*, with a link straight to the booking. Cancelled and no-show
+  rows are excluded — they are already out of the diary. `CHECKED_IN` and
+  `IN_SERVICE` are included, because a guest at the desk is the most expensive
+  thing to find out later.
+
+Nothing is cancelled automatically. Moving or calling the guest stays a human
+act.
+
+Still missing: a request does not email anyone.

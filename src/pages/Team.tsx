@@ -37,7 +37,7 @@ import {
   X,
 } from "lucide-react";
 
-import { branchDay, branchToday, cn, shiftDayKey } from "@/lib/utils";
+import { branchDay, branchTime, branchToday, cn, shiftDayKey } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
 import type { Employee, LeavePerson, Service, StaffLogin } from "@/lib/api-types";
@@ -300,6 +300,7 @@ function LeavePanel() {
   const [nonce, setNonce] = React.useState(0);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<ApiError | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
 
   const board = useAsync("team:leave:" + from + ":" + nonce, () =>
     api.employees.leave({ from, to }),
@@ -308,8 +309,19 @@ function LeavePanel() {
   async function answer(person: LeavePerson, decision: "approve" | "decline") {
     setBusy(person.id);
     setError(null);
+    setNotice(null);
     try {
       await api.employees.decideLeave(person.employeeId, person.id, { decision });
+      // The row leaves the queue, so the clash count has to be said out loud
+      // or it disappears with it.
+      if (decision === "approve" && person.clashes > 0) {
+        setNotice(
+          "Approved. " +
+            person.clashes +
+            (person.clashes === 1 ? " appointment now sits" : " appointments now sit") +
+            " inside it — listed below to move or call.",
+        );
+      }
       board.reload();
     } catch (err) {
       setError(
@@ -322,6 +334,7 @@ function LeavePanel() {
 
   const pending = board.data?.pending ?? [];
   const days = board.data?.days ?? [];
+  const affected = board.data?.affected ?? [];
 
   return (
     <section className="rounded-2xl border border-border/70 bg-card/60 p-5">
@@ -344,6 +357,12 @@ function LeavePanel() {
       </div>
 
       {error && <ErrorNote error={error} className="mt-3" />}
+
+      {notice && (
+        <p className="mt-3 rounded-lg border border-clay/30 bg-clay/[0.05] px-3 py-2 text-[11.5px] text-clay">
+          {notice}
+        </p>
+      )}
 
       {board.error ? (
         <ErrorNote error={board.error} onRetry={board.reload} className="mt-3" />
@@ -370,6 +389,14 @@ function LeavePanel() {
                       {person.reason ? " · " + person.reason : ""}
                     </p>
                   </div>
+                  {person.clashes > 0 && (
+                    <span
+                      title="Bookings already sitting inside this range"
+                      className="shrink-0 rounded-full border border-clay/30 bg-clay/[0.06] px-2 py-0.5 text-[10px] font-medium text-clay"
+                    >
+                      {person.clashes} booked
+                    </span>
+                  )}
                   <div className="flex shrink-0 gap-1.5">
                     <Button
                       size="sm"
@@ -435,6 +462,43 @@ function LeavePanel() {
             Available of scheduled, from each stylist's weekly hours. A day turns clay when
             approved leave leaves nobody on the floor.
           </p>
+
+          {affected.length > 0 && (
+            <div className="mt-4 rounded-xl border border-clay/30 bg-clay/[0.04] p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-[12px] font-semibold text-clay">
+                  Appointments inside approved leave
+                </p>
+                <span className="text-[10.5px] text-muted-foreground">
+                  {affected.length} to move or call
+                </span>
+              </div>
+              <ul className="mt-2 space-y-1.5">
+                {affected.map((booking) => (
+                  <li
+                    key={booking.bookingId}
+                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11.5px]"
+                  >
+                    <Link
+                      to={"/app/bookings?range=all&q=" + encodeURIComponent(booking.reference)}
+                      className="font-mono text-[11px] underline decoration-dotted underline-offset-2 hover:text-clay"
+                    >
+                      {booking.reference}
+                    </Link>
+                    <span className="truncate">{booking.clientName ?? "Guest"}</span>
+                    <span className="text-muted-foreground">
+                      · {booking.employeeName} · {branchDay(booking.startsAt)}{" "}
+                      {branchTime(booking.startsAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[10.5px] text-muted-foreground">
+                Move them from the booking, or call the guest. Approving leave never cancels
+                anything on its own.
+              </p>
+            </div>
+          )}
         </>
       )}
     </section>
