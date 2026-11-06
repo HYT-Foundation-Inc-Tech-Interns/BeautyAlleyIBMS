@@ -1,0 +1,36 @@
+{
+  "ADMIN": [
+    "overview",
+    "bookings",
+    "clients",
+    "promos",
+    "services",
+    "employees",
+    "arrivals",
+    "tasks",
+    "attendance",
+    "insights",
+    "settings"
+  ],
+  "CONCIERGE": [
+    "overview",
+    "bookings",
+    "promos",
+    "arrivals",
+    "tasks",
+    "insights",
+    "settings"
+  ],
+  "EMPLOYEE": [
+    "overview",
+    "bookings",
+    "arrivals",
+    "my-tasks",
+    "attendance",
+    "settings"
+  ],
+  "CLIENT": [
+    "my-bookings",
+    "settings"
+  ]
+}

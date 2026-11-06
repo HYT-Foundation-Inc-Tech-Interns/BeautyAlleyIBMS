@@ -13,6 +13,7 @@ backups/
 .env
 .env.*
 !.env.example
+!.env.test.example
 
 *.log
 npm-debug.log*

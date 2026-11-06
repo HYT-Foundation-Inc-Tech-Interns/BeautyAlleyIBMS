@@ -64,8 +64,13 @@ The project's build command compiles both halves, which is why the API is not
 built by a framework preset:
 
 ```bash
-npm run build && cd backend && npm ci --no-audit --no-fund && npm run build
+npm run build && cd backend && npm ci --include=dev --no-audit --no-fund && npm run build
 ```
+
+`--include=dev` is required. Once `NODE_ENV=production` is set in the project,
+a plain `npm ci` omits devDependencies — including `typescript` and
+`@types/express` — and the backend build fails with a wall of TS7016 errors.
+The setting belongs in the deploy environment; the build still needs its tools.
 
 It used to be two **services** in the same project. That model built the frontend
 correctly but never produced an invocable API function — every `/api/*` and
@@ -142,6 +147,38 @@ ACCOUNT_PASSWORD='…' node scripts/verify-atomicity.js
 The login page no longer offers demo quick-fill, and `vite build` cannot emit a
 credential it was never given.
 
+### Changing a password
+
+The console is the normal path now:
+
+- **Settings → My account** — any signed-in user changes their own password.
+  The current password is required, so a session left open on a shared terminal
+  is not enough on its own.
+- **Settings → Account recovery** — an ADMIN sets a password for any account by
+  email, including the four demo logins. No mail link is sent; the owner hands
+  the new password over in person.
+
+`accounts.json` stores emails, names and linked rows only. It never stores a
+password.
+
+### Business settings
+
+Two owner-only sections beyond passwords:
+
+- **Booking rules** — the client cancellation cutoff (hours) and the arrival
+  window (minutes). The booking service reads them on the next cancellation or
+  pass, so a change needs no deploy. `CANCELLATION_WINDOW_HOURS` and
+  `QR_CHECKIN_WINDOW_MINUTES` are now fallbacks for a database without the row.
+- **Deposits (test)** — opens a deposit checkout. Mock mode uses a built-in
+  test gateway with a real hosted page and a signed webhook; a HitPay key opens
+  HitPay's page instead. Not attached to a booking; no money moves.
+- **Payments** — which of the five providers the desk offers, and which is the
+  default. This records the choice; it does not connect a processor.
+- **Reminders** — every booking queues a 24-hour and a 2-hour email. Gmail
+  SMTP is configured and an hourly automation runs `npm run reminders`.
+  Settings → Reminders shows SMTP status, queue counts and a test-email button.
+  See [Reminders](./docs/runbook.md#reminders).
+
 ---
 
 ## What each role sees
@@ -150,21 +187,48 @@ Access is enforced **server-side**; the navigation merely avoids offering links
 that would 403. The role comes from `public.profiles.role`, never from the JWT,
 so a demotion takes effect immediately rather than when a token expires.
 
-| Area | ADMIN | CONCIERGE | EMPLOYEE | CLIENT |
+This table is **the console** — the areas `SCOPE` in
+[`src/auth/AuthProvider.tsx`](./src/auth/AuthProvider.tsx) grants each role. It is
+checked in CI by `npm run check:roles` against
+[`tools/roles.expected.json`](./tools/roles.expected.json), so the table and the
+code cannot drift apart silently.
+
+| Area | Owner | Front desk | Therapist | Client |
 | --- | :-: | :-: | :-: | :-: |
 | Overview | ✓ | ✓ | ✓ | |
 | Bookings | ✓ | ✓ | ✓ | |
-| Scan arrival pass | ✓ | ✓ | | |
-| QR check-in | ✓ | ✓ | ✓ | |
+| Arrivals | ✓ | ✓ | ✓ | |
 | Task board (assign work) | ✓ | ✓ | | |
 | My tasks (do the work) | | | ✓ | |
-| Attendance | ✓ | ✓ | ✓ | |
-| Clients / Promos / Employees | ✓ | | | |
-| Monitoring board | ✓ | | | |
+| Attendance | ✓ | | ✓ | |
+| Clients | ✓ | | | |
+| Promo codes | ✓ | ✓ | | |
+| Services | ✓ | | | |
+| Employees | ✓ | | | |
+| Insights | ✓ | ✓ | | |
+| Settings | ✓ | ✓ | ✓ | ✓ |
 | My bookings | | | | ✓ |
 
+These are display names. The internal role codes stay `ADMIN`, `CONCIERGE`,
+`EMPLOYEE` and `CLIENT`; the API guards and `SCOPE` did not change with the
+labels.
+
 An employee who navigates directly to `/app/tasks` gets a polite refusal, and
-the API refuses them regardless.
+the API refuses them regardless. All three staff roles can open `/app/arrivals`;
+the default mode is scan-and-confirm, so a mis-scan cannot admit the wrong guest.
+
+### The API is deliberately wider than this table
+
+Two areas are narrower here than the endpoints behind them, and that is not
+drift to be "fixed" by widening `SCOPE`:
+
+- **Attendance.** `GET /attendance` is `OPERATIONS` and scopes itself per caller
+  in the service — a therapist sees their own row, the front desk sees the floor.
+  The console simply does not offer the desk the screen, because a clock is a
+  person's own record.
+- **Clients.** `GET /admin/clients` is `DESK`, so the Insights aggregates work
+  for the front desk. Everything that *writes* a client record sits behind the
+  blanket `ADMIN` guard below it.
 
 ---
 
@@ -180,8 +244,9 @@ the API refuses them regardless.
 - **Attendance** — time in / time out, hours worked, history, date filters.
 - **Task board** — the concierge assigns work; statuses, priorities, due dates.
 - **My tasks** — the employee's own list, with completion notes.
-- **Scan arrival pass** — camera QR scanning with a manual reference fallback.
-- **Bookings, clients, promos, employees, monitoring board, reports.**
+- **Arrivals** — scan and confirm, or quick check-in, with a manual reference fallback.
+- **My bookings** — a client can move or cancel their own appointment inside the policy; the row updates from the server response, not a stale refetch.
+- **Bookings, clients, promos, employees, Insights, reports.**
 
 ---
 
@@ -246,13 +311,20 @@ rather than a wrapper so Radix portals (the mobile sidebar sheet) inherit it too
 
 ## Testing
 
+`npm test` runs against a **second Supabase project**, configured in
+`backend/.env.test.local` (gitignored). It refuses to run without it: the suite
+truncates seventeen tables, and pointing it at the salon's database would delete
+the branch's data.
+
 ```bash
 cd backend
-npm test               # Jest + Supertest — 398 tests, 18 suites
-npm run test:unit      # the five suites that need no database
-npm run smoke          # 47 end-to-end checks over real HTTP (needs a running server)
-npm run db:verify      # 51 behavioural checks in a rolled-back transaction
-npm run verify:arrival # 29 checks: book -> pass -> confirm arrival (needs a running server)
+cp .env.test.example .env.test.local   # fill in the test project's four values
+npm run db:setup:test                  # migrations + seed, once
+npm test                               # 460 tests, 23 suites
+npm run test:unit                      # 187 tests, no database
+npm run smoke                          # end-to-end checks over real HTTP (needs a running server)
+npm run db:verify                      # 51 checks against the application database
+npm run verify:arrival                 # book -> pass -> confirm arrival (needs a running server)
 npm run typecheck
 ```
 
@@ -268,16 +340,15 @@ appears anywhere in `dist/`** — that regression is worth a dedicated check,
 because it is invisible in code review and obvious to anyone who greps the
 bundle.
 
-> `npm test` **reseeds the database** — it truncates `bookings` and rebuilds the
-> fixtures. Restore the demo grid afterwards with
-> `cd backend && npm run demo:bookings -- --force`. The seed re-links the demo
-> accounts itself, and a Jest `globalTeardown` re-checks them once the suites
-> have finished (some suites borrow the demo stylist and would otherwise leave
-> the Employee login authenticated but unlinked), so the four logins above keep
-> working after a test run.
+> The free Supabase plan allows two active projects. `beautyalley-test` is kept
+> **paused** so the payroll project can stay active. To run the suite, pause
+> payroll, resume `beautyalley-test`, run, then swap back — see
+> [Test database](./docs/runbook.md#test-database).
 
-The seed is destructive, so it now requires an explicit opt-in — see
-[Destructive scripts](./docs/runbook.md#destructive-scripts).
+`npm run db:verify` books real slots inside a transaction that rolls back, so
+run it during branch hours. Its QR section depends on a bookable slot and stops
+with `OUTSIDE_WORKING_HOURS` after the salon closes; that is the script's time
+dependency, not a failed check.
 
 ---
 
@@ -306,7 +377,9 @@ These are the things this prototype does **not** do. None of them is hidden in
 the code.
 
 **Security / production**
-- `demo-accounts.json` holds a plaintext password in a tracked file.
+- The demo password was committed in an earlier revision and still exists in git
+  history. `accounts.json` no longer stores it; rotate the password in Supabase
+  and keep the new one in a password manager.
 - QR passes are long-lived links and the scanning device is trusted. Production
   needs short expiry windows, device binding, and an audit trail of which device
   scanned what. (The pass itself already carries no personal data — only a

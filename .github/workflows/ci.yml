@@ -51,6 +51,12 @@ jobs:
       # one. A separate `tsc --noEmit` would add a minute and prove nothing new.
       - run: npm run build
 
+      # SCOPE is the client's mirror of the backend's requireRole calls. It has
+      # drifted twice (desk lost client records, owner lost the task board), and
+      # neither shows up as a build error. This compares it with the documented
+      # contract in tools/roles.expected.json.
+      - run: npm run check:roles
+
       - name: No credential in the production bundle
         run: |
           set -e

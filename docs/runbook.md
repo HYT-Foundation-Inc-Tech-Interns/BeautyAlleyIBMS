@@ -79,11 +79,53 @@ environment variables below as platform secrets.
 | `DATABASE_URL` | **yes** | contains the database password |
 | `ALLOWED_ORIGINS` | no | required on Vercel; not needed when `SERVE_APP=true` |
 | `SERVE_APP` | no | `true` for the container; leave unset on Vercel |
+| `NODE_ENV` | no | **`production` on Vercel** — see below; it is what arms the guard |
 | `BRANCH_TIMEZONE` | no | `Asia/Manila` |
 
 The API **refuses to boot** in production with an empty `ALLOWED_ORIGINS` and
 `SERVE_APP` off. That is intentional: the alternative is reflecting any origin
 with credentials.
+
+### `NODE_ENV` is not optional on Vercel
+
+The boot guard above only runs when `NODE_ENV` is exactly `production`, and the
+schema defaults it to `development` when it is unset. A Vercel deployment that
+never sets it therefore looks healthy while running with **every development
+convenience switched on** — most importantly, CORS reflecting any origin with
+`Access-Control-Allow-Credentials: true`, which is the hole the guard exists to
+prevent.
+
+Two checks, after any deploy. Both are one line and neither needs the dashboard.
+
+```bash
+# 1. The environment must say production, not development.
+curl -s https://<project>.vercel.app/health | grep -o '"env":"[a-z]*"'
+
+# 2. A foreign origin must NOT be reflected alongside credentials.
+curl -s -D - -o /dev/null -H "Origin: https://evil.example.com" \
+  https://<project>.vercel.app/api/v1/services \
+  | grep -i "access-control-allow-origin"
+```
+
+The first must print `"env":"production"`. The second must print nothing. If it
+prints the foreign origin, `NODE_ENV` is unset on that project.
+
+The same two checks are packaged as one command that exits non-zero on failure,
+so it can be run after every deploy without reading headers by eye:
+
+```bash
+cd backend
+npm run smoke:cors -- --url https://<project>.vercel.app --expect-production
+```
+
+It sends a preflight and a plain GET with `Origin: https://evil.example.com`,
+prints the reported environment and the returned CORS headers, and fails if
+either request reflects the hostile origin.
+
+This is not theoretical: the pilot deployment shipped without it, and the
+`/health` body read `"env":"development"` while the API reflected arbitrary
+origins. Setting `NODE_ENV=production` also switches error responses to their
+production shape, so re-check `/health` after the change.
 
 ### When every API path answers 500
 
@@ -161,6 +203,146 @@ re-synced afterwards; then it compares row counts to the snapshot.
 **Measured on 2026-10-19:** 21 tables, 417 rows, restored in **6 seconds**, counts
 verified, demo logins still working afterwards. Re-run this drill quarterly —
 a backup that has never been restored is a guess.
+
+---
+
+## Reminders
+
+Every booking queues a **24-hour** and a **2-hour** email in
+`reminder_outbox`. The trigger keeps the queue in step with reschedules and
+cancellations; the sender only sends what is due.
+
+```bash
+cd backend
+npm run reminders:dry   # list due rows, change nothing
+npm run reminders       # send and mark SENT / FAILED / SKIPPED
+```
+
+An hourly WorkBuddy automation runs `npm run reminders` in this workspace.
+It is idempotent: a row is only sent while `status = 'PENDING'`. Hourly
+resolution is plenty for 24h/2h notices; if the salon needs tighter timing,
+point a 5–15 minute cron at the same command. Settings → Reminders shows the
+queue and can send a test email.
+
+### SMTP
+
+Set these in `backend/.env.local` (and in the deployment environment):
+
+```
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=...
+SMTP_PASS=...
+SMTP_FROM=Beauty Alley <no-reply@beautyalley.app>
+```
+
+For Gmail: `SMTP_HOST=smtp.gmail.com`, port `587`, `SMTP_SECURE=false`, the
+full address as `SMTP_USER`, and a 16-character **app password** (Google
+requires 2-Step Verification to create one). Verify before scheduling:
+
+```bash
+cd backend
+npm run mail:test
+```
+
+Without a host — or with a username but no password — the script exits 0 and
+leaves the queue **PENDING**; it never pretends to have sent. A client with no email on file is marked `SKIPPED` with
+`no email on file`, so the queue does not grow forever.
+
+The email says the appointment time, the reference, the stylist and the
+cancellation window. It does not contain a payment link or a pass; those stay
+behind the client's sign-in.
+
+---
+
+## HitPay (deposit test)
+
+Settings → **Deposits (test)** opens a HitPay hosted checkout for an amount you
+choose. It is deliberately **not** attached to a booking: it proves the account,
+the enabled payment methods and the return URL before a deposit becomes a
+condition of a reservation.
+
+```
+HITPAY_API_KEY=...
+HITPAY_MODE=sandbox         # mock | sandbox | live
+APP_URL=https://beautyalleyibms.vercel.app
+```
+
+- **Sandbox keys come from `https://sandbox.hit-pay.com`**, not the live
+  dashboard. HitPay rejects a `live_` key against the sandbox host with
+  "You are using a live API key in a sandbox environment".
+- **No API key**, or `HITPAY_MODE=mock`: the button opens `/deposit/mock`, which
+  says TEST MODE and writes nothing.
+- **Sandbox/live key**: the API creates a real payment request and returns
+  HitPay's hosted `url`. Sandbox uses `api.sandbox.hit-pay.com`; live uses
+  `api.hit-pay.com`. A live key cannot be used on the sandbox host, and a live
+  store must finish HitPay verification before it can accept online orders
+  (`403 This store is not yet verified`). Until then, keep `HITPAY_MODE=mock`.
+- The endpoint is ADMIN-only; it spends the salon's account even in sandbox mode.
+
+## Built-in test gateway (no merchant account)
+
+`HITPAY_MODE=mock` uses a self-hosted gateway. The checkout is a real database
+row in `test_payment_requests`; pressing **Pay now (test)** builds a
+`payment_request.completed` body, signs it with HMAC-SHA256 over the raw bytes,
+and posts it to the same handler HitPay will use:
+
+```
+POST /api/v1/webhooks/hitpay
+Header: Hitpay-Signature: <HMAC-SHA256 of the raw body, using HITPAY_SALT>
+```
+
+Register that URL in HitPay → Developers → Webhook Endpoints with the
+`payment_request.completed` event when the account is verified. A bad or
+missing signature is a 401; the redirect URL is never trusted.
+
+Nothing in this flow marks a booking paid. The test page says TEST MODE on
+every screen and moves no money.
+
+---
+
+## Test database
+
+`npm test` runs against **`beautyalley-test`**, a second Supabase project:
+
+| | |
+|---|---|
+| Ref | `csfxgyvclrtklkqbguda` |
+| Region | Southeast Asia (Singapore) |
+| Credentials | `backend/.env.test.local` (gitignored) |
+| Schema | 48 migrations + seed, verified 2026-11-04 |
+| State | **Paused** by default |
+
+The free plan allows two active projects, and the payroll system needs one. The
+test project is therefore kept paused and swapped in only for a test run.
+
+### Running the suite
+
+1. Pause the payroll project (`fwmjwjgeajwpnmxeqbyv`) in the dashboard:
+   **Project Settings → General → Pause project**.
+2. Resume `beautyalley-test` the same way.
+3. Run:
+   ```bash
+   cd backend
+   npm test
+   ```
+4. Pause `beautyalley-test`, then restore payroll.
+
+Pausing preserves data on both sides. The test project's schema and seed survive
+the pause, so `db:setup:test` is only needed on a **fresh** test project.
+
+### Rules
+
+- **Never** point `.env.test.local` at `gmdeielhcddkuziraryl` (BeautyAlley).
+  `tests/env.ts` refuses to run if the two URLs resolve to the same database.
+- `db:seed:test` passes `--force` because `_load-env.js` has already proved the
+  target came from `.env.test.local`. Do not add `--force` to the normal seed.
+- `db:setup:test` is destructive: it truncates and reseeds. It is for a
+  disposable project only.
+- The first full run on 2026-11-04 found two fresh-install gaps that production
+  had hidden: migrations `22a` (the four legacy demo services) and `46` (the
+  privilege baseline). Both now apply cleanly to an empty project.
 
 ---
 
@@ -252,3 +434,11 @@ Rotate in this order:
    outstanding arrival pass, so guests holding a printed pass will need a new one.
 
 Rotating the Supabase JWT secret additionally invalidates every signed-in session.
+
+Record each rotation here, so "was this key ever changed?" has an answer that
+does not depend on memory. A rotation with no date and no verifier is a rumour.
+
+| Date | Key | Rotated by | Verified by |
+|---|---|---|---|
+| _pending_ | `SUPABASE_SERVICE_ROLE_KEY` | — | — |
+| _pending_ | demo account password | — | — |

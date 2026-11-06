@@ -1,0 +1,4 @@
+# Generated documents and scratch output are not part of the deployed site.
+output/
+backend/.tmp-svc.cjs
+*.log

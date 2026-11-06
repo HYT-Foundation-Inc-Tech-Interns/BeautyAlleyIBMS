@@ -1,6 +1,5 @@
 {
-  "note": "Single source for the demo logins. Read by src/auth/demo.ts (the login page's quick-fill buttons) and backend/scripts/demo-accounts.js (which creates them). Do not duplicate these values anywhere else.",
-  "password": "AlleyDemo2026!",
+  "note": "The demo logins, by email and linked row. No password is stored here: scripts that sign in read ACCOUNT_PASSWORD from the environment. Read by backend/scripts/seed.js (to relink profiles) and the verify scripts.",
   "accounts": [
     {
       "role": "ADMIN",
@@ -12,7 +11,7 @@
       "role": "CONCIERGE",
       "email": "concierge@beautyalley.ph",
       "fullName": "Mara Villanueva",
-      "blurb": "Concierge — reception, bookings, payments and loyalty, but no admin settings"
+      "blurb": "Front desk — reception, bookings, payments and loyalty, but no admin settings"
     },
     {
       "role": "EMPLOYEE",

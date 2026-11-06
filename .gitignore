@@ -19,6 +19,7 @@ build/
 .env.*
 !.env.example
 !*/.env.example
+!*/.env.test.example
 
 # Local JSON backups written by backend/scripts/reset-demo-data.js
 backups/
@@ -61,3 +62,15 @@ desktop.ini
 
 # cloudflared binary downloaded by backend/scripts/tunnel.js (~70MB, per-OS)
 backend/bin/
+.vercel
+.env*
+
+# Scratch screenshots and one-off harnesses
+working/
+
+# Supabase CLI link state and one-off probes
+backend/supabase/.temp/
+backend/.tmp-*.cjs
+
+# Generated pipeline output
+output/
