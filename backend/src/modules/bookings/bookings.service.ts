@@ -1,11 +1,15 @@
 import { requireServiceRole } from "../../db/supabase";
-import { iso } from "../../lib/dates";
+import { iso, isoOrNull } from "../../lib/dates";
 import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { paginated } from "../../lib/pagination";
 import { passWindow, signQrPass, toCheckInUrl, verifyQrPass } from "../../lib/qr";
 import { OPERATIONS } from "../../lib/roleGroups";
 import { settingsService } from "../settings/settings.service";
+import {
+  bookingDepositsRepository,
+  type BookingDepositRow,
+} from "../deposits/deposits.repository";
 import type { Actor } from "../../types/actor";
 import type { BookingStatus } from "../../types/database";
 import {
@@ -44,7 +48,11 @@ interface CreateBookingRpcResult {
  * `iso()` from lib/dates.ts normalises to `Z` here and in every other DTO, so
  * the API has one wire format.
  */
-function toBookingDto(row: BookingDetailRow, items: BookingItemRow[] = []) {
+function toBookingDto(
+  row: BookingDetailRow,
+  items: BookingItemRow[] = [],
+  deposit?: BookingDepositRow | null,
+) {
   return {
     id: row.id,
     reference: row.reference,
@@ -70,6 +78,16 @@ function toBookingDto(row: BookingDetailRow, items: BookingItemRow[] = []) {
     notes: row.notes,
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
+    // Null means the policy did not apply when this booking was made. A DUE
+    // row means the desk has to settle it before the guest is admitted.
+    deposit: deposit
+      ? {
+          amountCents: deposit.amount_cents,
+          status: deposit.status,
+          provider: deposit.provider,
+          paidAt: isoOrNull(deposit.paid_at),
+        }
+      : null,
     items: items.map((i) => ({
       id: i.id,
       serviceId: i.service_id,
@@ -225,6 +243,27 @@ export const bookingsService = {
     if (error) throw error;
 
     const result = data as CreateBookingRpcResult;
+
+    // A deposit is a record, not a charge: the desk can settle it in cash, or
+    // the client can pay it through the gateway once that is wired. A failed
+    // deposit write must not fail the booking - the obligation is visible and
+    // fixable at the desk, while a lost booking is not.
+    const policy = await bookingDepositsRepository.getPolicy();
+    if (policy.enabled) {
+      try {
+        await bookingDepositsRepository.createForBooking(
+          result.bookingId,
+          policy.amountCents,
+          "manual",
+          `DEP-${result.reference}`,
+        );
+      } catch (err) {
+        logger.error("booking.deposit_failed", {
+          bookingId: result.bookingId,
+          message: String(err),
+        });
+      }
+    }
     logger.info("booking.created", {
       bookingId: result.bookingId,
       reference: result.reference,
@@ -279,8 +318,11 @@ export const bookingsService = {
   async detail(id: string) {
     const row = await bookingsRepository.getById(id);
     if (!row) throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
-    const items = await bookingsRepository.itemsFor(id);
-    return toBookingDto(row, items);
+    const [items, deposit] = await Promise.all([
+      bookingsRepository.itemsFor(id),
+      bookingDepositsRepository.getForBooking(id),
+    ]);
+    return toBookingDto(row, items, deposit);
   },
 
   /**
@@ -297,16 +339,23 @@ export const bookingsService = {
       throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
     }
 
-    const items = await bookingsRepository.itemsFor(id);
-    return toBookingDto(row, items);
+    const [items, deposit] = await Promise.all([
+      bookingsRepository.itemsFor(id),
+      bookingDepositsRepository.getForBooking(id),
+    ]);
+    return toBookingDto(row, items, deposit);
   },
 
   async list(query: ListBookingsQuery, actor?: Actor) {
     const scoped = { ...query, employeeId: scopeEmployee(actor, query.employeeId) };
     const { rows, total } = await bookingsRepository.list(scoped);
-    const items = await bookingsRepository.itemsForMany(rows.map((r) => r.id));
+    const ids = rows.map((r) => r.id);
+    const [items, deposits] = await Promise.all([
+      bookingsRepository.itemsForMany(ids),
+      bookingDepositsRepository.getForBookings(ids),
+    ]);
     return paginated(
-      rows.map((r) => toBookingDto(r, items.get(r.id) ?? [])),
+      rows.map((r) => toBookingDto(r, items.get(r.id) ?? [], deposits.get(r.id) ?? null)),
       total,
       query.page,
       query.limit
@@ -434,6 +483,27 @@ export const bookingsService = {
     });
     if (error) throw error;
 
+    // A held deposit must end somewhere. A staff-forced cancellation is the
+    // salon's decision, so it always refunds; otherwise the owner's onCancel
+    // rule decides. A failed settle is logged, not thrown: the cancellation
+    // already happened, and a stuck row is recoverable at the desk.
+    const depositPolicy = await bookingDepositsRepository.getPolicy();
+    const hoursUntilStart =
+      (new Date(row.start_time).getTime() - Date.now()) / 3_600_000;
+    const forfeit =
+      !force &&
+      (depositPolicy.onCancel === "forfeit" ||
+        (depositPolicy.onCancel === "forfeit_if_late" &&
+          hoursUntilStart < rules.cancellationWindowHours));
+    try {
+      await bookingDepositsRepository.settleOnCancel(id, forfeit);
+    } catch (err) {
+      logger.error("booking.deposit_settle_failed", {
+        bookingId: id,
+        message: String(err),
+      });
+    }
+
     logger.info("booking.cancelled", { bookingId: id, forced: force, by: actor?.id ?? "guest" });
     return { ...(data as object), booking: await this.detail(id) };
   },
@@ -507,6 +577,16 @@ export const bookingsService = {
       return booking;
     }
 
+    if (status === "CHECKED_IN") {
+      const deposit = await bookingDepositsRepository.getForBooking(id);
+      if (deposit?.status === "DUE") {
+        throw AppError.conflict(
+          CODES.DEPOSIT_DUE,
+          "This booking has an unpaid deposit. Settle it before admitting the guest."
+        );
+      }
+    }
+
     // Everything else goes through a function so the status write and its
     // audit row are one transaction. Writing the column directly left
     // COMPLETED and NO_SHOW with no trail at all.
@@ -517,6 +597,19 @@ export const bookingsService = {
       p_actor: actor.id,
     });
     if (error) throw error;
+
+    // A no-show keeps the deposit, whatever the cancellation rule says: the
+    // guest did not cancel, they simply did not arrive.
+    if (status === "NO_SHOW") {
+      try {
+        await bookingDepositsRepository.settleOnCancel(id, true);
+      } catch (err) {
+        logger.error("booking.deposit_settle_failed", {
+          bookingId: id,
+          message: String(err),
+        });
+      }
+    }
 
     logger.info("booking.status_changed", {
       bookingId: id,
@@ -567,6 +660,14 @@ export const bookingsService = {
       throw AppError.badRequest(map[verified.reason], "That check-in code is not valid");
     }
 
+    const deposit = await bookingDepositsRepository.getForBooking(verified.payload.bid);
+    if (deposit?.status === "DUE") {
+      throw AppError.conflict(
+        CODES.DEPOSIT_DUE,
+        "This booking has an unpaid deposit. Settle it before admitting the guest."
+      );
+    }
+
     // A pass may only be redeemed by staff. A client scanning their own pass
     // to mark themselves arrived would defeat the point of a desk check-in.
     const staffId = actor.employeeId ?? null;
@@ -603,5 +704,47 @@ export const bookingsService = {
       early: boolean;
     };
     return { ...result, checkedInAt: iso(result.checkedInAt) };
+  },
+
+  /**
+   * Settle a deposit at the desk.
+   *
+   * Only a DUE row can move, so a double tap cannot mark a refunded deposit
+   * paid a second time. The route is DESK: taking money is the front desk's
+   * job, and a stylist settling someone else's bill is the thing this guard
+   * exists to prevent.
+   */
+  async settleDeposit(id: string, action: "paid" | "waive", actor: Actor) {
+    const row = await bookingsRepository.getById(id);
+    if (!row) throw AppError.notFound(CODES.BOOKING_NOT_FOUND, "No such booking");
+
+    const deposit = await bookingDepositsRepository.getForBooking(id);
+    if (!deposit) {
+      throw AppError.notFound(CODES.NOT_FOUND, "This booking has no deposit");
+    }
+    if (deposit.status !== "DUE") {
+      throw AppError.conflict(
+        CODES.INVALID_STATUS_TRANSITION,
+        `This deposit is already ${deposit.status}.`
+      );
+    }
+
+    const updated =
+      action === "paid"
+        ? await bookingDepositsRepository.markPaidByBooking(id, actor.id)
+        : await bookingDepositsRepository.waiveByBooking(id, actor.id);
+    if (!updated) {
+      throw AppError.conflict(
+        CODES.INVALID_STATUS_TRANSITION,
+        "That deposit was settled by someone else."
+      );
+    }
+
+    logger.info("booking.deposit_settled", {
+      bookingId: id,
+      status: updated.status,
+      by: actor.id,
+    });
+    return this.detail(id);
   },
 };

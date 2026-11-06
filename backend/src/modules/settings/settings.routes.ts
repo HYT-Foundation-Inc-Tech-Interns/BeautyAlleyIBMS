@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { settingsController } from "./settings.controller";
-import { updateBookingRulesSchema, updatePaymentProvidersSchema } from "./settings.schemas";
+import {
+  updateBookingRulesSchema,
+  updateDepositPolicySchema,
+  updatePaymentProvidersSchema,
+} from "./settings.schemas";
 import { authenticate } from "../../middleware/authenticate";
 import { requireRole } from "../../middleware/requireRole";
 import { validate } from "../../middleware/validate";
@@ -59,6 +63,26 @@ settingsRouter.put(
   requireRole("ADMIN"),
   validate({ body: updateBookingRulesSchema }),
   asyncHandler(settingsController.updateBooking)
+);
+
+
+/*
+ * The deposit policy. Off by default in the database, so reading it is how the
+ * console knows whether to show the obligation at all.
+ */
+settingsRouter.get(
+  "/deposits",
+  authenticate,
+  requireRole("ADMIN"),
+  asyncHandler(settingsController.getDeposits)
+);
+
+settingsRouter.put(
+  "/deposits",
+  authenticate,
+  requireRole("ADMIN"),
+  validate({ body: updateDepositPolicySchema }),
+  asyncHandler(settingsController.updateDeposits)
 );
 
 /*

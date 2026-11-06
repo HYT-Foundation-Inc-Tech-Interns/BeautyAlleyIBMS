@@ -45,4 +45,14 @@ export const settingsController = {
     const result = await settingsService.sendTestReminder(req.actor!);
     res.status(200).json({ data: result });
   },
+
+  async getDeposits(_req: Request, res: Response) {
+    const result = await settingsService.getDepositPolicy();
+    res.status(200).json({ data: result });
+  },
+
+  async updateDeposits(req: Request, res: Response) {
+    const result = await settingsService.updateDepositPolicy(req.body, req.actor!);
+    res.status(200).json({ data: result });
+  },
 };

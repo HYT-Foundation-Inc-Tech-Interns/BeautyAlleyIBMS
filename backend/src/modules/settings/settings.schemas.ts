@@ -49,3 +49,24 @@ export const updateBookingRulesSchema = z.object({
 });
 
 export type UpdateBookingRulesInput = z.infer<typeof updateBookingRulesSchema>;
+
+/**
+ * The deposit policy.
+ *
+ * Enabled is off by default in the database, so this schema is only ever
+ * reached after the owner has made a decision. The bounds match the gateway
+ * adapter: one peso to ten thousand pesos.
+ *
+ * onCancel is the money rule and belongs to the owner, not to the code:
+ *   refund          - a cancellation always returns a held deposit
+ *   forfeit         - a cancellation always keeps it
+ *   forfeit_if_late - keeps it only inside the cancellation window
+ * A no-show always forfeits, whatever this says.
+ */
+export const updateDepositPolicySchema = z.object({
+  enabled: z.boolean(),
+  amountCents: z.number().int().min(100).max(1_000_000),
+  onCancel: z.enum(["refund", "forfeit", "forfeit_if_late"]),
+});
+
+export type UpdateDepositPolicyInput = z.infer<typeof updateDepositPolicySchema>;

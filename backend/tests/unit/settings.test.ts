@@ -1,5 +1,6 @@
 import {
   updateBookingRulesSchema,
+  updateDepositPolicySchema,
   updatePaymentProvidersSchema,
 } from "../../src/modules/settings/settings.schemas";
 import { changePasswordSchema, adminResetPasswordSchema } from "../../src/modules/auth/auth.schemas";
@@ -123,5 +124,28 @@ describe("password schemas", () => {
     });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.email).toBe("stylist@beautyalley.ph");
+  });
+});
+
+describe("deposit policy schema", () => {
+  it("accepts a disabled policy with the default refund rule", () => {
+    expect(
+      updateDepositPolicySchema.safeParse({ enabled: false, amountCents: 50000, onCancel: "refund" }).success,
+    ).toBe(true);
+  });
+
+  it("refuses a zero or fractional deposit", () => {
+    expect(
+      updateDepositPolicySchema.safeParse({ enabled: true, amountCents: 0, onCancel: "refund" }).success,
+    ).toBe(false);
+    expect(
+      updateDepositPolicySchema.safeParse({ enabled: true, amountCents: 500.5, onCancel: "refund" }).success,
+    ).toBe(false);
+  });
+
+  it("refuses a cancellation rule the code does not implement", () => {
+    expect(
+      updateDepositPolicySchema.safeParse({ enabled: true, amountCents: 50000, onCancel: "keep" }).success,
+    ).toBe(false);
   });
 });

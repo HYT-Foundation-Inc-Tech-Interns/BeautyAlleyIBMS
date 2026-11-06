@@ -71,4 +71,14 @@ export const bookingsController = {
     );
     res.status(200).json({ data: result });
   },
+
+  async markDepositPaid(req: Request, res: Response) {
+    const result = await bookingsService.settleDeposit(req.params.id as string, "paid", req.actor!);
+    res.status(200).json({ data: result });
+  },
+
+  async waiveDeposit(req: Request, res: Response) {
+    const result = await bookingsService.settleDeposit(req.params.id as string, "waive", req.actor!);
+    res.status(200).json({ data: result });
+  },
 };

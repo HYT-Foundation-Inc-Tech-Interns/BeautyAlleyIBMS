@@ -79,15 +79,20 @@ export interface BookingDepositRow {
   paid_at: string | null;
 }
 
+export type DepositCancelRule = "refund" | "forfeit" | "forfeit_if_late";
+
 export interface DepositPolicy {
   enabled: boolean;
   amountCents: number;
+  /** What happens to a held deposit when the booking is cancelled. */
+  onCancel: DepositCancelRule;
 }
 
 const POLICY_KEY = "deposit.policy";
 export const DEFAULT_DEPOSIT_POLICY: DepositPolicy = {
   enabled: false,
   amountCents: 50000,
+  onCancel: "refund",
 };
 
 function normalisePolicy(value: unknown): DepositPolicy {
@@ -98,6 +103,10 @@ function normalisePolicy(value: unknown): DepositPolicy {
       typeof v?.amountCents === "number" && Number.isFinite(v.amountCents)
         ? v.amountCents
         : DEFAULT_DEPOSIT_POLICY.amountCents,
+    onCancel:
+      v?.onCancel === "forfeit" || v?.onCancel === "forfeit_if_late"
+        ? v.onCancel
+        : DEFAULT_DEPOSIT_POLICY.onCancel,
   };
 }
 
@@ -110,7 +119,7 @@ export const bookingDepositsRepository = {
   async putPolicy(policy: DepositPolicy, actorId: string): Promise<void> {
     await settingsRepository.put(
       POLICY_KEY,
-      { enabled: policy.enabled, amountCents: policy.amountCents },
+      { enabled: policy.enabled, amountCents: policy.amountCents, onCancel: policy.onCancel },
       actorId,
     );
   },
@@ -200,5 +209,43 @@ export const bookingDepositsRepository = {
       .maybeSingle();
     if (error) throw error;
     return (data as BookingDepositRow | null) ?? null;
+  },
+
+  /** Desk decision: the obligation is dropped without payment. */
+  async waiveByBooking(bookingId: string, actorId: string): Promise<BookingDepositRow | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("booking_deposits")
+      .update({ status: "WAIVED", marked_by: actorId })
+      .eq("booking_id", bookingId)
+      .eq("status", "DUE")
+      .select("booking_id, amount_cents, status, provider, provider_ref, paid_at")
+      .maybeSingle();
+    if (error) throw error;
+    return (data as BookingDepositRow | null) ?? null;
+  },
+
+  /**
+   * Close a deposit when its booking ends without being delivered.
+   *
+   * A DUE row was never money, so it becomes WAIVED; a PAID row becomes
+   * REFUNDED or FORFEITED according to the owner's policy. Both statements
+   * match only the states they expect, so a second call is a no-op.
+   */
+  async settleOnCancel(bookingId: string, forfeit: boolean): Promise<void> {
+    const db = requireServiceRole();
+    const { error } = await db
+      .from("booking_deposits")
+      .update({ status: forfeit ? "FORFEITED" : "REFUNDED" })
+      .eq("booking_id", bookingId)
+      .eq("status", "PAID");
+    if (error) throw error;
+
+    const { error: dueError } = await db
+      .from("booking_deposits")
+      .update({ status: "WAIVED" })
+      .eq("booking_id", bookingId)
+      .eq("status", "DUE");
+    if (dueError) throw dueError;
   },
 };

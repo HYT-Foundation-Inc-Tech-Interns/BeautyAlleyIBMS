@@ -124,6 +124,26 @@ bookingsRouter.patch(
   asyncHandler(bookingsController.updateStatus)
 );
 
+// --- deposits ---------------------------------------------------------------
+// The desk takes the money; the therapist does not. Both routes are DESK for
+// the same reason room and stylist overrides are: it is a decision made with
+// the guest standing in front of you. Only a DUE row can move.
+bookingsRouter.post(
+  "/:id/deposit/paid",
+  authenticate,
+  requireRole(...DESK),
+  validate({ params: idParamSchema }),
+  asyncHandler(bookingsController.markDepositPaid)
+);
+
+bookingsRouter.post(
+  "/:id/deposit/waive",
+  authenticate,
+  requireRole(...DESK),
+  validate({ params: idParamSchema }),
+  asyncHandler(bookingsController.waiveDeposit)
+);
+
 // --- aftercare notes -------------------------------------------------------
 // Optional auth on the read: the guest holding the booking uuid is exactly who
 // the note was written for. Staff see the internal ones as well.

@@ -4,9 +4,11 @@ import { logger } from "../../lib/logger";
 import { sendMail, smtpConfigured } from "../../lib/mailer";
 import type { Actor } from "../../types/actor";
 import { settingsRepository } from "./settings.repository";
+import { bookingDepositsRepository } from "../deposits/deposits.repository";
 import type { ReminderStats } from "./settings.repository";
 import type {
   UpdateBookingRulesInput,
+  UpdateDepositPolicyInput,
   UpdatePaymentProvidersInput,
 } from "./settings.schemas";
 
@@ -226,5 +228,21 @@ export const settingsService = {
     }
     logger.info("settings.reminder_test_sent", { by: actor.id, to });
     return { to };
+  },
+
+  /** The deposit obligation: whether it applies, how much, and what a cancel does. */
+  async getDepositPolicy() {
+    return bookingDepositsRepository.getPolicy();
+  },
+
+  async updateDepositPolicy(input: UpdateDepositPolicyInput, actor: Actor) {
+    await bookingDepositsRepository.putPolicy(input, actor.id);
+    logger.info("settings.deposit_policy_updated", {
+      by: actor.id,
+      enabled: input.enabled,
+      amountCents: input.amountCents,
+      onCancel: input.onCancel,
+    });
+    return bookingDepositsRepository.getPolicy();
   },
 };

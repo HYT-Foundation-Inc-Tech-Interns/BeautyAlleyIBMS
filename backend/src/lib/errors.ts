@@ -21,6 +21,7 @@ export const CODES = {
   CLIENT_REQUIRED: "CLIENT_REQUIRED",
   OUTSIDE_WORKING_HOURS: "OUTSIDE_WORKING_HOURS",
   CANCELLATION_WINDOW_PASSED: "CANCELLATION_WINDOW_PASSED",
+  DEPOSIT_DUE: "DEPOSIT_DUE",
   QR_INVALID: "QR_INVALID",
   QR_EXPIRED: "QR_EXPIRED",
   QR_TOO_EARLY: "QR_TOO_EARLY",
@@ -157,6 +158,7 @@ const PG_FUNCTION_ERRORS: Record<string, { status: number; code: string }> = {
   CLIENT_REQUIRED: { status: 400, code: CODES.CLIENT_REQUIRED },
   OUTSIDE_WORKING_HOURS: { status: 400, code: CODES.OUTSIDE_WORKING_HOURS },
   CANCELLATION_WINDOW_PASSED: { status: 400, code: CODES.CANCELLATION_WINDOW_PASSED },
+  DEPOSIT_DUE: { status: 409, code: CODES.DEPOSIT_DUE },
   EMPLOYEE_NOT_QUALIFIED: { status: 403, code: CODES.EMPLOYEE_NOT_QUALIFIED },
   EMPLOYEE_NOT_FOUND: { status: 404, code: CODES.EMPLOYEE_NOT_FOUND },
   NO_EMPLOYEE_AVAILABLE: { status: 409, code: CODES.SLOT_TAKEN },
@@ -401,6 +403,8 @@ const MESSAGES: Record<string, string> = {
   [CODES.START_TIME_IN_PAST]: "The start time must be in the future.",
   [CODES.CLIENT_REQUIRED]: "Provide either a client id or a guest phone number.",
   [CODES.OUTSIDE_WORKING_HOURS]: "That time is outside the stylist's working hours.",
+  [CODES.DEPOSIT_DUE]:
+    "This booking has an unpaid deposit. Settle it before admitting the guest.",
   [CODES.CANCELLATION_WINDOW_PASSED]:
     "This booking can no longer be cancelled online. Please call the salon.",
   [CODES.EMPLOYEE_NOT_QUALIFIED]: "That stylist does not deliver the selected service.",
