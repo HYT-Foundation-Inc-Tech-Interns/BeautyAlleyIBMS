@@ -446,12 +446,13 @@ export const bookingsService = {
     }
 
     /*
-     * A client may move their own appointment, but not at the last minute.
-     * The same owner-editable cutoff that governs cancellation applies here:
-     * otherwise "reschedule" becomes a way around the cancellation window.
-     * Staff are exempt, because they are the ones who handle the exception.
+     * A client or a guest may move their own appointment, but not at the last
+     * minute. The same owner-editable cutoff that governs cancellation applies
+     * here: otherwise a move becomes a way around the cancellation window. A
+     * guest holds the booking uuid, so the rule cannot depend on an account.
+     * Staff are exempt: they are the ones who handle the exception.
      */
-    if (actor?.role === "CLIENT") {
+    if (!isStaff(actor)) {
       const rules = await settingsService.getBookingRules();
       const hoursUntil = (new Date(row.start_time).getTime() - Date.now()) / 3_600_000;
       if (hoursUntil < rules.cancellationWindowHours) {

@@ -19,6 +19,7 @@ import * as React from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import {
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -37,6 +38,7 @@ import { useAsync } from "@/lib/useAsync";
 import { Button } from "@/components/ui/button";
 import { ErrorNote, Loading, StatusBadge } from "@/components/app/api-bits";
 import { PublicShell } from "@/components/app/PublicShell";
+import { RescheduleDialog } from "@/components/app/reschedule-dialog";
 
 export default function Pass() {
   const { id } = useParams<{ id: string }>();
@@ -68,6 +70,8 @@ export default function Pass() {
   const [cancelling, setCancelling] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<ApiError | null>(null);
   const [confirmCancel, setConfirmCancel] = React.useState(false);
+  const [moving, setMoving] = React.useState(false);
+  const [movedTo, setMovedTo] = React.useState<string | null>(null);
 
   async function cancel() {
     if (!id) return;
@@ -129,6 +133,7 @@ export default function Pass() {
   const checkedIn = Boolean(qr?.used) || booking.status === "CHECKED_IN" || booking.status === "IN_SERVICE";
   const dead = booking.status === "CANCELLED" || booking.status === "NO_SHOW";
   const canCancel = !dead && booking.status !== "COMPLETED";
+  const canMove = booking.status === "PENDING" || booking.status === "CONFIRMED";
 
   return (
     <PublicShell>
@@ -286,6 +291,12 @@ export default function Pass() {
 
           {cancelError && <ErrorNote error={cancelError} className="mt-6" />}
 
+          {movedTo && (
+            <p className="mt-6 rounded-lg border border-alley-200 bg-alley-50 px-4 py-3 text-[12.5px] leading-relaxed text-alley-700">
+              Moved to {branchLongDay(movedTo)} at {branchTime(movedTo)}. A fresh pass has been issued.
+            </p>
+          )}
+
           <div
             data-print="hide"
             className="mt-8 flex flex-wrap items-center gap-2 border-t border-border/70 pt-6"
@@ -298,6 +309,12 @@ export default function Pass() {
               <Button variant="outline" className="gap-2" onClick={() => window.print()}>
                 <Printer className="size-4" />
                 Print pass
+              </Button>
+            )}
+            {canMove && (
+              <Button variant="outline" onClick={() => setMoving(true)}>
+                <CalendarClock className="size-4" />
+                Move appointment
               </Button>
             )}
             {canCancel && !confirmCancel && (
@@ -320,6 +337,18 @@ export default function Pass() {
             )}
           </div>
         </div>
+
+        {moving && (
+          <RescheduleDialog
+            booking={booking}
+            onClose={() => setMoving(false)}
+            onDone={(updated) => {
+              setMoving(false);
+              setMovedTo(updated.startTime);
+              state.reload();
+            }}
+          />
+        )}
 
         <p className="mt-6 text-center text-[12px] leading-relaxed text-muted-foreground">
           Bookmark this link — it is your only copy of the pass. Cancelling is free
