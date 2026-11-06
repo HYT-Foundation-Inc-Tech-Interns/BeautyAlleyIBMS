@@ -13,8 +13,9 @@
  * eight times would put eight round trips on the wire to render one screen, and
  * they would disagree with each other while they resolved. The dashboard
  * endpoint already answers in one pass, so the page asks once and passes the
- * result down. A tile that needed a *different* question would get its own
- * fetch — none of them do.
+ * result down. The two tiles that ask a different question — retention and
+ * promo performance — read `/admin/insights` on their own, so a failing
+ * aggregation blanks those two and leaves the rest of the board standing.
  *
  * The owner and the desk both read it. The two aggregate endpoints behind it
  * (`/admin/dashboard`, `/admin/clients`) are the only admin routes the
@@ -670,7 +671,7 @@ function WidgetBody({
             </div>
           ) : (
             <>
-              <div className="flex items-baseline gap-2">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <Big>{r.didNotRebook}</Big>
                 <span className="text-[11.5px] text-muted-foreground">
                   of {eligible} registered clients did not book again
@@ -683,17 +684,23 @@ function WidgetBody({
               )}
               <ul className="mt-3 space-y-2.5">
                 {r.clients.slice(0, 5).map((c) => (
-                  <li key={c.clientId} className="flex items-center gap-2.5">
-                    <PersonAvatar name={c.fullName} className="size-7 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] font-medium">{c.fullName}</p>
-                      <p className="truncate text-[10.5px] text-muted-foreground">
-                        {c.visits} visits · {peso(c.valueCents)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-[11px] tabular-nums text-clay">
-                      {c.daysSince}d ago
-                    </span>
+                  <li key={c.clientId}>
+                    <Link
+                      to={`/app/clients?client=${c.clientId}`}
+                      className="-mx-1.5 flex items-center gap-2.5 rounded-lg px-1.5 py-0.5 transition-colors hover:bg-muted/50"
+                      title={`Open ${c.fullName}`}
+                    >
+                      <PersonAvatar name={c.fullName} className="size-7 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-medium">{c.fullName}</p>
+                        <p className="truncate text-[10.5px] text-muted-foreground">
+                          {c.visits} visits · {peso(c.valueCents)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[11px] tabular-nums text-clay">
+                        {c.daysSince}d ago
+                      </span>
+                    </Link>
                   </li>
                 ))}
               </ul>
