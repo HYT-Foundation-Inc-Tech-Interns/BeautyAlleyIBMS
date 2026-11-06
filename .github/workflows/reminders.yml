@@ -1,0 +1,67 @@
+name: Reminders
+
+# The sender is a script, not a request path: a slow SMTP server must never hold
+# a booking response open. This workflow is the schedule that keeps it running
+# without anyone's laptop.
+#
+# Configure these repository secrets before relying on it:
+#   DATABASE_URL, SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM
+#
+# Without DATABASE_URL the job exits green and does nothing, so a fork or a new
+# clone is not red for lacking the salon's credentials.
+
+on:
+  schedule:
+    # Every 15 minutes. The sender is idempotent - a row is only sent while
+    # status = 'PENDING' - so a missed or doubled run cannot send twice.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: reminders
+  cancel-in-progress: false
+
+jobs:
+  send:
+    name: Send due reminders
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Is the queue configured?
+        id: config
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not set; skipping the reminder run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install backend dependencies
+        if: steps.config.outputs.skip != 'true'
+        working-directory: backend
+        run: npm ci
+
+      - name: Send
+        if: steps.config.outputs.skip != 'true'
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          BRANCH_TIMEZONE: ${{ vars.BRANCH_TIMEZONE || 'Asia/Manila' }}
+        run: npm run reminders
+

@@ -218,11 +218,13 @@ npm run reminders:dry   # list due rows, change nothing
 npm run reminders       # send and mark SENT / FAILED / SKIPPED
 ```
 
-An hourly WorkBuddy automation runs `npm run reminders` in this workspace.
-It is idempotent: a row is only sent while `status = 'PENDING'`. Hourly
-resolution is plenty for 24h/2h notices; if the salon needs tighter timing,
-point a 5–15 minute cron at the same command. Settings → Reminders shows the
-queue and can send a test email.
+The schedule lives in the repository: `.github/workflows/reminders.yml` runs
+`npm run reminders` every 15 minutes. It is idempotent - a row is only sent
+while `status = 'PENDING'` - so a missed or doubled run cannot send twice.
+Configure the repository secrets `DATABASE_URL` and the `SMTP_*` pair; without
+`DATABASE_URL` the job exits green and does nothing. **Run workflow** on the
+Actions tab is the by-hand equivalent. Settings → Reminders shows the queue and
+can send a test email.
 
 ### SMTP
 
