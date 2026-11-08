@@ -75,6 +75,19 @@ const schema = z.object({
     .min(32, "QR_SIGNING_SECRET must be at least 32 chars"),
   QR_CHECKIN_WINDOW_MINUTES: z.coerce.number().int().nonnegative().default(60),
 
+  /*
+   * The pepper behind every door PIN (migration 58).
+   *
+   * Optional in the schema so the process still boots - and serves everything
+   * else - without it. The PIN endpoints answer 503 until it is set, which is
+   * the correct failure: a PIN lookup without a pepper is a 10,000-row table
+   * anyone could reverse.
+   *
+   * Changing this value invalidates every PIN already issued. It is not a
+   * rotation you can do quietly.
+   */
+  KIOSK_PIN_PEPPER: z.string().min(32, "KIOSK_PIN_PEPPER must be at least 32 chars").optional().or(z.literal("")),
+
   // Where a scanned QR pass points. Defaults to the branch check-in page.
   QR_CHECKIN_URL: z.string().url().default("https://beautyalley.app/check-in"),
 
@@ -152,6 +165,7 @@ const FALLBACK: EnvShape = {
   SERVE_APP: false,
   QR_SIGNING_SECRET: "unconfigured-qr-signing-secret-placeholder",
   QR_CHECKIN_WINDOW_MINUTES: 60,
+  KIOSK_PIN_PEPPER: "",
   QR_CHECKIN_URL: "https://beautyalley.app/check-in",
   BRANCH_ID: "beautyalley-main",
   QR_ENTER_URL: "https://beautyalley.app/welcome",
@@ -239,6 +253,7 @@ export const env = {
 
   qrSigningSecret: data.QR_SIGNING_SECRET,
   qrCheckinWindowMinutes: data.QR_CHECKIN_WINDOW_MINUTES,
+  kioskPinPepper: data.KIOSK_PIN_PEPPER || "",
   qrCheckInUrl: data.QR_CHECKIN_URL,
   branchId: data.BRANCH_ID,
   qrEnterUrl: data.QR_ENTER_URL,

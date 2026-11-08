@@ -106,6 +106,15 @@ export const CODES = {
    * not exist.
    */
   KIOSK_ALREADY_REVOKED: "KIOSK_ALREADY_REVOKED",
+  /**
+   * Migration 58. Another employee already holds that door PIN.
+   *
+   * A PIN identifies a person by value, so two people cannot share one. The
+   * message deliberately does not name the holder: the owner is the only caller
+   * who can see this, but a sentence that names a colleague is the kind of
+   * detail that ends up in a screenshot.
+   */
+  PIN_TAKEN: "PIN_TAKEN",
   CONFLICT: "CONFLICT",
 
   // --- 429 -----------------------------------------------------------------
@@ -227,6 +236,8 @@ const PG_FUNCTION_ERRORS: Record<string, { status: number; code: string }> = {
   // --- migration 57: the door kiosk ---------------------------------------
   KIOSK_NOT_FOUND: { status: 404, code: CODES.KIOSK_NOT_FOUND },
   KIOSK_ALREADY_REVOKED: { status: 409, code: CODES.KIOSK_ALREADY_REVOKED },
+  // --- migration 58: door PINs ---------------------------------------------
+  PIN_TAKEN: { status: 409, code: CODES.PIN_TAKEN },
 };
 
 /** SQLSTATE classes we care about. */
@@ -483,6 +494,7 @@ const MESSAGES: Record<string, string> = {
   [CODES.KIOSK_REVOKED]: "This kiosk has been switched off.",
   [CODES.KIOSK_NOT_FOUND]: "No such kiosk.",
   [CODES.KIOSK_ALREADY_REVOKED]: "That kiosk is already switched off.",
+  [CODES.PIN_TAKEN]: "That PIN is already in use. Choose a different one.",
 };
 
 function humanise(code: string): string {

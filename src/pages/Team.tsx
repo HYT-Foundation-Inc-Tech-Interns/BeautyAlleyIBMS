@@ -44,7 +44,14 @@ import {
 import { branchDay, branchTime, branchToday, cn, shiftDayKey } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import type { Employee, LeavePerson, Service, StaffLogin, WorkingHour } from "@/lib/api-types";
+import type {
+  Employee,
+  LeavePerson,
+  Service,
+  StaffLogin,
+  StaffPin,
+  WorkingHour,
+} from "@/lib/api-types";
 import { ROLE_LABEL } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -95,6 +102,19 @@ export default function Team() {
   const hours = useAsync(`team:hours:${expanded}:${expandedActive}`, async () => {
     if (!expanded || !expandedActive) return [];
     return api.employees.workingHours(expanded);
+  });
+
+  /*
+   * Whether this person can admit a guest at the door.
+   *
+   * Read per card, like the hours, and for the same reason: the roster payload
+   * is public and must not carry it. What comes back is a boolean and a
+   * timestamp - the PIN itself is a digest in the database and cannot be read
+   * back by anyone, including the owner.
+   */
+  const pin = useAsync(`team:pin:${expanded}:${expandedActive}`, async () => {
+    if (!expanded || !expandedActive) return null;
+    return api.employees.staffPin(expanded);
   });
 
   /*
@@ -153,6 +173,29 @@ export default function Team() {
         err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not save those hours"),
       );
       return false;
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /*
+   * The door PIN.
+   *
+   * Unlike the two editors above, the error is returned to the caller instead
+   * of being put in `actionError`. That banner sits above the grid, and the one
+   * failure this control has - "that PIN is already in use" - is about the
+   * value that was just typed. A message three cards away from the field is a
+   * message the owner will not connect to what they did.
+   */
+  async function savePin(person: Employee, value: string | null): Promise<ApiError | null> {
+    setBusyId(person.id);
+    try {
+      if (value === null) await api.employees.clearStaffPin(person.id);
+      else await api.employees.setStaffPin(person.id, value);
+      pin.reload();
+      return null;
+    } catch (err) {
+      return err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not save that PIN");
     } finally {
       setBusyId(null);
     }
@@ -298,6 +341,7 @@ export default function Team() {
               onToggle={() => setExpanded(expanded === person.id ? null : person.id)}
               detail={expanded === person.id ? detail : null}
               hours={expanded === person.id ? hours : null}
+              pin={expanded === person.id ? pin : null}
               serviceName={serviceName}
               services={catalogue.data ?? []}
               logins={logins.data ?? []}
@@ -305,6 +349,7 @@ export default function Team() {
               onToggleActive={() => void toggleActive(person)}
               onSaveServices={(ids) => saveServices(person, ids)}
               onSaveHours={(windows) => saveHours(person, windows)}
+              onSavePin={(value) => savePin(person, value)}
               onLinkLogin={(profileId) => linkLogin(person, profileId)}
             />
           ))}
@@ -565,6 +610,7 @@ function EmployeeCard({
   onToggle,
   detail,
   hours,
+  pin,
   serviceName,
   services,
   logins,
@@ -572,6 +618,7 @@ function EmployeeCard({
   onToggleActive,
   onSaveServices,
   onSaveHours,
+  onSavePin,
   onLinkLogin,
 }: {
   person: Employee;
@@ -579,6 +626,7 @@ function EmployeeCard({
   onToggle: () => void;
   detail: { data: Employee | null; error: ApiError | null; initial: boolean } | null;
   hours: { data: WorkingHour[] | null; error: ApiError | null; initial: boolean } | null;
+  pin: { data: StaffPin | null; error: ApiError | null; initial: boolean } | null;
   serviceName: (id: string) => string;
   services: Service[];
   logins: StaffLogin[];
@@ -588,6 +636,8 @@ function EmployeeCard({
   onSaveHours: (
     windows: { weekday: number; startTime: string; endTime: string }[],
   ) => Promise<boolean>;
+  /** `null` clears the PIN. Resolves to the error, or null on success. */
+  onSavePin: (value: string | null) => Promise<ApiError | null>;
   onLinkLogin: (profileId: string) => Promise<boolean>;
 }) {
   return (
@@ -656,6 +706,13 @@ function EmployeeCard({
                 error={hours?.error ?? null}
                 busy={busy}
                 onSave={onSaveHours}
+              />
+              <DoorPin
+                pin={pin?.data ?? null}
+                loading={pin?.initial ?? false}
+                error={pin?.error ?? null}
+                busy={busy}
+                onSave={onSavePin}
               />
             </>
           ) : null}
@@ -1277,6 +1334,202 @@ function WeeklyHours({
                 " a week. Slots are only offered inside these windows; a closed day has none."}
           </p>
         </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * The door PIN
+ * ------------------------------------------------------------------ */
+
+/**
+ * The PIN a stylist types at the tablet to admit a guest.
+ *
+ * Two things this block deliberately does not do.
+ *
+ * It never shows the PIN. The server keeps a peppered HMAC and cannot return
+ * the digits, so the read view says *whether* one is set and when it last
+ * changed - "Change" replaces it, it does not reveal it. An owner who forgets
+ * a PIN sets a new one; there is no "show me".
+ *
+ * It says why the PIN matters. A four-digit number on a shared tablet is a weak
+ * credential, and the honest framing is that it is not a password: it proves a
+ * member of staff was standing there, nothing more. The copy says so rather
+ * than implying the screen is secure.
+ */
+function DoorPin({
+  pin,
+  loading,
+  error,
+  busy,
+  onSave,
+}: {
+  pin: StaffPin | null;
+  loading: boolean;
+  error: ApiError | null;
+  busy: boolean;
+  onSave: (value: string | null) => Promise<ApiError | null>;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [failure, setFailure] = React.useState<ApiError | null>(null);
+
+  const hasPin = pin?.hasPin ?? false;
+
+  /*
+   * Same reason as WeeklyHours: the card is not remounted between people, so a
+   * draft must not survive into the next person's card. Keyed on the fetched
+   * record, which is a new object after every save.
+   */
+  React.useEffect(() => {
+    setEditing(false);
+    setValue("");
+    setFailure(null);
+  }, [pin]);
+
+  /*
+   * A local copy of the server's rule, kept only so the Save button can be
+   * disabled before a request is spent on a two-digit typo. The server is still
+   * the authority - `PUT` re-checks and answers VALIDATION_FAILED - and this
+   * must stay in step with `PIN_PATTERN` in `backend/src/lib/staffPin.ts`.
+   */
+  const shaped = /^\d{4,6}$/.test(value);
+
+  async function save(next: string | null) {
+    setSaving(true);
+    const problem = await onSave(next);
+    setSaving(false);
+
+    if (problem) {
+      setFailure(problem);
+      return;
+    }
+    setFailure(null);
+    setEditing(false);
+    setValue("");
+  }
+
+  return (
+    <div className="mt-5 border-t border-border/60 pt-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Door PIN
+        </p>
+        {!editing && !loading && !error && (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11.5px]"
+              disabled={busy || saving}
+              onClick={() => {
+                setValue("");
+                setFailure(null);
+                setEditing(true);
+              }}
+            >
+              <Pencil className="size-3" />
+              {hasPin ? "Change" : "Set"}
+            </Button>
+            {hasPin && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11.5px] text-muted-foreground hover:text-clay"
+                disabled={busy || saving}
+                onClick={() => void save(null)}
+              >
+                <X className="size-3" />
+                Remove
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <Loading label="Checking the PIN…" className="py-4" />
+      ) : error ? (
+        <ErrorNote error={error} className="mt-2" />
+      ) : editing ? (
+        <>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={6}
+              aria-label="Door PIN"
+              placeholder="••••"
+              value={value}
+              onChange={(event) => {
+                // Digits only, and never longer than the server accepts - a
+                // pasted "12 34" should not look like a server-side failure.
+                setValue(event.target.value.replace(/\D/g, "").slice(0, 6));
+                setFailure(null);
+              }}
+              className="h-8 w-24 rounded-lg border border-border bg-card px-2 text-[13px] tracking-[0.3em] tabular-nums outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+            />
+            <span className="text-[11px] text-muted-foreground">4 to 6 digits</span>
+          </div>
+
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            They type this at the door tablet to admit a guest. It cannot be shown again once
+            saved, so choose one they will remember.
+          </p>
+
+          {failure && <ErrorNote error={failure} className="mt-2" />}
+
+          <div className="mt-3 flex items-center gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || saving || !shaped}
+              onClick={() => void save(value)}
+            >
+              {busy || saving ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Check className="size-3.5" />
+              )}
+              Save PIN
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={busy || saving}
+              onClick={() => {
+                setEditing(false);
+                setValue("");
+                setFailure(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="mt-1.5 text-[11.5px] leading-relaxed">
+          {hasPin ? (
+            <>
+              <span className="font-medium text-foreground">Set.</span>{" "}
+              <span className="text-muted-foreground">
+                {pin?.updatedAt
+                  ? "Last changed " + branchDay(pin.updatedAt) + " at " + branchTime(pin.updatedAt) + "."
+                  : "This person can admit a guest at the door."}
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">
+              Not set. This person cannot admit a guest at the door tablet.
+            </span>
+          )}
+        </p>
       )}
     </div>
   );

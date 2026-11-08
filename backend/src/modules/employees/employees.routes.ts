@@ -11,6 +11,7 @@ import {
   performanceQuerySchema,
   quotaQuerySchema,
   setEmployeeServicesSchema,
+  setStaffPinSchema,
   setWorkingHoursSchema,
   timeOffSchema,
   updateEmployeeSchema,
@@ -100,6 +101,39 @@ employeesRouter.put(
   ...admin,
   validate({ params: idParamSchema, body: setWorkingHoursSchema }),
   asyncHandler(employeesController.setWorkingHours)
+);
+
+/*
+ * The door PIN.
+ *
+ * ADMIN in both directions, and the read is ADMIN too. A PIN is a way to admit
+ * a guest, so "does this stylist have one" is a security-relevant fact rather
+ * than roster data - the desk has no reason to know, and the public employee
+ * shape never carries it.
+ *
+ * Three verbs rather than one PATCH with a nullable field: `DELETE` says "this
+ * person has no PIN" without the caller having to know that absence is spelled
+ * `null`, and it is idempotent, which is what the owner means by it.
+ */
+employeesRouter.get(
+  "/:id/pin",
+  ...admin,
+  validate({ params: idParamSchema }),
+  asyncHandler(employeesController.staffPin)
+);
+
+employeesRouter.put(
+  "/:id/pin",
+  ...admin,
+  validate({ params: idParamSchema, body: setStaffPinSchema }),
+  asyncHandler(employeesController.setStaffPin)
+);
+
+employeesRouter.delete(
+  "/:id/pin",
+  ...admin,
+  validate({ params: idParamSchema }),
+  asyncHandler(employeesController.clearStaffPin)
 );
 
 // Reading time off is useful to anyone who works here - a stylist wants to

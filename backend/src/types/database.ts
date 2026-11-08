@@ -315,6 +315,10 @@ export interface Database {
           last_seen_at: string | null;
           /** `inet`, which supabase-js hands back as text. */
           last_seen_ip: string | null;
+          /** Migration 58. Consecutive wrong door PINs from this screen. */
+          pin_failures: number;
+          /** Migration 58. No PIN is accepted here before this time. */
+          pin_locked_until: string | null;
           revoked_at: string | null;
           revoked_by: string | null;
         };
@@ -325,6 +329,8 @@ export interface Database {
           created_by?: string | null;
           last_seen_at?: string | null;
           last_seen_ip?: string | null;
+          pin_failures?: number;
+          pin_locked_until?: string | null;
           revoked_at?: string | null;
           revoked_by?: string | null;
         };
@@ -332,8 +338,37 @@ export interface Database {
           label?: string;
           last_seen_at?: string | null;
           last_seen_ip?: string | null;
+          pin_failures?: number;
+          pin_locked_until?: string | null;
           revoked_at?: string | null;
           revoked_by?: string | null;
+        };
+        Relationships: [];
+      };
+
+      /**
+       * Migration 58. One door PIN per employee, stored as a peppered HMAC so
+       * it can be looked up by value. The PIN itself is never stored, and
+       * `pin_lookup` must never be serialised to a client.
+       */
+      staff_pins: {
+        Row: {
+          employee_id: string;
+          pin_lookup: string;
+          created_at: string;
+          created_by: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          employee_id: string;
+          pin_lookup: string;
+          created_by?: string | null;
+          updated_by?: string | null;
+        };
+        Update: {
+          pin_lookup?: string;
+          updated_by?: string | null;
         };
         Relationships: [];
       };
@@ -1262,6 +1297,19 @@ export interface Database {
       /** Migration 57. Stamp `revoked_at`. Raises KIOSK_ALREADY_REVOKED on a second call. */
       revoke_kiosk_device: {
         Args: { p_id: string; p_actor?: string | null };
+        Returns: Json;
+      };
+      /**
+       * Migration 58. Set or replace an employee's door PIN from its peppered
+       * HMAC. Raises EMPLOYEE_NOT_FOUND and PIN_TAKEN.
+       */
+      set_staff_pin: {
+        Args: { p_employee_id: string; p_pin_lookup: string; p_actor?: string | null };
+        Returns: Json;
+      };
+      /** Migration 58. Remove a door PIN. Idempotent. */
+      clear_staff_pin: {
+        Args: { p_employee_id: string; p_actor?: string | null };
         Returns: Json;
       };
     };

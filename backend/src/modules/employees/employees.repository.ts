@@ -23,6 +23,13 @@ export interface WorkingHourRow {
   end_time: string;
 }
 
+/** Migration 58. Everything about a door PIN except the digest itself. */
+export interface StaffPinRow {
+  employee_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export type TimeOffStatus = "PENDING" | "APPROVED" | "DECLINED";
 
 export interface TimeOffRow {
@@ -186,6 +193,62 @@ export const employeesRepository = {
       .order("start_time");
     if (error) throw error;
     return (data ?? []) as WorkingHourRow[];
+  },
+
+  /**
+   * Whether this person has a door PIN, and when it last changed.
+   *
+   * `pin_lookup` is deliberately not selected. The console only needs to know
+   * which button to show, and a digest that never leaves the database cannot
+   * be compared against a guessed PIN by anyone reading a network tab.
+   */
+  async pinFor(employeeId: string): Promise<StaffPinRow | null> {
+    const db = requireServiceRole();
+    const { data, error } = await db
+      .from("staff_pins")
+      .select("employee_id, created_at, updated_at")
+      .eq("employee_id", employeeId)
+      .maybeSingle();
+    if (error) throw error;
+    return (data as StaffPinRow) ?? null;
+  },
+
+  /**
+   * Set or replace a PIN. The lookup is computed in the service; nothing in
+   * this layer ever sees the digits.
+   *
+   * Migration 58. The function raises EMPLOYEE_NOT_FOUND and PIN_TAKEN, and
+   * writes the audit row - which is why this is an RPC and not an upsert here.
+   */
+  async setPin(
+    employeeId: string,
+    pinLookup: string,
+    actorId: string | null
+  ): Promise<StaffPinRow> {
+    const db = requireServiceRole();
+    const { data, error } = await db.rpc("set_staff_pin", {
+      p_employee_id: employeeId,
+      p_pin_lookup: pinLookup,
+      p_actor: actorId,
+    });
+    if (error) throw error;
+
+    const row = data as unknown as { employeeId: string; createdAt: string; updatedAt: string };
+    return {
+      employee_id: row.employeeId,
+      created_at: row.createdAt,
+      updated_at: row.updatedAt,
+    };
+  },
+
+  /** Remove a PIN. Idempotent: clearing one that is not set is a success. */
+  async clearPin(employeeId: string, actorId: string | null): Promise<void> {
+    const db = requireServiceRole();
+    const { error } = await db.rpc("clear_staff_pin", {
+      p_employee_id: employeeId,
+      p_actor: actorId,
+    });
+    if (error) throw error;
   },
 
   async timeOffFor(employeeId: string, from?: string): Promise<TimeOffRow[]> {

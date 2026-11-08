@@ -2,9 +2,11 @@ import { requireServiceRole, supabasePublic } from "../../db/supabase";
 import { iso, isoOrNull } from "../../lib/dates";
 import { AppError, CODES } from "../../lib/errors";
 import { paginated } from "../../lib/pagination";
+import { pinLookup } from "../../lib/staffPin";
 import {
   employeesRepository,
   type EmployeeRow,
+  type StaffPinRow,
   type TimeOffRow,
   type WorkingHourRow,
 } from "./employees.repository";
@@ -50,6 +52,28 @@ function toTimeOffDto(row: TimeOffRow) {
     status: row.status,
     decidedAt: isoOrNull(row.decided_at),
     decisionNote: row.decision_note,
+  };
+}
+
+/**
+ * What the console is told about a door PIN.
+ *
+ * `hasPin` rather than the row, because that is the only question the screen
+ * asks - it decides whether the button says "Set" or "Change". The digest is
+ * not in this shape at all, so no later refactor can start returning it by
+ * spreading a repository row.
+ */
+export interface StaffPinDto {
+  employeeId: string;
+  hasPin: boolean;
+  updatedAt: string | null;
+}
+
+function toStaffPinDto(employeeId: string, row: StaffPinRow | null): StaffPinDto {
+  return {
+    employeeId,
+    hasPin: row !== null,
+    updatedAt: row ? iso(row.updated_at) : null,
   };
 }
 
@@ -134,6 +158,42 @@ export const employeesService = {
     await this.getById(id);
     await employeesRepository.setWorkingHours(id, hours);
     return this.getById(id);
+  },
+
+  /**
+   * Whether this person can admit a guest at the door.
+   *
+   * A PIN belongs to a person, not to a screen: it is typed at whatever tablet
+   * is by the entrance, and the API works out whose it is from the digits
+   * alone. That is why there is nothing to choose here beyond the id.
+   */
+  async staffPin(id: string): Promise<StaffPinDto> {
+    await this.getById(id);
+    return toStaffPinDto(id, await employeesRepository.pinFor(id));
+  },
+
+  /**
+   * Set or replace a PIN.
+   *
+   * The lookup is computed first, before anything is read. If the pepper is
+   * missing this throws a 503 naming it, and it is better for that to be the
+   * answer than to report a 404 for an employee id that is perfectly fine.
+   *
+   * The plaintext is used once, here, and never logged: the only things that
+   * leave this function are the digest and the timestamp the database wrote.
+   */
+  async setStaffPin(id: string, pin: string, actor: Actor): Promise<StaffPinDto> {
+    const lookup = pinLookup(pin);
+    await this.getById(id);
+
+    const row = await employeesRepository.setPin(id, lookup, actor.id);
+    return toStaffPinDto(id, row);
+  },
+
+  async clearStaffPin(id: string, actor: Actor): Promise<StaffPinDto> {
+    await this.getById(id);
+    await employeesRepository.clearPin(id, actor.id);
+    return toStaffPinDto(id, null);
   },
 
   /**

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { queryBoolean } from "../../lib/query";
 import { paginationSchema } from "../../lib/pagination";
+import { PIN_PATTERN } from "../../lib/staffPin";
 
 export const EMPLOYEE_SORT_COLUMNS = ["full_name", "title", "created_at"] as const;
 
@@ -67,6 +68,21 @@ export const workingHourSchema = z
 
 export const setWorkingHoursSchema = z.object({
   hours: z.array(workingHourSchema).max(21),
+});
+
+/**
+ * A door PIN.
+ *
+ * The shape check lives here and the pattern lives in `lib/staffPin`, so the
+ * rule has one home: the kiosk will need to reject the same strings before it
+ * hashes them, and two copies of `^\d{4,6}$` is how the door and the console
+ * end up disagreeing about what a PIN is.
+ *
+ * The message names the range rather than saying "invalid", because the person
+ * typing it is at a tablet in a lobby with someone waiting.
+ */
+export const setStaffPinSchema = z.object({
+  pin: z.string().regex(PIN_PATTERN, "A PIN is 4 to 6 digits"),
 });
 
 export const timeOffSchema = z

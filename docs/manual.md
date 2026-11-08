@@ -124,6 +124,12 @@ and they must have **working hours**. A new stylist starts on the house pattern
 included. A closed day has no slots, and a stylist with no windows at all is
 offered nowhere. Saving the week also updates the leave board's cover counts.
 
+**Show details → Door PIN** is the four-to-six digit number a stylist types at
+the tablet by the door to admit a guest. One PIN per person and no two people
+share one, because the PIN is what tells the screen who is admitting. It cannot
+be read back after saving — set a new one instead — and removing it stops that
+person admitting anyone until it is set again.
+
 **Promos** (`Promos`) — proposals from the desk arrive as pending. Approve to make
 a code live, or reject with a reason. Retiring a code stops new redemptions and
 keeps the history.

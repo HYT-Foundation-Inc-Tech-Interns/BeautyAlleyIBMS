@@ -69,6 +69,7 @@ import type {
   ServiceInput,
   ServiceSubcategory,
   Session,
+  StaffPin,
   Task,
   TaskCounts,
   TaskPriority,
@@ -484,6 +485,24 @@ export const api = {
       request<Employee>("PUT", `/api/v1/employees/${id}/working-hours`, {
         body: { hours },
       }),
+
+    /**
+     * The door PIN.
+     *
+     * There is no read that returns the PIN - the database holds a peppered
+     * digest, so the console is told `hasPin` and nothing more. That is the
+     * whole point: a PIN that can be read back is a PIN that ends up in a
+     * screenshot of the Team page.
+     */
+    staffPin: (id: string) => request<StaffPin>("GET", `/api/v1/employees/${id}/pin`),
+
+    /** Set or replace. A PIN identifies one person, so a collision is a 409. */
+    setStaffPin: (id: string, pin: string) =>
+      request<StaffPin>("PUT", `/api/v1/employees/${id}/pin`, { body: { pin } }),
+
+    /** Remove it. Idempotent, so the button can be pressed twice without an error. */
+    clearStaffPin: (id: string) =>
+      request<StaffPin>("DELETE", `/api/v1/employees/${id}/pin`),
 
     /**
      * One stylist's progress against the daily quota. `date` is a plain

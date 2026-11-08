@@ -61,6 +61,26 @@ export const employeesController = {
     res.status(200).json({ data: result });
   },
 
+  async staffPin(req: Request, res: Response) {
+    const result = await employeesService.staffPin(req.params.id);
+    res.status(200).json({ data: result });
+  },
+
+  /**
+   * The PIN is read off the body, used once, and not echoed. The response
+   * describes the state - "this person has a PIN, last changed at 14:02" -
+   * which is all the console needs to redraw the button.
+   */
+  async setStaffPin(req: Request, res: Response) {
+    const result = await employeesService.setStaffPin(req.params.id, req.body.pin, req.actor!);
+    res.status(200).json({ data: result });
+  },
+
+  async clearStaffPin(req: Request, res: Response) {
+    const result = await employeesService.clearStaffPin(req.params.id, req.actor!);
+    res.status(200).json({ data: result });
+  },
+
   /**
    * Ask for leave. The service decides whether that is a request or a
    * decision, from the caller's role - not from anything in the body.

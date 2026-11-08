@@ -76,6 +76,7 @@ environment variables below as platform secrets.
 | `SUPABASE_ANON_KEY` | no | public by design; shipped to browsers |
 | `SUPABASE_SERVICE_ROLE_KEY` | **yes** | bypasses RLS — treat as a master key |
 | `QR_SIGNING_SECRET` | **yes** | rotating it invalidates every outstanding pass |
+| `KIOSK_PIN_PEPPER` | **yes** | required for door PINs; rotating it invalidates every PIN |
 | `DATABASE_URL` | **yes** | contains the database password |
 | `ALLOWED_ORIGINS` | no | required on Vercel; not needed when `SERVE_APP=true` |
 | `SERVE_APP` | no | `true` for the container; leave unset on Vercel |
@@ -435,6 +436,11 @@ Rotate in this order:
 3. `QR_SIGNING_SECRET` **last**, and deliberately: it invalidates every
    outstanding arrival pass, so guests holding a printed pass will need a new one.
 
+`KIOSK_PIN_PEPPER` sits outside that order because it is not part of the
+boot path: rotating it invalidates every door PIN and nothing else. Do it out of
+hours, then re-issue PINs from the Team page — the old ones stop working the
+moment the new value is live.
+
 Rotating the Supabase JWT secret additionally invalidates every signed-in session.
 
 Record each rotation here, so "was this key ever changed?" has an answer that
@@ -554,5 +560,44 @@ Reading the pattern is `GET /employees/:id/working-hours` (ADMIN). It is a
 separate call because the public `GET /employees/:id` omits `workingHours` on
 purpose — hours are an internal scheduling detail with no RLS policy for a
 browser.
+
+## Door PINs
+
+The kiosk by the entrance admits a guest only after a member of staff confirms
+with a PIN. **Team → a stylist's card → Show details → Door PIN** sets, changes
+and removes it; the read is `GET /employees/:id/pin` and the writes are
+`PUT`/`DELETE` on the same path, all ADMIN.
+
+The PIN is **not a password and is not stored as one.** It is a blind index:
+
+    pin_lookup = HMAC-SHA256(KIOSK_PIN_PEPPER, "staff-pin:" || pin)
+
+A PIN identifies *who typed it*, from the digits alone — the tablet knows no
+employee id, and letting it name one would let a stolen device admit guests
+under any name it liked. Looking a secret up by value rules out a per-row salt,
+so the pepper stands in for it.
+
+What follows from that, operationally:
+
+- **`KIOSK_PIN_PEPPER` must be set before any PIN can be issued.** Without it
+  the three PIN endpoints answer `503 CONFIG_ERROR`; everything else runs
+  normally. Generate one with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+- **Rotating the pepper invalidates every PIN at once.** There is no column
+  remembering which pepper a row used — keeping the old one forever is worse
+  than re-issuing five four-digit numbers. Do it out of hours and expect to
+  re-set every PIN.
+- **A PIN is unique across staff**, because it has to resolve to one person. A
+  collision is `409 PIN_TAKEN`; the message does not name the holder.
+- **No endpoint can read a PIN back**, including for the owner. A forgotten PIN
+  is replaced, not recovered.
+- **A PIN can be set for a deactivated stylist** — a person may be given one
+  before their first shift. Whether a *deactivated* person can actually admit
+  someone is decided when the arrival is recorded, not here.
+
+Wrong PINs are throttled **per device**, not per person: five in a row start a
+60-second wait that doubles to a 15-minute ceiling, and a correct PIN clears the
+count. Locking a person instead would let anyone in the lobby lock a stylist out
+of their own PIN.
 
 Still missing: a request does not email anyone.

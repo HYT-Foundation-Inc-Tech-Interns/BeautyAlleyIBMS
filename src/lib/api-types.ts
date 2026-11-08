@@ -201,6 +201,19 @@ export interface WorkingHour {
   endTime: string;
 }
 
+/**
+ * The door PIN, as far as any screen is allowed to know it.
+ *
+ * There is no field for the PIN and there never will be: the server keeps a
+ * peppered digest, so "what is this person's PIN" is not a question the API can
+ * answer. `updatedAt` is null when no PIN is set.
+ */
+export interface StaffPin {
+  employeeId: string;
+  hasPin: boolean;
+  updatedAt: string | null;
+}
+
 export interface Employee {
   id: string;
   profileId: string | null;

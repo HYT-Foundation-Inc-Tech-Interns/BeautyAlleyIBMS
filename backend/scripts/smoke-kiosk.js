@@ -45,6 +45,7 @@ const TOKEN_SHAPE = /^kiosk\.[0-9a-f-]{36}\.[A-Za-z0-9_-]{43}$/;
 
 const userIds = [];
 const deviceIds = [];
+const employeeIds = [];
 let failures = 0;
 
 function check(label, condition, detail) {
@@ -244,6 +245,147 @@ async function main() {
     !keys.has("token") && !keys.has("secret") && !keys.has("tokenHash") && !keys.has("token_hash"),
     [...keys].join(",")
   );
+
+  // --- door PINs -------------------------------------------------------
+  //
+  // The fixtures are inactive on purpose: they never appear on the public
+  // "meet the team" list, not even for the second this takes, and the PIN
+  // endpoints do not care about is_active (a person can be given a PIN before
+  // their first shift).
+  const pinHolders = [];
+  for (const name of ["Smoke PIN One", "Smoke PIN Two"]) {
+    const made = await admin
+      .from("employees")
+      .insert({ full_name: name, is_active: false })
+      .select("id")
+      .single();
+    if (made.error) throw new Error(`create employee: ${made.error.message}`);
+    employeeIds.push(made.data.id);
+    pinHolders.push(made.data.id);
+  }
+  const [first, second] = pinHolders;
+
+  const noPin = await api(`/api/v1/employees/${first}/pin`, { token: adminToken });
+  check("a new employee has no PIN", noPin.status === 200 && noPin.json?.data?.hasPin === false);
+  check("the PIN read names the person", noPin.json?.data?.employeeId === first);
+
+  const tooShort = await api(`/api/v1/employees/${first}/pin`, {
+    method: "PUT",
+    token: adminToken,
+    body: { pin: "12" },
+  });
+  check("a two-digit PIN is refused", tooShort.status === 400, `got ${tooShort.status}`);
+
+  const letters = await api(`/api/v1/employees/${first}/pin`, {
+    method: "PUT",
+    token: adminToken,
+    body: { pin: "12a4" },
+  });
+  check("a PIN with letters is refused", letters.status === 400, `got ${letters.status}`);
+
+  const tooLong = await api(`/api/v1/employees/${first}/pin`, {
+    method: "PUT",
+    token: adminToken,
+    body: { pin: "1234567" },
+  });
+  check("a seven-digit PIN is refused", tooLong.status === 400, `got ${tooLong.status}`);
+
+  const set = await api(`/api/v1/employees/${first}/pin`, {
+    method: "PUT",
+    token: adminToken,
+    body: { pin: "4821" },
+  });
+  check("PUT /employees/:id/pin is 200 for ADMIN", set.status === 200, `got ${set.status}`);
+  check("the person now has a PIN", set.json?.data?.hasPin === true);
+  check("the PIN is not echoed back", JSON.stringify(set.json ?? {}).indexOf("4821") === -1);
+  check(
+    "the digest is not echoed back either",
+    !Object.keys(set.json?.data ?? {}).some((k) => /lookup|digest|hash/i.test(k)),
+    Object.keys(set.json?.data ?? {}).join(",")
+  );
+
+  const readBack = await api(`/api/v1/employees/${first}/pin`, { token: adminToken });
+  check("the PIN survives a re-read", readBack.json?.data?.hasPin === true);
+
+  const stored = await admin
+    .from("staff_pins")
+    .select("pin_lookup")
+    .eq("employee_id", first)
+    .maybeSingle();
+  check(
+    "the database holds a 64-hex digest, not the digits",
+    /^[0-9a-f]{64}$/.test(stored.data?.pin_lookup ?? ""),
+    String(stored.data?.pin_lookup).slice(0, 12)
+  );
+  check("the digest is not the PIN", stored.data?.pin_lookup !== "4821");
+
+  const audit = await admin
+    .from("audit_logs")
+    .select("id, action")
+    .eq("entity", "employees")
+    .eq("entity_id", first)
+    .eq("action", "staff.pin_set");
+  check("setting a PIN is audited", (audit.data ?? []).length >= 1);
+
+  const taken = await api(`/api/v1/employees/${second}/pin`, {
+    method: "PUT",
+    token: adminToken,
+    body: { pin: "4821" },
+  });
+  check(
+    "two people cannot share a PIN",
+    taken.status === 409 && taken.code === "PIN_TAKEN",
+    `got ${taken.status} ${taken.code}`
+  );
+
+  const other = await api(`/api/v1/employees/${second}/pin`, {
+    method: "PUT",
+    token: adminToken,
+    body: { pin: "7391" },
+  });
+  check("a different PIN is accepted for the second person", other.status === 200);
+
+  const changed = await api(`/api/v1/employees/${first}/pin`, {
+    method: "PUT",
+    token: adminToken,
+    body: { pin: "9074" },
+  });
+  check("a PIN can be replaced", changed.status === 200 && changed.json?.data?.hasPin === true);
+
+  const reused = await api(`/api/v1/employees/${second}/pin`, {
+    method: "PUT",
+    token: adminToken,
+    body: { pin: "4821" },
+  });
+  check("the replaced PIN is free for someone else to use", reused.status === 200, `got ${reused.status}`);
+
+  const asStylist = await api(`/api/v1/employees/${first}/pin`, { token: employeeToken });
+  check("an EMPLOYEE cannot read a door PIN", asStylist.status === 403, `got ${asStylist.status}`);
+
+  const unknownEmployee = await api(`/api/v1/employees/${crypto.randomUUID()}/pin`, {
+    token: adminToken,
+  });
+  check(
+    "an unknown employee is 404",
+    unknownEmployee.status === 404 && unknownEmployee.code === "EMPLOYEE_NOT_FOUND",
+    `got ${unknownEmployee.status} ${unknownEmployee.code}`
+  );
+
+  const cleared = await api(`/api/v1/employees/${first}/pin`, {
+    method: "DELETE",
+    token: adminToken,
+  });
+  check("DELETE /employees/:id/pin is 200", cleared.status === 200 && cleared.json?.data?.hasPin === false);
+
+  const clearedAgain = await api(`/api/v1/employees/${first}/pin`, {
+    method: "DELETE",
+    token: adminToken,
+  });
+  check(
+    "clearing twice is a success, not a 404",
+    clearedAgain.status === 200 && clearedAgain.json?.data?.hasPin === false,
+    `got ${clearedAgain.status}`
+  );
 }
 
 main()
@@ -273,6 +415,25 @@ main()
         await admin.from("kiosk_devices").delete().in("id", deviceIds);
       } catch {
         /* reported below as a non-zero exit only if an assertion already failed */
+      }
+    }
+
+    // The employees go with their PINs (`on delete cascade`), so only the audit
+    // rows need clearing by hand.
+    if (employeeIds.length > 0) {
+      try {
+        await admin
+          .from("audit_logs")
+          .delete()
+          .eq("entity", "employees")
+          .in("entity_id", employeeIds);
+      } catch {
+        /* as above */
+      }
+      try {
+        await admin.from("employees").delete().in("id", employeeIds);
+      } catch {
+        /* as above */
       }
     }
     for (const id of userIds) {
