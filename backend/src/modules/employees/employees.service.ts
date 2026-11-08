@@ -112,6 +112,21 @@ export const employeesService = {
     return this.getById(id);
   },
 
+  /**
+   * The weekly shift pattern, for the owner's rota editor.
+   *
+   * There was no read for these at all: `GET /employees/:id` is the public
+   * shape and deliberately omits them, so the only way to see a stylist's
+   * hours was to query the database. The write existed and the screen did not,
+   * which is why every stylist created through the console sat on the house
+   * pattern until someone edited the table by hand.
+   */
+  async workingHours(id: string) {
+    await this.getById(id);
+    const hours = await employeesRepository.workingHoursFor(id);
+    return hours.map(toWorkingHourDto);
+  },
+
   async setWorkingHours(
     id: string,
     hours: { weekday: number; startTime: string; endTime: string }[]

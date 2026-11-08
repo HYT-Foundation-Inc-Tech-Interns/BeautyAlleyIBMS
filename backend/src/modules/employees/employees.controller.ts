@@ -51,6 +51,11 @@ export const employeesController = {
     res.status(200).json({ data: result });
   },
 
+  async workingHours(req: Request, res: Response) {
+    const result = await employeesService.workingHours(req.params.id);
+    res.status(200).json({ data: result });
+  },
+
   async setWorkingHours(req: Request, res: Response) {
     const result = await employeesService.setWorkingHours(req.params.id, req.body.hours);
     res.status(200).json({ data: result });

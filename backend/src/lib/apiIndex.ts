@@ -107,6 +107,7 @@ export const API_GROUPS: ApiGroup[] = [
       { method: "PATCH", path: "/api/v1/employees/:id", auth: "ADMIN", summary: "Update a stylist." },
       { method: "DELETE", path: "/api/v1/employees/:id", auth: "ADMIN", summary: "Deactivate a stylist." },
       { method: "PUT", path: "/api/v1/employees/:id/services", auth: "ADMIN", summary: "Set which services the stylist is qualified for." },
+      { method: "GET", path: "/api/v1/employees/:id/working-hours", auth: "ADMIN", summary: "The weekly shift pattern, for the rota editor." },
       { method: "PUT", path: "/api/v1/employees/:id/working-hours", auth: "ADMIN", summary: "Replace the weekly shift pattern." },
       { method: "GET", path: "/api/v1/employees/:id/time-off", auth: "OPERATIONS", summary: "Leave entries for a stylist." },
       { method: "GET", path: "/api/v1/employees/leave", auth: "DESK", summary: "The rota board: per day, who is scheduled, who is off and what is left. ?from=&to=YYYY-MM-DD, up to 63 days." },

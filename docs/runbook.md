@@ -528,4 +528,31 @@ visible, twice:
 Nothing is cancelled automatically. Moving or calling the guest stays a human
 act.
 
+### Where the weekly pattern is edited
+
+**Team → a stylist's card → Show details → Weekly hours.** Seven days, each
+holding one or more windows; a day with no window is *Closed*. A second window
+on the same day is a split shift, which is why the editor shows every window
+rather than the first one: the write is a replace, so anything the screen
+omits is deleted.
+
+- **Saving replaces the whole week** through `PUT /employees/:id/working-hours`
+  (ADMIN). The server validates ordering and overlap before it deletes, so a
+  bad draft cannot leave a stylist with no rota at all.
+- **An empty week is legal and means unbookable.** `get_available_slots`
+  inner-joins `working_hours`, so no windows is not "offered with no times" —
+  the stylist is absent from the grid. The editor refuses to save that state;
+  deactivating the stylist is the honest way to take them off the floor.
+- **A new stylist starts on the house pattern** — Monday to Saturday,
+  09:00–18:00 — written by `POST /employees`. That is the branch's opening
+  hours, not a guess about the person.
+- **Saving re-reads the leave board**, because its *scheduled* count is
+  "whose pattern includes this weekday". A rota change and a stale coverage
+  strip would contradict each other.
+
+Reading the pattern is `GET /employees/:id/working-hours` (ADMIN). It is a
+separate call because the public `GET /employees/:id` omits `workingHours` on
+purpose — hours are an internal scheduling detail with no RLS policy for a
+browser.
+
 Still missing: a request does not email anyone.

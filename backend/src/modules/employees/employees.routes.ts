@@ -83,6 +83,18 @@ employeesRouter.put(
   asyncHandler(employeesController.setServices)
 );
 
+/*
+ * The rota is read and written by the owner. The read is here because the
+ * public `GET /employees/:id` omits `workingHours` on purpose - they are an
+ * internal scheduling detail - and without it the editor had nothing to load.
+ */
+employeesRouter.get(
+  "/:id/working-hours",
+  ...admin,
+  validate({ params: idParamSchema }),
+  asyncHandler(employeesController.workingHours)
+);
+
 employeesRouter.put(
   "/:id/working-hours",
   ...admin,

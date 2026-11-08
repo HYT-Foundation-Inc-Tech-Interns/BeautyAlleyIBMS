@@ -19,9 +19,9 @@ without one.
 | Role | Can open | The job |
 |---|---|---|
 | **Administrator** | Everything | Runs the business: prices, treatments, team, promos, client records, reports |
-| **Concierge** | Overview, Bookings, Promos, Scan arrivals, Tasks, Board | Runs the desk: takes bookings, receives guests, assigns work |
-| **Employee** | Overview, Bookings (own chair), Check-in, My tasks, Attendance | Works the floor: their appointments, the door, their own clock |
-| **Client** | My bookings | Sees their own appointments and passes |
+| **Concierge** | Overview, Bookings, Promo codes, Arrivals, Task board, Insights, Settings | Runs the desk: takes bookings, receives guests, assigns work |
+| **Employee** | Overview, Bookings (own chair), Arrivals, My tasks, Attendance, Settings | Works the floor: their appointments, the door, their own clock |
+| **Client** | My bookings, Settings | Sees their own appointments and passes |
 
 If a screen is missing from the sidebar, that role does not have it — the API
 would refuse anyway. Nothing is hidden that could be opened by guessing a link.
@@ -88,12 +88,14 @@ reissue or check in from there.
 7. Confirm → the pass appears. **Print it** and hand it over. No payment is taken
    at this point.
 
-**Receiving a guest** — `Scan arrivals`, scan or paste the token, confirm.
-**Assigning work** — `Tasks`: write the task, choose the assignee, save. It shows
+**Receiving a guest** — `Arrivals`: scan the pass, or paste the reference, then
+confirm. A mis-scan cannot admit the wrong guest, because the name is shown
+before anything is written.
+**Assigning work** — `Task board`: write the task, choose the assignee, save. It shows
 up on their phone immediately; there is only one copy of a task.
-**Proposing a promo** — `Promos → propose`. It is inert until the administrator
+**Proposing a promo** — `Promo codes → propose`. It is inert until the administrator
 approves it; the row tells you which state it is in.
-**The board** — `Board` is the owner's report, readable by the desk: revenue,
+**The week** — `Insights` is the owner's report, readable by the desk: revenue,
 completion, no-shows, the week's curve, top treatments.
 
 ## 6. The floor — a stylist's day
@@ -116,8 +118,11 @@ on the bookings that sold it.
 
 **Team** (`Team`) — add a person, give them a role and the treatments they
 perform. Two things make a stylist bookable: they must perform the treatment,
-and they must have **working hours**. A new stylist with no rota will not appear
-in the booking picker — set their week, and they appear immediately.
+and they must have **working hours**. A new stylist starts on the house pattern
+— Monday to Saturday, 09:00–18:00 — and the week is changed per person under
+**Show details → Weekly hours**: one or more windows a day, split shifts
+included. A closed day has no slots, and a stylist with no windows at all is
+offered nowhere. Saving the week also updates the leave board's cover counts.
 
 **Promos** (`Promos`) — proposals from the desk arrive as pending. Approve to make
 a code live, or reject with a reason. Retiring a code stops new redemptions and
@@ -127,7 +132,7 @@ keeps the history.
 exportable to CSV with identical numbers. Deactivating is a soft delete: the
 history stays, the client leaves the active list.
 
-**Board** (`Board`) — the monitoring view. Tiles are draggable and the layout is
+**Insights** (`Insights`) — the monitoring view. Tiles are draggable and the layout is
 remembered on your device. Every number is read live from the database.
 
 ## 8. When something looks wrong

@@ -8,6 +8,8 @@
 
 Also shipped the same day, ahead of Phase 2: a Settings page (own-password change, admin account recovery, payment-provider options) and the Board → Insights rename. Phase 2 is now complete: arrivals is one surface with two modes, Overview is the staff Today page, Tasks and My Tasks share one card, and booking/client/pass cross-links work. Next is Phase 3.
 
+**Status, 8 November 2026:** Phase 3 has not started. Three Phase 5 items shipped first because they were the ones blocking daily use: booking deposits (recorded and settled by hand, no gateway), reminder emails from a queued outbox, and leave with an approval, a clash list and a coverage board. The working-hours editor landed on 8 November — the weekly grid no longer caps capacity with no screen to change it. Next is the door kiosk.
+
 ---
 
 ## 1. The design rule

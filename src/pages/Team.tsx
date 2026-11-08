@@ -5,11 +5,14 @@
  *
  * Two things worth stating, because the screen could easily imply otherwise.
  *
- * **Working hours are not shown, because the API does not expose them.**
- * `GET /employees/:id` always passes `publicView = true`, so the response
- * carries `serviceIds` but no `workingHours` — those are an internal
- * scheduling detail with no RLS policy for a browser. Showing an empty shift
- * table would look like a data problem; omitting it and saying so does not.
+ * **Working hours are read separately, because the public shape omits them.**
+ * `GET /employees/:id` always passes `publicView = true`, so it carries
+ * `serviceIds` but no `workingHours` — those are an internal scheduling detail
+ * with no RLS policy for a browser. The editor therefore reads
+ * `GET /employees/:id/working-hours`, which sits behind the same admin guard as
+ * the write, and only while a card is open. An empty answer is a real state:
+ * `get_available_slots` inner-joins the table, so no windows means the stylist
+ * is offered nowhere.
  *
  * **Issuing a login is the only way to create a team account.** The role is
  * written to `app_metadata`, which only the service role can set, so this goes
@@ -28,6 +31,7 @@ import {
   Link2,
   Loader2,
   Pencil,
+  Plus,
   RefreshCw,
   Scissors,
   Sparkles,
@@ -40,7 +44,7 @@ import {
 import { branchDay, branchTime, branchToday, cn, shiftDayKey } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { useAsync } from "@/lib/useAsync";
-import type { Employee, LeavePerson, Service, StaffLogin } from "@/lib/api-types";
+import type { Employee, LeavePerson, Service, StaffLogin, WorkingHour } from "@/lib/api-types";
 import { ROLE_LABEL } from "@/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,6 +86,23 @@ export default function Team() {
     return api.employees.get(expanded);
   });
 
+  /*
+   * The rota, read only while a card is open. It is a second request because
+   * the public employee shape does not carry hours - see the file header.
+   * Keyed on the person rather than a nonce, so a reload after a save keeps
+   * the key and the open editor does not lose its draft.
+   */
+  const hours = useAsync(`team:hours:${expanded}:${expandedActive}`, async () => {
+    if (!expanded || !expandedActive) return [];
+    return api.employees.workingHours(expanded);
+  });
+
+  /*
+   * The leave board's coverage is computed from these windows, so a save has
+   * to reach it: it is rendered above the cards and owns its own fetch.
+   */
+  const [rotaVersion, setRotaVersion] = React.useState(0);
+
   const serviceName = (id: string) =>
     catalogue.data?.find((s) => s.id === id)?.name ?? "Unknown service";
 
@@ -104,6 +125,32 @@ export default function Team() {
     } catch (err) {
       setActionError(
         err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not save those qualifications"),
+      );
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /*
+   * Hours are a replace too: the body is every window on screen. The card
+   * reloads its own pattern, and the leave board is asked to re-read, because
+   * its "scheduled" count is exactly "whose pattern includes this weekday".
+   */
+  async function saveHours(
+    person: Employee,
+    windows: { weekday: number; startTime: string; endTime: string }[],
+  ): Promise<boolean> {
+    setBusyId(person.id);
+    setActionError(null);
+    try {
+      await api.employees.setWorkingHours(person.id, windows);
+      hours.reload();
+      setRotaVersion((v) => v + 1);
+      return true;
+    } catch (err) {
+      setActionError(
+        err instanceof ApiError ? err : new ApiError(0, "UNKNOWN", "Could not save those hours"),
       );
       return false;
     } finally {
@@ -207,7 +254,7 @@ export default function Team() {
         />
       </div>
 
-      <LeavePanel />
+      <LeavePanel refreshKey={rotaVersion} />
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <button
@@ -250,12 +297,14 @@ export default function Team() {
               open={expanded === person.id}
               onToggle={() => setExpanded(expanded === person.id ? null : person.id)}
               detail={expanded === person.id ? detail : null}
+              hours={expanded === person.id ? hours : null}
               serviceName={serviceName}
               services={catalogue.data ?? []}
               logins={logins.data ?? []}
               busy={busyId === person.id}
               onToggleActive={() => void toggleActive(person)}
               onSaveServices={(ids) => saveServices(person, ids)}
+              onSaveHours={(windows) => saveHours(person, windows)}
               onLinkLogin={(profileId) => linkLogin(person, profileId)}
             />
           ))}
@@ -294,7 +343,7 @@ function leaveRange(startsAt: string, endsAt: string) {
  * the ones on approved leave is more than zero - a rule that belongs in one
  * place, because the desk and the owner must not disagree about Thursday.
  */
-function LeavePanel() {
+function LeavePanel({ refreshKey = 0 }: { refreshKey?: number }) {
   const from = branchToday();
   const to = shiftDayKey(from, 13);
   const [nonce, setNonce] = React.useState(0);
@@ -302,7 +351,12 @@ function LeavePanel() {
   const [error, setError] = React.useState<ApiError | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
 
-  const board = useAsync("team:leave:" + from + ":" + nonce, () =>
+  /*
+   * `refreshKey` is the page telling this panel that a weekly pattern changed.
+   * Coverage is "whose pattern includes this weekday", so the numbers here are
+   * wrong the moment a rota is saved, and the panel owns its own fetch.
+   */
+  const board = useAsync("team:leave:" + from + ":" + nonce + ":" + refreshKey, () =>
     api.employees.leave({ from, to }),
   );
 
@@ -510,24 +564,30 @@ function EmployeeCard({
   open,
   onToggle,
   detail,
+  hours,
   serviceName,
   services,
   logins,
   busy,
   onToggleActive,
   onSaveServices,
+  onSaveHours,
   onLinkLogin,
 }: {
   person: Employee;
   open: boolean;
   onToggle: () => void;
   detail: { data: Employee | null; error: ApiError | null; initial: boolean } | null;
+  hours: { data: WorkingHour[] | null; error: ApiError | null; initial: boolean } | null;
   serviceName: (id: string) => string;
   services: Service[];
   logins: StaffLogin[];
   busy: boolean;
   onToggleActive: () => void;
   onSaveServices: (serviceIds: string[]) => Promise<boolean>;
+  onSaveHours: (
+    windows: { weekday: number; startTime: string; endTime: string }[],
+  ) => Promise<boolean>;
   onLinkLogin: (profileId: string) => Promise<boolean>;
 }) {
   return (
@@ -577,7 +637,7 @@ function EmployeeCard({
           ) : detail?.error ? (
             <ErrorNote error={detail.error} />
           ) : detail?.initial ? (
-            <Loading label="Loading qualifications…" className="py-6" />
+            <Loading label="Loading the record…" className="py-6" />
           ) : detail?.data ? (
             <>
               {!person.profileId && (
@@ -590,10 +650,13 @@ function EmployeeCard({
                 busy={busy}
                 onSave={onSaveServices}
               />
-              <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-                Shift patterns are not exposed by the API; they are an internal
-                scheduling detail.
-              </p>
+              <WeeklyHours
+                hours={hours?.data ?? null}
+                loading={hours?.initial ?? false}
+                error={hours?.error ?? null}
+                busy={busy}
+                onSave={onSaveHours}
+              />
             </>
           ) : null}
         </div>
@@ -606,7 +669,7 @@ function EmployeeCard({
           aria-expanded={open}
           className="flex flex-1 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
         >
-          {open ? "Hide qualifications" : "Show qualifications"}
+          {open ? "Hide details" : "Show details"}
           <ChevronDown
             className={cn("size-3.5 shrink-0 transition-transform duration-200", open && "rotate-180")}
           />
@@ -872,6 +935,342 @@ function Qualifications({
         </p>
       )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * The weekly rota
+ * ------------------------------------------------------------------ */
+
+/**
+ * The week as seven days of windows, Monday first.
+ *
+ * The column is `weekday` 0-6 with Sunday at 0 (that is what
+ * `extract(dow …)` in `get_available_slots` returns), so the mapping lives
+ * here once instead of at every use.
+ *
+ * A day can hold more than one window, because a split shift is a normal
+ * salon pattern rather than an edge case. The editor has to keep them all:
+ * the write is a replace, so showing only the first window would delete the
+ * second one on save.
+ */
+const WEEKDAYS = [
+  { value: 1, short: "Mon", long: "Monday" },
+  { value: 2, short: "Tue", long: "Tuesday" },
+  { value: 3, short: "Wed", long: "Wednesday" },
+  { value: 4, short: "Thu", long: "Thursday" },
+  { value: 5, short: "Fri", long: "Friday" },
+  { value: 6, short: "Sat", long: "Saturday" },
+  { value: 0, short: "Sun", long: "Sunday" },
+] as const;
+
+type Window = { startTime: string; endTime: string };
+type Week = Record<number, Window[]>;
+type HoursInput = { weekday: number; startTime: string; endTime: string }[];
+
+function emptyWeek(): Week {
+  return { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+}
+
+function weekFrom(hours: WorkingHour[]): Week {
+  const week = emptyWeek();
+  for (const hour of hours) {
+    week[hour.weekday] = [
+      ...(week[hour.weekday] ?? []),
+      { startTime: hour.startTime, endTime: hour.endTime },
+    ];
+  }
+  return week;
+}
+
+/** "HH:MM" -> minutes, for comparisons that do not care about midnight. */
+function minutesOf(hhmm: string): number {
+  const [hours, mins] = hhmm.split(":").map(Number);
+  return hours * 60 + mins;
+}
+
+function weekMinutes(week: Week): number {
+  return Object.values(week)
+    .flat()
+    .reduce((total, window) => total + Math.max(0, minutesOf(window.endTime) - minutesOf(window.startTime)), 0);
+}
+
+function hoursLabel(mins: number): string {
+  const hours = mins / 60;
+  return (Number.isInteger(hours) ? String(hours) : hours.toFixed(1)) + " h";
+}
+
+/**
+ * What would be wrong with this draft, in the order the server would say it.
+ *
+ * The overlap check is pairwise rather than "sort, then compare neighbours":
+ * a window added at the top of a day is not sorted, and the two must give the
+ * same answer. The server checks the same thing again - this is so the button
+ * can be disabled before the round trip, not instead of it.
+ */
+function weekProblem(week: Week): string | null {
+  const windows = Object.values(week).flat();
+  if (windows.length === 0) {
+    return "Add at least one window — with none, the booking engine offers this stylist nowhere.";
+  }
+  if (windows.length > 21) {
+    return "At most 21 windows a week. That is the server's limit.";
+  }
+  for (const day of WEEKDAYS) {
+    const list = week[day.value] ?? [];
+    for (const window of list) {
+      if (minutesOf(window.endTime) <= minutesOf(window.startTime)) {
+        return day.long + ": the end time has to be after the start.";
+      }
+    }
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        if (
+          minutesOf(list[i].startTime) < minutesOf(list[j].endTime) &&
+          minutesOf(list[j].startTime) < minutesOf(list[i].endTime)
+        ) {
+          return day.long + ": two windows overlap.";
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The week the booking engine reads.
+ *
+ * Read view: seven lines, closed days muted, and the weekly total — which is
+ * the honest answer to "what does this pattern cost me in bookable time".
+ * Edit view: the same seven lines as inputs. Saving replaces the whole week,
+ * so the draft starts from every stored window, split shifts included.
+ */
+function WeeklyHours({
+  hours,
+  loading,
+  error,
+  busy,
+  onSave,
+}: {
+  hours: WorkingHour[] | null;
+  loading: boolean;
+  error: ApiError | null;
+  busy: boolean;
+  onSave: (windows: HoursInput) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [draft, setDraft] = React.useState<Week>(emptyWeek);
+
+  const stored = React.useMemo(() => weekFrom(hours ?? []), [hours]);
+
+  /*
+   * Same reason as Qualifications: the card is not remounted between people,
+   * so the draft follows the record. Keyed on the fetched week, which is a new
+   * array after every save - so a save closes the editor instead of leaving a
+   * draft that no longer matches what the server holds.
+   */
+  React.useEffect(() => {
+    setDraft(stored);
+    setEditing(false);
+  }, [stored]);
+
+  function setWindow(weekday: number, index: number, patch: Partial<Window>) {
+    setDraft((prev) => ({
+      ...prev,
+      [weekday]: prev[weekday].map((window, i) => (i === index ? { ...window, ...patch } : window)),
+    }));
+  }
+
+  function addWindow(weekday: number) {
+    setDraft((prev) => ({
+      ...prev,
+      [weekday]: [...prev[weekday], { startTime: "09:00", endTime: "18:00" }],
+    }));
+  }
+
+  function removeWindow(weekday: number, index: number) {
+    setDraft((prev) => ({
+      ...prev,
+      [weekday]: prev[weekday].filter((_, i) => i !== index),
+    }));
+  }
+
+  const problem = weekProblem(draft);
+  const draftMinutes = weekMinutes(draft);
+  const draftDays = WEEKDAYS.filter((day) => (draft[day.value] ?? []).length > 0).length;
+  const storedMinutes = weekMinutes(stored);
+
+  async function save() {
+    if (problem) return;
+    setSaving(true);
+    const windows: HoursInput = WEEKDAYS.flatMap((day) =>
+      (draft[day.value] ?? []).map((window) => ({ weekday: day.value, ...window })),
+    );
+    const ok = await onSave(windows);
+    setSaving(false);
+    if (ok) setEditing(false);
+  }
+
+  return (
+    <div className="mt-5 border-t border-border/60 pt-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Weekly hours
+        </p>
+        {!editing && !loading && !error && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11.5px]"
+            onClick={() => {
+              // A cancelled draft must not reappear as the next one.
+              setDraft(stored);
+              setEditing(true);
+            }}
+          >
+            <Pencil className="size-3" />
+            Edit
+          </Button>
+        )}
+      </div>
+
+      {loading ? (
+        <Loading label="Reading the rota…" className="py-4" />
+      ) : error ? (
+        <ErrorNote error={error} className="mt-2" />
+      ) : editing ? (
+        <>
+          <div className="mt-2 space-y-1">
+            {WEEKDAYS.map((day) => {
+              const list = draft[day.value] ?? [];
+              return (
+                <div key={day.value} className="flex items-start gap-2">
+                  <span className="mt-1.5 w-8 shrink-0 text-[11px] font-medium text-muted-foreground">
+                    {day.short}
+                  </span>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {list.length === 0 ? (
+                      <p className="py-1.5 text-[11.5px] text-muted-foreground">Closed</p>
+                    ) : (
+                      list.map((window, index) => (
+                        <div key={index} className="flex items-center gap-1">
+                          <input
+                            type="time"
+                            aria-label={day.long + " start"}
+                            value={window.startTime}
+                            onChange={(event) =>
+                              event.target.value &&
+                              setWindow(day.value, index, { startTime: event.target.value })
+                            }
+                            className="h-8 w-[94px] rounded-lg border border-border bg-card px-1.5 text-[12px] tabular-nums outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                          />
+                          <span className="text-[11px] text-muted-foreground">–</span>
+                          <input
+                            type="time"
+                            aria-label={day.long + " end"}
+                            value={window.endTime}
+                            onChange={(event) =>
+                              event.target.value &&
+                              setWindow(day.value, index, { endTime: event.target.value })
+                            }
+                            className="h-8 w-[94px] rounded-lg border border-border bg-card px-1.5 text-[12px] tabular-nums outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                          />
+                          <button
+                            type="button"
+                            aria-label={"Remove the " + day.long + " window " + (index + 1)}
+                            onClick={() => removeWindow(day.value, index)}
+                            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-clay/10 hover:text-clay"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={"Add a window on " + day.long}
+                    onClick={() => addWindow(day.value)}
+                    disabled={Object.values(draft).flat().length >= 21}
+                    className="mt-0.5 shrink-0 rounded-md border border-border p-1 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-40"
+                  >
+                    <Plus className="size-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <p
+            className={cn(
+              "mt-2 text-[11px] leading-relaxed",
+              problem ? "text-clay" : "text-muted-foreground",
+            )}
+          >
+            {problem ??
+              hoursLabel(draftMinutes) +
+                " a week across " +
+                draftDays +
+                (draftDays === 1 ? " day" : " days") +
+                ". Slots are only offered inside these windows."}
+          </p>
+
+          <div className="mt-3 flex items-center gap-1.5">
+            <Button type="button" size="sm" disabled={busy || saving || !!problem} onClick={() => void save()}>
+              {busy || saving ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Check className="size-3.5" />
+              )}
+              Save
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={busy || saving}
+              onClick={() => setEditing(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mt-2 overflow-hidden rounded-lg border border-border/70">
+            {WEEKDAYS.map((day, index) => {
+              const list = stored[day.value] ?? [];
+              return (
+                <div
+                  key={day.value}
+                  className={cn(
+                    "flex items-baseline gap-3 px-2.5 py-[5px] text-[11.5px]",
+                    index > 0 && "border-t border-border/50",
+                  )}
+                >
+                  <span className="w-8 shrink-0 font-medium text-muted-foreground">{day.short}</span>
+                  <span
+                    className={cn("tabular-nums", list.length === 0 && "text-muted-foreground")}
+                  >
+                    {list.length === 0
+                      ? "Closed"
+                      : list.map((window) => window.startTime + "–" + window.endTime).join(", ")}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            {storedMinutes === 0
+              ? "No windows at all — the booking engine offers this stylist nowhere."
+              : hoursLabel(storedMinutes) +
+                " a week. Slots are only offered inside these windows; a closed day has none."}
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 

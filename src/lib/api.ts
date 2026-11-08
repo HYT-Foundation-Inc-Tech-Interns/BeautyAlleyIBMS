@@ -73,6 +73,7 @@ import type {
   TaskCounts,
   TaskPriority,
   TaskStatus,
+  WorkingHour,
 } from "./api-types";
 
 /**
@@ -460,6 +461,29 @@ export const api = {
      */
     setServices: (id: string, serviceIds: string[]) =>
       request<Employee>("PUT", `/api/v1/employees/${id}/services`, { body: { serviceIds } }),
+
+    /**
+     * The weekly shift pattern. Admin only, and read separately from the
+     * employee record: the public shape omits it on purpose.
+     *
+     * An empty list is legal and means "not offered by the booking engine at
+     * all", because `get_available_slots` inner-joins `working_hours`.
+     */
+    workingHours: (id: string) =>
+      request<WorkingHour[]>("GET", `/api/v1/employees/${id}/working-hours`),
+
+    /**
+     * Replace the whole pattern in one call - the body is every window, not a
+     * patch. The server validates before it deletes, so a bad window cannot
+     * leave the stylist with no rota at all.
+     */
+    setWorkingHours: (
+      id: string,
+      hours: { weekday: number; startTime: string; endTime: string }[],
+    ) =>
+      request<Employee>("PUT", `/api/v1/employees/${id}/working-hours`, {
+        body: { hours },
+      }),
 
     /**
      * One stylist's progress against the daily quota. `date` is a plain
