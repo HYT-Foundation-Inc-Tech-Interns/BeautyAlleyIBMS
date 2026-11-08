@@ -651,10 +651,17 @@ export interface Database {
           id: string;
           booking_id: string;
           staff_id: string | null;
+          /** Migration 59. The door screen that admitted the guest, if any. */
+          kiosk_id: string | null;
           checked_in_at: string;
         };
-        Insert: { id?: string; booking_id: string; staff_id?: string | null };
-        Update: { staff_id?: string | null };
+        Insert: {
+          id?: string;
+          booking_id: string;
+          staff_id?: string | null;
+          kiosk_id?: string | null;
+        };
+        Update: { staff_id?: string | null; kiosk_id?: string | null };
         Relationships: [];
       };
 
@@ -1204,6 +1211,10 @@ export interface Database {
           p_staff_id?: string | null;
           p_actor?: string | null;
           p_window_minutes?: number;
+          /** Migration 41. Skips the early-arrival window only. */
+          p_force?: boolean;
+          /** Migration 59. The door screen that admitted the guest. */
+          p_kiosk_id?: string | null;
         };
         Returns: {
           bookingId: string;
@@ -1211,6 +1222,7 @@ export interface Database {
           status: BookingStatus;
           checkedInAt: string;
           checkinId: string;
+          early: boolean;
         };
       };
       /** Migration 52. Clients who visited and did not rebook, with the rebook rate. */
@@ -1310,6 +1322,20 @@ export interface Database {
       /** Migration 58. Remove a door PIN. Idempotent. */
       clear_staff_pin: {
         Args: { p_employee_id: string; p_actor?: string | null };
+        Returns: Json;
+      };
+      /**
+       * Migration 59. Check a door PIN and throttle the device. Returns a
+       * verdict - `{ ok: false, reason }` - rather than raising, so a wrong PIN
+       * is still counted. Shape is `PinVerdict` in the kiosk repository.
+       */
+      verify_staff_pin: {
+        Args: { p_kiosk_id: string; p_pin_lookup: string };
+        Returns: Json;
+      };
+      /** Migration 59. The narrow arrival summary a door screen may see. */
+      kiosk_arrival: {
+        Args: { p_jti: string };
         Returns: Json;
       };
     };

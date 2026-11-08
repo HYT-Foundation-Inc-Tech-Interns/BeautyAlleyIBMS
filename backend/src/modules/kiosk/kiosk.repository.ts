@@ -24,6 +24,37 @@ type DeviceJson = {
   revokedAt: string | null;
 };
 
+/**
+ * The verdict from `verify_staff_pin`.
+ *
+ * A discriminated union rather than an exception, because the throttle has to
+ * be *recorded* on a miss and an exception would roll the counter back. The
+ * database decides; this type is the whole of its vocabulary.
+ */
+export type PinVerdict =
+  | { ok: true; employeeId: string; fullName: string }
+  | { ok: false; reason: "INVALID"; attemptsLeft: number }
+  | { ok: false; reason: "LOCKED"; retryAfterSeconds: number }
+  | { ok: false; reason: "INACTIVE"; employeeId: string };
+
+/**
+ * What `kiosk_arrival` returns. Deliberately narrow: this is what a screen in a
+ * public lobby may know. No phone number, no client id, no money, no notes.
+ */
+export interface ArrivalSummary {
+  reference: string;
+  status: string;
+  startTime: string;
+  endTime: string;
+  guestName: string | null;
+  staffName: string | null;
+  services: string[];
+  passUsed: boolean;
+  passRevoked: boolean;
+  passExpiresAt: string;
+  depositDue: boolean;
+}
+
 export const kioskRepository = {
   /**
    * Every device, revoked ones included.
@@ -83,5 +114,32 @@ export const kioskRepository = {
 
     if (error) throw error;
     return data as unknown as DeviceJson;
+  },
+
+  /**
+   * Check a PIN and throttle the device in one transaction.
+   *
+   * The lookup is computed in the service from the pepper; nothing here sees
+   * the digits. The function takes the device id so the counter is per screen,
+   * and returns a verdict rather than raising so a miss is still counted.
+   */
+  async verifyPin(kioskId: string, pinLookup: string): Promise<PinVerdict> {
+    const db = requireServiceRole();
+    const { data, error } = await db.rpc("verify_staff_pin", {
+      p_kiosk_id: kioskId,
+      p_pin_lookup: pinLookup,
+    });
+
+    if (error) throw error;
+    return data as unknown as PinVerdict;
+  },
+
+  /** The arrival summary for one pass. Raises QR_INVALID for an unknown jti. */
+  async arrival(jti: string): Promise<ArrivalSummary> {
+    const db = requireServiceRole();
+    const { data, error } = await db.rpc("kiosk_arrival", { p_jti: jti });
+
+    if (error) throw error;
+    return data as unknown as ArrivalSummary;
   },
 };

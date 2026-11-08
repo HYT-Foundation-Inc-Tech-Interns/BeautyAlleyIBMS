@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { kioskController } from "./kiosk.controller";
-import { createKioskDeviceSchema, kioskDeviceParamSchema } from "./kiosk.schemas";
+import { createKioskDeviceSchema, kioskDeviceParamSchema, kioskCheckInSchema, kioskLookupSchema } from "./kiosk.schemas";
 import { authenticate } from "../../middleware/authenticate";
 import { authenticateDevice } from "../../middleware/authenticateDevice";
 import { requireRole } from "../../middleware/requireRole";
@@ -23,6 +23,28 @@ import { OWNER } from "../../lib/roleGroups";
 export const kioskRouter = Router();
 
 kioskRouter.get("/me", authenticateDevice, asyncHandler(kioskController.me));
+
+/**
+ * The arrival desk.
+ *
+ * Both routes are device-only. `lookup` needs nothing but the device token and
+ * a pass - the pass is a signed credential the guest is holding, so looking it
+ * up reveals only what its holder already has. `check-in` additionally needs a
+ * staff PIN, which is what makes an admission attributable to a person.
+ */
+kioskRouter.post(
+  "/lookup",
+  authenticateDevice,
+  validate({ body: kioskLookupSchema }),
+  asyncHandler(kioskController.lookup)
+);
+
+kioskRouter.post(
+  "/check-in",
+  authenticateDevice,
+  validate({ body: kioskCheckInSchema }),
+  asyncHandler(kioskController.checkIn)
+);
 
 const owner = [authenticate, requireRole(...OWNER)] as const;
 

@@ -3,7 +3,8 @@ import { iso, isoOrNull } from "../../lib/dates";
 import { AppError, CODES } from "../../lib/errors";
 import { logger } from "../../lib/logger";
 import { paginated } from "../../lib/pagination";
-import { passWindow, signQrPass, toCheckInUrl, verifyQrPass } from "../../lib/qr";
+import { verifyArrivalPass } from "../../lib/arrival";
+import { passWindow, signQrPass, toCheckInUrl } from "../../lib/qr";
 import { OPERATIONS } from "../../lib/roleGroups";
 import { settingsService } from "../settings/settings.service";
 import {
@@ -648,19 +649,27 @@ export const bookingsService = {
    * The signature is checked first because it is cheap and stateless, then the
    * database decides. Both steps are required: the signature proves we issued
    * the pass, the row proves it has not been revoked or already used.
+   *
+   * There is exactly one of these on purpose. The desk and the door screen are
+   * two ways in, not two admissions: if the kiosk had its own path, the deposit
+   * guard, the token redemption and the audit entry would drift apart, and the
+   * first anyone would notice is a guest admitted without paying a deposit.
+   *
+   * `actor` is null for the kiosk, which is a device rather than a person.
+   * `staffId` then comes from the PIN check that ran before this call - never
+   * from a request body, or a stolen device token could admit a guest under any
+   * name it liked.
    */
-  async checkIn(pass: string, actor: Actor, force = false) {
-    const verified = verifyQrPass(pass);
-    if (!verified.ok) {
-      const map = {
-        MALFORMED: CODES.QR_INVALID,
-        BAD_SIGNATURE: CODES.QR_INVALID,
-        EXPIRED: CODES.QR_EXPIRED,
-      } as const;
-      throw AppError.badRequest(map[verified.reason], "That check-in code is not valid");
-    }
+  async checkIn(input: {
+    pass: string;
+    actor: Actor | null;
+    force?: boolean;
+    kioskId?: string | null;
+    staffId?: string | null;
+  }) {
+    const payload = verifyArrivalPass(input.pass);
 
-    const deposit = await bookingDepositsRepository.getForBooking(verified.payload.bid);
+    const deposit = await bookingDepositsRepository.getForBooking(payload.bid);
     if (deposit?.status === "DUE") {
       throw AppError.conflict(
         CODES.DEPOSIT_DUE,
@@ -670,27 +679,38 @@ export const bookingsService = {
 
     // A pass may only be redeemed by staff. A client scanning their own pass
     // to mark themselves arrived would defeat the point of a desk check-in.
-    const staffId = actor.employeeId ?? null;
+    //
+    // The kiosk passes `staffId` explicitly, from the PIN it just verified. It
+    // wins over `actor` because a device has no employee row of its own.
+    const staffId = input.staffId ?? input.actor?.employeeId ?? null;
 
     // `force` follows the same rule as the cancellation override: any member
     // of staff may use it, because the route already restricts this to
     // OPERATIONS, and the audit row names the account that did. The person
     // standing in front of the guest is the one who can judge whether the
     // window applies — not a role table three files away.
+    //
+    // The door screen never forces: it has no way to ask a human "are you
+    // sure", and an override that nobody decided is worse than a refusal.
 
     const rules = await settingsService.getBookingRules();
 
     const db = requireServiceRole();
     const { data, error } = await db.rpc("check_in_booking", {
-      p_jti: verified.payload.jti,
+      p_jti: payload.jti,
       p_staff_id: staffId,
-      p_actor: actor.id,
+      p_actor: input.actor?.id ?? null,
       p_window_minutes: rules.arrivalWindowMinutes,
-      p_force: force,
+      p_force: input.force ?? false,
+      p_kiosk_id: input.kioskId ?? null,
     });
     if (error) throw error;
 
-    logger.info("booking.checked_in", { jti: verified.payload.jti, by: actor.id });
+    logger.info("booking.checked_in", {
+      jti: payload.jti,
+      by: input.actor?.id ?? null,
+      kiosk: input.kioskId ?? null,
+    });
 
     // `checkedInAt` comes back as a `timestamptz` inside the function's `jsonb`,
     // which Postgres renders as `+00:00` - normalised here for the same reason

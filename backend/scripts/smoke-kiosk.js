@@ -2,7 +2,7 @@
 "use strict";
 
 /**
- * End-to-end smoke test for the door kiosk (migration 57).
+ * End-to-end smoke test for the door kiosk (migrations 57-59).
  *
  * A device token is a second way into the API, so the thing worth proving is
  * not just "a device can call /kiosk/me" but that the two credentials cannot
@@ -46,7 +46,9 @@ const TOKEN_SHAPE = /^kiosk\.[0-9a-f-]{36}\.[A-Za-z0-9_-]{43}$/;
 const userIds = [];
 const deviceIds = [];
 const employeeIds = [];
+const bookingIds = [];
 let failures = 0;
+let cleanupFailures = 0;
 
 function check(label, condition, detail) {
   if (condition) {
@@ -54,6 +56,24 @@ function check(label, condition, detail) {
   } else {
     failures++;
     console.error(`FAIL  ${label}${detail ? ` — ${detail}` : ""}`);
+  }
+}
+
+/**
+ * A cleanup step that reports rather than throws.
+ *
+ * A delete that fails here leaves furniture behind, and the *next* run then
+ * fails for reasons that have nothing to do with the code - which is exactly
+ * how a leftover `Smoke PIN Two` came to hold the PIN the collision check
+ * wanted. So the error is counted and printed, not swallowed.
+ */
+async function cleanupStep(label, run) {
+  try {
+    const { error } = await run();
+    if (error) throw new Error(error.message);
+  } catch (err) {
+    cleanupFailures++;
+    console.error(`CLEANUP  ${label} — ${err.message}`);
   }
 }
 
@@ -102,6 +122,109 @@ async function lastSeenOf(id, token, attempts = 15) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   return null;
+}
+
+/**
+ * A PIN that nobody at the salon currently holds.
+ *
+ * `pin_lookup` is globally unique, so a fixed literal such as "4821" is only
+ * free until a real stylist picks it - and once one has, every run against the
+ * pilot fails on the *first* set, then cascades into half a dozen assertions
+ * that all look like product bugs. The probe employee is how a candidate is
+ * tested: a 200 means the digits were free, and the row is deleted again at
+ * once so the caller can hand them to whoever the check is about.
+ */
+async function freePin(probeId, token) {
+  for (let i = 0; i < 40; i++) {
+    const candidate = String(crypto.randomInt(100000, 1000000));
+
+    const probe = await api(`/api/v1/employees/${probeId}/pin`, {
+      method: "PUT",
+      token,
+      body: { pin: candidate },
+    });
+    if (probe.status !== 200) {
+      if (probe.code === "PIN_TAKEN") continue; // someone holds these digits
+      throw new Error(`probe PIN: ${probe.status} ${probe.code}`);
+    }
+
+    const released = await api(`/api/v1/employees/${probeId}/pin`, { method: "DELETE", token });
+    if (released.status !== 200) {
+      throw new Error(`release probe PIN: ${released.status} ${released.code}`);
+    }
+    return candidate;
+  }
+  throw new Error("no free PIN in 40 tries");
+}
+
+/**
+ * A booking whose pass is open right now.
+ *
+ * Written straight to the table rather than through `POST /bookings`, because
+ * the point of this section is the door, not the availability grid: a booking
+ * made through the API has to land on a free slot inside today's working
+ * hours, and at 23:00 Manila there is no such slot at all. The EXCLUDE
+ * constraint is the oracle - a taken window comes back as 23P01 and the next
+ * offset is tried - so this cannot collide with a real booking either.
+ *
+ * The offsets walk the arrival window because the pass only opens
+ * `arrivalWindowMinutes` before the start and closes when the appointment ends.
+ */
+async function insertCheckinableBooking(employeeId, reference, service, windowMinutes) {
+  const durationMs = 30 * 60_000;
+  const step = 5 * 60_000;
+  const windowMs = windowMinutes * 60_000;
+
+  for (let offset = windowMs - step; offset >= -(durationMs - step); offset -= step) {
+    const start = new Date(Date.now() + offset);
+    const end = new Date(start.getTime() + durationMs);
+
+    const inserted = await admin
+      .from("bookings")
+      .insert({
+        reference,
+        guest_name: "Smoke Door Guest",
+        // The `bookings_identity` constraint wants a client or a name *and* a
+        // phone. This fixture is a guest, so it supplies both.
+        guest_phone: "+639009990001",
+        employee_id: employeeId,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        status: "CONFIRMED",
+        subtotal_cents: service.price_cents,
+        discount_cents: 0,
+        total_cents: service.price_cents,
+      })
+      .select("id")
+      .single();
+
+    if (inserted.error?.code === "23P01") continue; // that window is taken
+    if (inserted.error) throw new Error(`create booking: ${inserted.error.message}`);
+
+    const bookingId = inserted.data.id;
+    const item = await admin.from("booking_items").insert({
+      booking_id: bookingId,
+      service_id: service.id,
+      employee_id: employeeId,
+      name_snapshot: service.name,
+      price_cents_snapshot: service.price_cents,
+      duration_minutes_snapshot: service.duration_minutes,
+    });
+    if (item.error) throw new Error(`create booking item: ${item.error.message}`);
+
+    // `create_booking` normally writes the pass row; a direct insert has to do
+    // it here, or `GET /bookings/:id/qr` has nothing to sign. Same expiry rule
+    // as the function: the appointment's end plus a day.
+    const token = await admin.from("qr_tokens").insert({
+      booking_id: bookingId,
+      expires_at: new Date(end.getTime() + 86_400_000).toISOString(),
+    });
+    if (token.error) throw new Error(`create pass: ${token.error.message}`);
+
+    return bookingId;
+  }
+
+  throw new Error("no check-in-able slot was free for the fixture booking");
 }
 
 async function main() {
@@ -252,8 +375,10 @@ async function main() {
   // "meet the team" list, not even for the second this takes, and the PIN
   // endpoints do not care about is_active (a person can be given a PIN before
   // their first shift).
+  //
+  // `probe` exists only to test whether a PIN is free; it never keeps one.
   const pinHolders = [];
-  for (const name of ["Smoke PIN One", "Smoke PIN Two"]) {
+  for (const name of ["Smoke PIN One", "Smoke PIN Two", "Smoke PIN Probe"]) {
     const made = await admin
       .from("employees")
       .insert({ full_name: name, is_active: false })
@@ -263,7 +388,7 @@ async function main() {
     employeeIds.push(made.data.id);
     pinHolders.push(made.data.id);
   }
-  const [first, second] = pinHolders;
+  const [first, second, probe] = pinHolders;
 
   const noPin = await api(`/api/v1/employees/${first}/pin`, { token: adminToken });
   check("a new employee has no PIN", noPin.status === 200 && noPin.json?.data?.hasPin === false);
@@ -290,14 +415,15 @@ async function main() {
   });
   check("a seven-digit PIN is refused", tooLong.status === 400, `got ${tooLong.status}`);
 
+  const pinA = await freePin(probe, adminToken);
   const set = await api(`/api/v1/employees/${first}/pin`, {
     method: "PUT",
     token: adminToken,
-    body: { pin: "4821" },
+    body: { pin: pinA },
   });
   check("PUT /employees/:id/pin is 200 for ADMIN", set.status === 200, `got ${set.status}`);
   check("the person now has a PIN", set.json?.data?.hasPin === true);
-  check("the PIN is not echoed back", JSON.stringify(set.json ?? {}).indexOf("4821") === -1);
+  check("the PIN is not echoed back", JSON.stringify(set.json ?? {}).indexOf(pinA) === -1);
   check(
     "the digest is not echoed back either",
     !Object.keys(set.json?.data ?? {}).some((k) => /lookup|digest|hash/i.test(k)),
@@ -317,7 +443,7 @@ async function main() {
     /^[0-9a-f]{64}$/.test(stored.data?.pin_lookup ?? ""),
     String(stored.data?.pin_lookup).slice(0, 12)
   );
-  check("the digest is not the PIN", stored.data?.pin_lookup !== "4821");
+  check("the digest is not the PIN", stored.data?.pin_lookup !== pinA);
 
   const audit = await admin
     .from("audit_logs")
@@ -330,7 +456,7 @@ async function main() {
   const taken = await api(`/api/v1/employees/${second}/pin`, {
     method: "PUT",
     token: adminToken,
-    body: { pin: "4821" },
+    body: { pin: pinA },
   });
   check(
     "two people cannot share a PIN",
@@ -338,24 +464,26 @@ async function main() {
     `got ${taken.status} ${taken.code}`
   );
 
+  const pinB = await freePin(probe, adminToken);
   const other = await api(`/api/v1/employees/${second}/pin`, {
     method: "PUT",
     token: adminToken,
-    body: { pin: "7391" },
+    body: { pin: pinB },
   });
   check("a different PIN is accepted for the second person", other.status === 200);
 
+  const pinC = await freePin(probe, adminToken);
   const changed = await api(`/api/v1/employees/${first}/pin`, {
     method: "PUT",
     token: adminToken,
-    body: { pin: "9074" },
+    body: { pin: pinC },
   });
   check("a PIN can be replaced", changed.status === 200 && changed.json?.data?.hasPin === true);
 
   const reused = await api(`/api/v1/employees/${second}/pin`, {
     method: "PUT",
     token: adminToken,
-    body: { pin: "4821" },
+    body: { pin: pinA },
   });
   check("the replaced PIN is free for someone else to use", reused.status === 200, `got ${reused.status}`);
 
@@ -386,6 +514,181 @@ async function main() {
     clearedAgain.status === 200 && clearedAgain.json?.data?.hasPin === false,
     `got ${clearedAgain.status}`
   );
+
+  // --- the door admits a guest -----------------------------------------
+  //
+  // A second, live device: the one above was revoked on purpose, and a revoked
+  // screen must not get this far.
+  const door = await api("/api/v1/kiosk/devices", {
+    method: "POST",
+    token: adminToken,
+    body: { label: `Smoke door live ${suffix}` },
+  });
+  const doorToken = door.json?.data?.token;
+  if (door.json?.data?.device?.id) deviceIds.push(door.json.data.device.id);
+  check("a second screen can be provisioned", door.status === 201 && Boolean(doorToken));
+
+  const service = await admin
+    .from("services")
+    .select("id, name, price_cents, duration_minutes")
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+  if (service.error) throw new Error(`pick a service: ${service.error.message}`);
+
+  const bookingId = await insertCheckinableBooking(
+    second,
+    `BA-SMOKE-${suffix}`,
+    service.data,
+    60
+  );
+  bookingIds.push(bookingId);
+
+  const passRes = await api(`/api/v1/bookings/${bookingId}/qr`, { token: adminToken });
+  const pass = passRes.json?.data?.pass;
+  check("the fixture booking has a pass", passRes.status === 200 && Boolean(pass), String(passRes.status));
+
+  const noToken = await api("/api/v1/kiosk/lookup", { method: "POST", body: { pass } });
+  check("the door needs a device token", noToken.status === 401, `got ${noToken.status}`);
+
+  const junk = await api("/api/v1/kiosk/lookup", {
+    method: "POST",
+    token: doorToken,
+    body: { pass: "BA1.not-a-real-pass.value" },
+  });
+  check(
+    "a junk pass is refused as invalid",
+    junk.status === 400 && junk.code === "QR_INVALID",
+    `got ${junk.status} ${junk.code}`
+  );
+
+  const look = await api("/api/v1/kiosk/lookup", {
+    method: "POST",
+    token: doorToken,
+    body: { pass },
+  });
+  check("POST /kiosk/lookup is 200 for a live pass", look.status === 200, `got ${look.status}`);
+  check("the door learns who the guest is", look.json?.data?.guestName === "Smoke Door Guest");
+  check("it names the stylist they are seeing", look.json?.data?.staffName === "Smoke PIN Two");
+  check(
+    "it names what they booked",
+    Array.isArray(look.json?.data?.services) && look.json.data.services[0] === service.data.name,
+    JSON.stringify(look.json?.data?.services)
+  );
+  check("the arrival is inside its window", look.json?.data?.window === "OPEN");
+  check("nothing blocks admission", look.json?.data?.blocked === null, String(look.json?.data?.blocked));
+  check(
+    "the lookup carries no contact details",
+    !("guestPhone" in (look.json?.data ?? {})) && !("clientId" in (look.json?.data ?? {}))
+  );
+
+  // A PIN that belongs to nobody, so "wrong PIN" cannot accidentally be
+  // somebody else's *right* PIN - which would admit the guest and turn the next
+  // three assertions into nonsense.
+  const pinWrong = await freePin(probe, adminToken);
+
+  const wrongPin = await api("/api/v1/kiosk/check-in", {
+    method: "POST",
+    token: doorToken,
+    body: { pass, pin: pinWrong },
+  });
+  check(
+    "a wrong PIN is refused, with the attempts left",
+    wrongPin.status === 401 &&
+      wrongPin.code === "KIOSK_PIN_INVALID" &&
+      wrongPin.json?.error?.details?.attemptsLeft === 4,
+    `got ${wrongPin.status} ${wrongPin.code} ${JSON.stringify(wrongPin.json?.error?.details)}`
+  );
+
+  // `second` must be deactivated *here*, not merely created that way: the check
+  // is about the verdict for a live PIN held by someone who is not working
+  // today, so the state it depends on is set immediately before it is read.
+  const deactivated = await admin.from("employees").update({ is_active: false }).eq("id", second);
+  if (deactivated.error) throw new Error(`deactivate: ${deactivated.error.message}`);
+
+  const inactive = await api("/api/v1/kiosk/check-in", {
+    method: "POST",
+    token: doorToken,
+    body: { pass, pin: pinA },
+  });
+  check(
+    "a correct PIN for a deactivated stylist is not reported as wrong",
+    inactive.status === 403 && inactive.code === "KIOSK_PIN_INACTIVE",
+    `got ${inactive.status} ${inactive.code}`
+  );
+
+  const activated = await admin.from("employees").update({ is_active: true }).eq("id", second);
+  if (activated.error) throw new Error(`activate: ${activated.error.message}`);
+
+  const admitted = await api("/api/v1/kiosk/check-in", {
+    method: "POST",
+    token: doorToken,
+    body: { pass, pin: pinA },
+  });
+  check("POST /kiosk/check-in is 200", admitted.status === 200, `got ${admitted.status} ${admitted.code}`);
+  check("the guest is checked in", admitted.json?.data?.status === "CHECKED_IN");
+  check("the response names the stylist who admitted them", admitted.json?.data?.staffName === "Smoke PIN Two");
+  check("the response does not name a device to the guest", !("kioskId" in (admitted.json?.data ?? {})));
+
+  const checkin = await admin
+    .from("checkins")
+    .select("staff_id, kiosk_id")
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+  check("the check-in records the stylist", checkin.data?.staff_id === second);
+  check("the check-in records the screen that admitted them", checkin.data?.kiosk_id === door.json?.data?.device?.id);
+
+  const bookingAfter = await admin.from("bookings").select("status").eq("id", bookingId).maybeSingle();
+  check("the booking moved to CHECKED_IN", bookingAfter.data?.status === "CHECKED_IN");
+
+  const replay = await api("/api/v1/kiosk/check-in", {
+    method: "POST",
+    token: doorToken,
+    body: { pass, pin: pinA },
+  });
+  check(
+    "the same pass cannot admit a second guest",
+    replay.status === 409 && replay.code === "ALREADY_CHECKED_IN",
+    `got ${replay.status} ${replay.code}`
+  );
+
+  // --- the throttle -----------------------------------------------------
+  //
+  // Five wrong PINs arm the lock on the fifth and refuse on the sixth. That is
+  // the deliberate shape: the fifth failure is still reported as a failure, and
+  // the wait is announced when it actually bites.
+  const attemptsLeft = [];
+  for (let i = 0; i < 5; i++) {
+    const miss = await api("/api/v1/kiosk/check-in", {
+      method: "POST",
+      token: doorToken,
+      body: { pass, pin: pinWrong },
+    });
+    attemptsLeft.push(miss.json?.error?.details?.attemptsLeft);
+  }
+  check(
+    "the attempts count down 4, 3, 2, 1, 0",
+    attemptsLeft.join(",") === "4,3,2,1,0",
+    attemptsLeft.join(",")
+  );
+
+  const locked = await api("/api/v1/kiosk/check-in", {
+    method: "POST",
+    token: doorToken,
+    body: { pass, pin: pinA },
+  });
+  check(
+    "the screen is locked out, and told for how long",
+    locked.status === 429 &&
+      locked.code === "KIOSK_PIN_LOCKED" &&
+      locked.json?.error?.details?.retryAfterSeconds > 0,
+    `got ${locked.status} ${locked.code} ${JSON.stringify(locked.json?.error?.details)}`
+  );
+  check(
+    "the lock outlasts a correct PIN - the point of the throttle",
+    locked.json?.error?.details?.retryAfterSeconds > 30,
+    String(locked.json?.error?.details?.retryAfterSeconds)
+  );
 }
 
 main()
@@ -394,52 +697,54 @@ main()
     console.error(`ERROR  ${err.message}`);
   })
   .finally(async () => {
-    // Always clean up, even if an assertion failed half-way through. The
-    // devices are deleted outright rather than revoked: a smoke run on the
-    // pilot should leave no furniture behind.
+    // Always clean up, even if an assertion failed half-way through. The order
+    // is not cosmetic: `bookings.employee_id` references the fixture employees,
+    // so deleting them first fails - and when that error was swallowed, the
+    // person and their PIN survived to poison the next run. The booking goes
+    // first and takes its items, pass and check-in with it.
     //
-    // Wrapped in try/catch rather than `.catch()` on the builder: the
-    // supabase-js filter builder is thenable but has no `catch` of its own, and
-    // a cleanup that throws in `finally` masks the assertion that failed.
-    if (deviceIds.length > 0) {
-      try {
-        await admin
-          .from("audit_logs")
-          .delete()
-          .eq("entity", "kiosk_devices")
-          .in("entity_id", deviceIds);
-      } catch {
-        /* the audit trail is append-only by intent; a leftover row is harmless */
-      }
-      try {
-        await admin.from("kiosk_devices").delete().in("id", deviceIds);
-      } catch {
-        /* reported below as a non-zero exit only if an assertion already failed */
-      }
+    // Devices are deleted outright rather than revoked: a smoke run on the
+    // pilot should leave no furniture behind.
+    if (bookingIds.length > 0) {
+      await cleanupStep("booking audit rows", () =>
+        admin.from("audit_logs").delete().eq("entity", "bookings").in("entity_id", bookingIds)
+      );
+      await cleanupStep("fixture bookings", () =>
+        admin.from("bookings").delete().in("id", bookingIds)
+      );
     }
 
-    // The employees go with their PINs (`on delete cascade`), so only the audit
-    // rows need clearing by hand.
     if (employeeIds.length > 0) {
-      try {
-        await admin
-          .from("audit_logs")
-          .delete()
-          .eq("entity", "employees")
-          .in("entity_id", employeeIds);
-      } catch {
-        /* as above */
-      }
-      try {
-        await admin.from("employees").delete().in("id", employeeIds);
-      } catch {
-        /* as above */
-      }
+      await cleanupStep("employee audit rows", () =>
+        admin.from("audit_logs").delete().eq("entity", "employees").in("entity_id", employeeIds)
+      );
+      // Their PINs go with them (`on delete cascade`), so only the audit rows
+      // need clearing by hand.
+      await cleanupStep("fixture employees", () =>
+        admin.from("employees").delete().in("id", employeeIds)
+      );
     }
+
+    if (deviceIds.length > 0) {
+      await cleanupStep("device audit rows", () =>
+        admin.from("audit_logs").delete().eq("entity", "kiosk_devices").in("entity_id", deviceIds)
+      );
+      await cleanupStep("fixture devices", () =>
+        admin.from("kiosk_devices").delete().in("id", deviceIds)
+      );
+    }
+
     for (const id of userIds) {
       await admin.auth.admin.deleteUser(id).catch(() => undefined);
     }
 
-    console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
-    process.exit(failures === 0 ? 0 : 1);
+    const ok = failures === 0 && cleanupFailures === 0;
+    console.log(
+      ok
+        ? "\nALL CHECKS PASSED"
+        : `\n${failures} CHECK(S) FAILED${
+            cleanupFailures > 0 ? `, ${cleanupFailures} CLEANUP PROBLEM(S)` : ""
+          }`
+    );
+    process.exit(ok ? 0 : 1);
   });

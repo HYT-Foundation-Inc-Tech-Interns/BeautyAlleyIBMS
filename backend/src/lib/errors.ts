@@ -62,6 +62,22 @@ export const CODES = {
   KIOSK_TOKEN_INVALID: "KIOSK_TOKEN_INVALID",
   /** The device is ours and the secret matches, but the owner has switched it off. */
   KIOSK_REVOKED: "KIOSK_REVOKED",
+  /**
+   * A door PIN that matched nobody.
+   *
+   * 401 rather than 403: the caller presented a credential and it was wrong.
+   * The body carries `attemptsLeft`, because a screen that can say "two tries
+   * left" is the difference between a mistyped digit and a locked tablet.
+   */
+  KIOSK_PIN_INVALID: "KIOSK_PIN_INVALID",
+  /**
+   * The right PIN, belonging to someone who has left.
+   *
+   * Separate from KIOSK_PIN_INVALID on purpose. Reporting "wrong PIN" for a
+   * correct one sends the stylist into a loop of retyping digits that cannot
+   * work, in front of a waiting guest.
+   */
+  KIOSK_PIN_INACTIVE: "KIOSK_PIN_INACTIVE",
 
   // --- 404 -----------------------------------------------------------------
   NOT_FOUND: "NOT_FOUND",
@@ -119,6 +135,15 @@ export const CODES = {
 
   // --- 429 -----------------------------------------------------------------
   RATE_LIMITED: "RATE_LIMITED",
+  /**
+   * This screen has had too many wrong PINs.
+   *
+   * Distinct from RATE_LIMITED because it is not about request volume: a
+   * correct PIN still succeeds the moment the wait is over, and the body says
+   * how long that is. A screen can count down; it cannot do that with a
+   * generic "slow down".
+   */
+  KIOSK_PIN_LOCKED: "KIOSK_PIN_LOCKED",
 
   // --- 503 -----------------------------------------------------------------
   CONFIG_ERROR: "CONFIG_ERROR",
@@ -492,6 +517,11 @@ const MESSAGES: Record<string, string> = {
   [CODES.KIOSK_TOKEN_INVALID]:
     "This device is not signed in. Ask the owner for a new kiosk code.",
   [CODES.KIOSK_REVOKED]: "This kiosk has been switched off.",
+  [CODES.KIOSK_PIN_INVALID]: "That PIN was not recognised.",
+  [CODES.KIOSK_PIN_INACTIVE]:
+    "That PIN belongs to someone who is no longer active. See the front desk.",
+  [CODES.KIOSK_PIN_LOCKED]:
+    "Too many wrong PINs at this screen. Please wait before trying again.",
   [CODES.KIOSK_NOT_FOUND]: "No such kiosk.",
   [CODES.KIOSK_ALREADY_REVOKED]: "That kiosk is already switched off.",
   [CODES.PIN_TAKEN]: "That PIN is already in use. Choose a different one.",

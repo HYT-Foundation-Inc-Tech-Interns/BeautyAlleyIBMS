@@ -268,6 +268,8 @@ export const API_GROUPS: ApiGroup[] = [
     name: "kiosk",
     endpoints: [
       { method: "GET", path: "/api/v1/kiosk/me", auth: "KIOSK", summary: "Who this device is. The screen calls it on boot; a 401 means it has to be provisioned again." },
+      { method: "POST", path: "/api/v1/kiosk/lookup", auth: "KIOSK", summary: "What a scanned pass is for: guest, stylist, services, time, and what would block admission. No PIN - the pass is the credential." },
+      { method: "POST", path: "/api/v1/kiosk/check-in", auth: "KIOSK", summary: "Admit a guest. The staff PIN is checked before the pass is parsed, and the check-in records the person and the screen." },
       { method: "GET", path: "/api/v1/kiosk/devices", auth: "ADMIN", summary: "Every kiosk, revoked ones included. Never carries a token - only a digest is stored, and it is not read back." },
       { method: "POST", path: "/api/v1/kiosk/devices", auth: "ADMIN", summary: "Register a screen. The token is in the response once and cannot be retrieved again." },
       { method: "POST", path: "/api/v1/kiosk/devices/:id/revoke", auth: "ADMIN", summary: "Switch a screen off. Refuses a second revoke; the row is kept so past admissions stay attributable." },

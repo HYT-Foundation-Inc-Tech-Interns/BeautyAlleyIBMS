@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PIN_PATTERN } from "../../lib/staffPin";
 
 /**
  * A device label is what the owner calls the screen - "Front door", "Back
@@ -18,4 +19,25 @@ export type CreateKioskDeviceInput = z.infer<typeof createKioskDeviceSchema>;
 
 export const kioskDeviceParamSchema = z.object({
   id: z.string().uuid("Not a device id"),
+});
+
+/**
+ * A scanned pass, as the tablet hands it over.
+ *
+ * The bound is generous because the pass may arrive as a full URL rather than
+ * the token - a phone's camera app opens the link instead of decoding the
+ * payload. Unwrapping it is `lib/arrival`'s job; this only rejects the empty
+ * and the absurd.
+ */
+const passField = z.string().trim().min(10, "Scan a pass to continue").max(2048);
+
+export const kioskLookupSchema = z.object({ pass: passField });
+
+/**
+ * Admission. The PIN is checked before the pass is parsed, so the two are
+ * required together: there is no endpoint that redeems a pass without one.
+ */
+export const kioskCheckInSchema = z.object({
+  pass: passField,
+  pin: z.string().regex(PIN_PATTERN, "A PIN is 4 to 6 digits"),
 });

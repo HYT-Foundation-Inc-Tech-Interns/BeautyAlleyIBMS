@@ -82,18 +82,7 @@ export const qrService = {
   },
 
   async checkIn(input: { pass: string; force: boolean }, actor: Actor) {
-    // Tolerate a full URL: pull the `pass` query parameter back out if the
-    // scanner decoded the QR into a link rather than a raw token.
-    let pass = input.pass.trim();
-    if (/^https?:\/\//i.test(pass)) {
-      try {
-        const url = new URL(pass);
-        pass = url.searchParams.get("pass") ?? pass;
-      } catch {
-        /* not a URL after all - fall through and let the verifier reject it */
-      }
-    }
-    return bookingsService.checkIn(pass, actor, input.force);
+    return bookingsService.checkIn({ pass: input.pass, actor, force: input.force });
   },
 
   /**

@@ -28,4 +28,15 @@ export const kioskController = {
     const device = await kioskService.revokeDevice(req.params.id, req.actor!);
     res.status(200).json({ data: device });
   },
+
+  /** What the door screen shows after a scan. No PIN, no personal contact data. */
+  async lookup(req: Request, res: Response) {
+    const result = await kioskService.lookup(req.body);
+    res.status(200).json({ data: result });
+  },
+
+  async checkIn(req: Request, res: Response) {
+    const result = await kioskService.checkIn(req.body, req.kiosk!);
+    res.status(200).json({ data: result });
+  },
 };
