@@ -1044,6 +1044,14 @@ function weekProblem(week: Week): string | null {
  * the honest answer to "what does this pattern cost me in bookable time".
  * Edit view: the same seven lines as inputs. Saving replaces the whole week,
  * so the draft starts from every stored window, split shifts included.
+ *
+ * The two views word the total differently on purpose, and that is not drift
+ * to be tidied up: the read view says "22 h a week. Slots are only offered
+ * inside these windows; a closed day has none." The edit view says "22 h a
+ * week across 4 days", because while you are moving windows the day count is
+ * the thing you are changing. A verification run once asserted the read view
+ * used the edit view's sentence and reported a false failure; the copy was
+ * right. Do not "fix" one to match the other.
  */
 function WeeklyHours({
   hours,
