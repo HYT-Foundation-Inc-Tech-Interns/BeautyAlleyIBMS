@@ -246,6 +246,11 @@ drift to be "fixed" by widening `SCOPE`:
 - **My tasks** — the employee's own list, with completion notes.
 - **Arrivals** — scan and confirm, or quick check-in, with a manual reference fallback.
 - **My bookings** — a client can move or cancel their own appointment inside the policy; the row updates from the server response, not a stale refetch.
+- **Leave** — a stylist asks against their own roster record and withdraws it while
+  pending; the owner answers it, and the board shows who is left on the floor and
+  which appointments already sit inside approved leave.
+- **Deposits** — the owner's policy records an obligation on every booking; the
+  desk settles it from the booking row, and a DUE deposit refuses check-in.
 - **Bookings, clients, promos, employees, Insights, reports.**
 
 ---
@@ -294,9 +299,10 @@ rather than a wrapper so Radix portals (the mobile sidebar sheet) inherit it too
 
 ## Data and persistence
 
-- Existing tables and relationships are reused throughout; the new features add
-  **two tables** (`attendance`, `tasks`) and extend two DTOs. Nothing is
-  duplicated into a second store.
+- Existing tables and relationships are reused throughout; the features add
+  their own rows rather than a second store: `attendance`, `tasks`, `time_off`,
+  `booking_deposits`, `reminder_outbox`, `test_payment_requests` and
+  `app_settings`.
 - **`localStorage` is never cleared** to make a feature work. It holds exactly
   one key — the session (`alley.session.v1`) — written by `src/auth/session.ts`.
 - `attendance` and `tasks` **survive a refresh** because they are database rows,
@@ -320,8 +326,8 @@ the branch's data.
 cd backend
 cp .env.test.example .env.test.local   # fill in the test project's four values
 npm run db:setup:test                  # migrations + seed, once
-npm test                               # 460 tests, 23 suites
-npm run test:unit                      # 187 tests, no database
+npm test                               # full suite; needs the test project resumed
+npm run test:unit                      # 217 tests, 11 suites, no database
 npm run smoke                          # end-to-end checks over real HTTP (needs a running server)
 npm run db:verify                      # 51 checks against the application database
 npm run verify:arrival                 # book -> pass -> confirm arrival (needs a running server)
@@ -394,8 +400,10 @@ the code.
 - The four deactivated salon services still need real prices and durations.
 - **Treatment photography is placeholder imagery**, resolved from the treatment
   name and category rather than stored per row.
-- Attendance has no leave-request or approval workflow — the desk files leave
-  directly. There is no rostering UI for `working_hours`.
+- There is no rostering UI for `working_hours`. A weekly shift pattern can only
+  be written through `PUT /employees/:id/working-hours`, so the grid the plan
+  calls for is the missing screen — and until it exists, capacity is capped by
+  whatever pattern was last set by hand.
 - A confirmed arrival is attributed to the concierge through the **audit log**
   (`booking.checked_in`, actor = their profile). A concierge has no `employees`
   row — reception is not a service provider — so `checkins.staff_id` is `null`
