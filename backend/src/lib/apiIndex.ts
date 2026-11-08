@@ -43,8 +43,20 @@ import { env } from "../config/env";
  * actually implements. "DESK" is the front desk (CONCIERGE + ADMIN) and
  * "OPERATIONS" is everyone who works at the branch (EMPLOYEE + CONCIERGE +
  * ADMIN).
+ *
+ * "KIOSK" is not a role. It means the caller presents a *device* token -
+ * `kiosk.<id>.<secret>`, issued from the console - rather than a session. The
+ * two are mutually exclusive: a device token is not a staff login and a staff
+ * login is not a device.
  */
-export type ApiAuth = "public" | "optional" | "authenticated" | "OPERATIONS" | "DESK" | "ADMIN";
+export type ApiAuth =
+  | "public"
+  | "optional"
+  | "authenticated"
+  | "OPERATIONS"
+  | "DESK"
+  | "ADMIN"
+  | "KIOSK";
 
 export interface ApiEndpoint {
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -250,6 +262,15 @@ export const API_GROUPS: ApiGroup[] = [
     ],
   },
   {
+    name: "kiosk",
+    endpoints: [
+      { method: "GET", path: "/api/v1/kiosk/me", auth: "KIOSK", summary: "Who this device is. The screen calls it on boot; a 401 means it has to be provisioned again." },
+      { method: "GET", path: "/api/v1/kiosk/devices", auth: "ADMIN", summary: "Every kiosk, revoked ones included. Never carries a token - only a digest is stored, and it is not read back." },
+      { method: "POST", path: "/api/v1/kiosk/devices", auth: "ADMIN", summary: "Register a screen. The token is in the response once and cannot be retrieved again." },
+      { method: "POST", path: "/api/v1/kiosk/devices/:id/revoke", auth: "ADMIN", summary: "Switch a screen off. Refuses a second revoke; the row is kept so past admissions stay attributable." },
+    ],
+  },
+  {
     name: "settings",
     endpoints: [
       { method: "GET", path: "/api/v1/settings/public", auth: "public", summary: "The client-facing booking policy: cancellation cutoff and arrival window. No account required." },
@@ -302,7 +323,9 @@ export function buildApiIndex(): ApiIndex {
       "'public' needs no token; 'optional' changes behaviour when one is present; " +
       "'authenticated' needs any signed-in account. The role gates are 'OPERATIONS' " +
       "(EMPLOYEE, CONCIERGE, ADMIN - everyone who works the floor), 'DESK' (CONCIERGE " +
-      "and ADMIN - reception, payments, room assignment) and 'ADMIN' (the owner).",
+      "and ADMIN - reception, payments, room assignment) and 'ADMIN' (the owner). " +
+      "'KIOSK' takes a device token (`kiosk.<id>.<secret>`), not a session; the two " +
+      "are not interchangeable.",
     errors: "Every failure is { error: { code, message, details? } } for any status.",
     endpointCount: API_GROUPS.reduce((n, g) => n + g.endpoints.length, 0),
     groups: API_GROUPS,

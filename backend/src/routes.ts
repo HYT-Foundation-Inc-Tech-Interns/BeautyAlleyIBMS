@@ -17,6 +17,7 @@ import { settingsRouter } from "./modules/settings/settings.routes";
 import { depositsRouter } from "./modules/deposits/deposits.routes";
 import { depositTestRouter } from "./modules/deposits/deposit-test.routes";
 import { webhooksRouter } from "./modules/deposits/webhook.routes";
+import { kioskRouter } from "./modules/kiosk/kiosk.routes";
 import { buildApiIndex } from "./lib/apiIndex";
 
 /**
@@ -51,6 +52,14 @@ apiRouter.use("/settings", settingsRouter);
 apiRouter.use("/deposits", depositsRouter);
 apiRouter.use("/deposits/test", depositTestRouter);
 apiRouter.use("/webhooks", webhooksRouter);
+
+/*
+ * The door kiosk. `/kiosk/me` is answered to a device token, the rest to the
+ * owner's session - see the router's docblock. Mounted outside /admin on
+ * purpose: a device must never be one mis-ordered middleware away from the
+ * blanket ADMIN gate.
+ */
+apiRouter.use("/kiosk", kioskRouter);
 
 /*
  * Order matters here, and it is not cosmetic.

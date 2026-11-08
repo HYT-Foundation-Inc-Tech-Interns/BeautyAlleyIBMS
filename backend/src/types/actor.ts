@@ -31,3 +31,17 @@ export interface Actor {
   isActive: boolean;
   accessToken: string;
 }
+
+/**
+ * The caller, when the caller is the screen by the door.
+ *
+ * Deliberately not an Actor. A kiosk has no role, no email and no employee
+ * row, and giving it an Actor shape would let it fall through a
+ * `requireRole` gate by accident. Code that wants a person asks for
+ * `req.actor`; code that wants to know *which device* admitted someone asks
+ * for `req.kiosk`.
+ */
+export interface KioskIdentity {
+  id: string;
+  label: string;
+}

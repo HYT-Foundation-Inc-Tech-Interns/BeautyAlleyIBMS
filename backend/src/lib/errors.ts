@@ -50,6 +50,18 @@ export const CODES = {
   EMPLOYEE_NOT_QUALIFIED: "EMPLOYEE_NOT_QUALIFIED",
   INSUFFICIENT_ROLE: "INSUFFICIENT_ROLE",
   NOT_TASK_OWNER: "NOT_TASK_OWNER",
+  /**
+   * A kiosk token that is not one of ours: wrong shape, wrong prefix, or an id
+   * that names no device.
+   *
+   * One code for all three on purpose. The kiosk screen can do nothing useful
+   * with the distinction - every case ends at "ask the owner for a new code" -
+   * and separating them would tell an attacker which half of a guess was
+   * right.
+   */
+  KIOSK_TOKEN_INVALID: "KIOSK_TOKEN_INVALID",
+  /** The device is ours and the secret matches, but the owner has switched it off. */
+  KIOSK_REVOKED: "KIOSK_REVOKED",
 
   // --- 404 -----------------------------------------------------------------
   NOT_FOUND: "NOT_FOUND",
@@ -63,6 +75,8 @@ export const CODES = {
   PROFILE_NOT_FOUND: "PROFILE_NOT_FOUND",
   /** Migration 54. A leave request that does not exist, or is not this person's. */
   LEAVE_NOT_FOUND: "LEAVE_NOT_FOUND",
+  /** Migration 57. A kiosk device id that matches no row. */
+  KIOSK_NOT_FOUND: "KIOSK_NOT_FOUND",
 
   // --- 409 conflict --------------------------------------------------------
   SLOT_TAKEN: "SLOT_TAKEN",
@@ -83,6 +97,15 @@ export const CODES = {
   ROOM_STILL_BOOKED: "ROOM_STILL_BOOKED",
   /** Someone already answered this leave request - approve and decline cannot both win. */
   LEAVE_DECIDED: "LEAVE_DECIDED",
+  /**
+   * Migration 57. Revoking a device that is already revoked.
+   *
+   * Kept apart from INVALID_STATUS_TRANSITION because the owner sees this one:
+   * a second click in the console, or two tabs open on the same list. "That
+   * status change is not allowed" would send them looking for a rule that does
+   * not exist.
+   */
+  KIOSK_ALREADY_REVOKED: "KIOSK_ALREADY_REVOKED",
   CONFLICT: "CONFLICT",
 
   // --- 429 -----------------------------------------------------------------
@@ -201,6 +224,9 @@ const PG_FUNCTION_ERRORS: Record<string, { status: number; code: string }> = {
   WORKING_HOURS_INVALID: { status: 400, code: CODES.WORKING_HOURS_INVALID },
   ROOM_STILL_BOOKED: { status: 409, code: CODES.ROOM_STILL_BOOKED },
   PROFILE_NOT_FOUND: { status: 404, code: CODES.PROFILE_NOT_FOUND },
+  // --- migration 57: the door kiosk ---------------------------------------
+  KIOSK_NOT_FOUND: { status: 404, code: CODES.KIOSK_NOT_FOUND },
+  KIOSK_ALREADY_REVOKED: { status: 409, code: CODES.KIOSK_ALREADY_REVOKED },
 };
 
 /** SQLSTATE classes we care about. */
@@ -452,6 +478,11 @@ const MESSAGES: Record<string, string> = {
   [CODES.ROOM_STILL_BOOKED]:
     "That room still has bookings that have not finished. Move them before decommissioning it.",
   [CODES.PROFILE_NOT_FOUND]: "No profile for that account.",
+  [CODES.KIOSK_TOKEN_INVALID]:
+    "This device is not signed in. Ask the owner for a new kiosk code.",
+  [CODES.KIOSK_REVOKED]: "This kiosk has been switched off.",
+  [CODES.KIOSK_NOT_FOUND]: "No such kiosk.",
+  [CODES.KIOSK_ALREADY_REVOKED]: "That kiosk is already switched off.",
 };
 
 function humanise(code: string): string {

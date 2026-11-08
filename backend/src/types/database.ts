@@ -299,6 +299,45 @@ export interface Database {
         Relationships: [];
       };
 
+      /**
+       * Migration 57. A door kiosk is a device, not an account: it holds a
+       * random secret whose sha256 is the only thing stored here. RLS is on
+       * with no policies, so this table is unreachable from a browser at all.
+       */
+      kiosk_devices: {
+        Row: {
+          id: string;
+          label: string;
+          /** sha256 hex of the secret. Never serialised to a client. */
+          token_hash: string;
+          created_by: string | null;
+          created_at: string;
+          last_seen_at: string | null;
+          /** `inet`, which supabase-js hands back as text. */
+          last_seen_ip: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          label: string;
+          token_hash: string;
+          created_by?: string | null;
+          last_seen_at?: string | null;
+          last_seen_ip?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+        };
+        Update: {
+          label?: string;
+          last_seen_at?: string | null;
+          last_seen_ip?: string | null;
+          revoked_at?: string | null;
+          revoked_by?: string | null;
+        };
+        Relationships: [];
+      };
+
       bookings: {
         Row: {
           id: string;
@@ -1210,6 +1249,20 @@ export interface Database {
       clock_out_attendance: {
         Args: { p_employee_id: string; p_day: string; p_remarks?: string | null };
         Returns: string | null;
+      };
+      /**
+       * Migration 57. Register a device from the digest of a secret minted in
+       * Node; the secret itself never reaches the database. Returns the row as
+       * the API shows it, never the hash.
+       */
+      create_kiosk_device: {
+        Args: { p_label: string; p_token_hash: string; p_actor?: string | null };
+        Returns: Json;
+      };
+      /** Migration 57. Stamp `revoked_at`. Raises KIOSK_ALREADY_REVOKED on a second call. */
+      revoke_kiosk_device: {
+        Args: { p_id: string; p_actor?: string | null };
+        Returns: Json;
       };
     };
 

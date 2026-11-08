@@ -3,7 +3,13 @@ import { supabaseAs, supabasePublic } from "../db/supabase";
 import { AppError, CODES } from "../lib/errors";
 import type { Actor, Role } from "../types/actor";
 
-function bearer(req: Request): string | null {
+/**
+ * The token out of `Authorization: Bearer <token>`, or null.
+ *
+ * Exported because `authenticateDevice` reads the same header and there is no
+ * reason for two parsers to disagree about what a bearer header looks like.
+ */
+export function bearer(req: Request): string | null {
   const header = req.headers.authorization;
   if (!header) return null;
   const [scheme, token] = header.split(" ");
