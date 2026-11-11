@@ -7,6 +7,12 @@
  *   because a visitor has no sidebar and no session. Booking is reachable
  *   signed out, which is the guest flow the salon actually runs on.
  *
+ *   **Kiosk** — `/kiosk`, the tablet by the door. Outside `RequireAuth` and
+ *   outside `AppShell`, and it has no session at all: its credential is a
+ *   device token carried in the URL fragment on first boot. It also lives on
+ *   the public origin, because that is where the tablet is pointed and where
+ *   the guest-facing brand lives.
+ *
  *   **Console** — everything under `/app`. One `AuthProvider` decides who you
  *   are, `RequireAuth` bounces an anonymous visitor to `/login` (remembering
  *   where they were headed), and `RequireArea` gates each room against the
@@ -28,6 +34,7 @@ import Services from "@/pages/Services";
 import Book from "@/pages/Book";
 import Pass from "@/pages/Pass";
 import Login from "@/pages/Login";
+import Kiosk from "@/pages/Kiosk";
 
 import Overview from "@/pages/Overview";
 import Bookings from "@/pages/Bookings";
@@ -77,6 +84,14 @@ export default function App() {
           */}
         <Route path="/login" element={<Login />} />
         <Route path="/deposit/mock" element={<DepositMock />} />
+
+        {/*
+          * The door tablet. No `RequireAuth` on purpose - it is not a person,
+          * and it has no session to require. Its token arrives in the URL
+          * fragment (`#t=…`) the first time the owner opens the link, and the
+          * page strips it from the address bar as soon as it has read it.
+          */}
+        <Route path="/kiosk" element={<Kiosk />} />
 
         {/* ------------------------------------------------ console */}
         <Route

@@ -1,10 +1,12 @@
 "use client";
 
 /**
- * Settings — one page, three jobs, separated by who is allowed to do them.
+ * Settings — one page, grouped by who is allowed to do what.
  *
  *   My account        every role: change your own password
  *   Account recovery  ADMIN: set any account's password by email
+ *   Booking rules     ADMIN: the cancellation cutoff and arrival window
+ *   Door screens      ADMIN: issue and switch off the tablets by the doors
  *   Payments          ADMIN: which providers are offered at the desk
  *
  * The password forms are the reason this page exists: the owner should not
@@ -20,11 +22,14 @@ import * as React from "react";
 import {
   CalendarClock,
   CheckCircle2,
+  Copy,
   Eye,
   Mail,
   EyeOff,
   KeyRound,
   Loader2,
+  MonitorSmartphone,
+  Power,
   Save,
   Settings2,
   ShieldCheck,
@@ -32,10 +37,15 @@ import {
 } from "lucide-react";
 
 import { api, ApiError } from "@/lib/api";
-import type { DepositCancelRule, PaymentProviderId, PaymentProviderOption } from "@/lib/api-types";
+import type {
+  DepositCancelRule,
+  KioskDevice,
+  PaymentProviderId,
+  PaymentProviderOption,
+} from "@/lib/api-types";
 import { useAsync } from "@/lib/useAsync";
 import { useAuth, ROLE_LABEL } from "@/auth/AuthProvider";
-import { cn } from "@/lib/utils";
+import { cn, relativeToNow, shortDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader, Panel, SectionHeading } from "@/components/app/bits";
@@ -570,6 +580,9 @@ export default function Settings() {
         )}
       </Panel>
 
+      {/* ------------------------------------------------- door screens */}
+      <DoorScreens isAdmin={isAdmin} />
+
       {/* ------------------------------------------------ deposit policy */}
       <Panel className="p-5 sm:p-6">
         <SectionHeading
@@ -875,5 +888,260 @@ export default function Settings() {
         ) : null}
       </Panel>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Door screens
+ * ------------------------------------------------------------------ */
+
+/**
+ * The tablet by the entrance, and the link that turns it into one.
+ *
+ * This is the only place in the product that displays a credential, so the
+ * link is treated like one: it is shown once, it is copied rather than typed,
+ * and losing it is fixed by switching the screen off and issuing another. The
+ * API cannot show it again — it keeps a digest — and the panel says so rather
+ * than leaving the owner to discover it.
+ *
+ * Revocation is inline rather than a dialog: the button is on the row it
+ * affects, and the consequence ("stops admitting guests immediately") is the
+ * sentence next to the confirmation, because that is the fact being decided.
+ */
+function DoorScreens({ isAdmin }: { isAdmin: boolean }) {
+  // Not fetched for a non-owner: the endpoint is ADMIN, and a page that asks
+  // and then apologises for the answer puts a 403 in every stylist's console.
+  const screens = useAsync("settings:door-screens", () =>
+    isAdmin ? api.doorScreens.list() : Promise.resolve([]),
+  );
+
+  const [label, setLabel] = React.useState("");
+  const [issuing, setIssuing] = React.useState(false);
+  const [issueError, setIssueError] = React.useState<string | null>(null);
+  const [issued, setIssued] = React.useState<{ label: string; link: string } | null>(null);
+  const [copied, setCopied] = React.useState(false);
+
+  const [confirming, setConfirming] = React.useState<string | null>(null);
+  const [revoking, setRevoking] = React.useState<string | null>(null);
+  const [revokeError, setRevokeError] = React.useState<string | null>(null);
+
+  async function issue(event: React.FormEvent) {
+    event.preventDefault();
+    const name = label.trim();
+    if (!name) return;
+
+    setIssueError(null);
+    setCopied(false);
+    setIssuing(true);
+    try {
+      const result = await api.doorScreens.issue(name);
+      // Assembled here, not on the server: the API does not know which origin
+      // the tablet will be pointed at, and the origin the owner is reading this
+      // on is the one they have just proved serves the app.
+      setIssued({
+        label: result.device.label,
+        link: `${window.location.origin}/kiosk#t=${result.token}`,
+      });
+      setLabel("");
+      screens.reload();
+    } catch (err) {
+      setIssueError(err instanceof ApiError ? err.message : "Could not issue a screen.");
+    } finally {
+      setIssuing(false);
+    }
+  }
+
+  async function copy(link: string) {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      // Refused on a non-HTTPS origin and on some managed browsers. The field
+      // is selectable, so the fallback is the owner's own keyboard rather than
+      // a second error they cannot act on.
+      setCopied(false);
+    }
+  }
+
+  async function revoke(device: KioskDevice) {
+    setRevokeError(null);
+    setRevoking(device.id);
+    try {
+      await api.doorScreens.revoke(device.id);
+      setConfirming(null);
+      screens.reload();
+    } catch (err) {
+      setRevokeError(err instanceof ApiError ? err.message : "Could not switch that screen off.");
+    } finally {
+      setRevoking(null);
+    }
+  }
+
+  const devices = screens.data ?? [];
+  const liveCount = devices.filter((d) => !d.revokedAt).length;
+
+  return (
+    <Panel className="p-5 sm:p-6">
+      <SectionHeading
+        eyebrow="Owner"
+        title="Door screens"
+        description="The tablet by the entrance. A screen admits a guest only after a stylist confirms with their door PIN, which is set on the Team page."
+      />
+
+      {!isAdmin ? (
+        <div className="mt-6 flex items-start gap-3 rounded-lg border border-border/70 bg-muted/30 px-4 py-4">
+          <MonitorSmartphone className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+            Issuing and switching off door screens is owner-only: each one holds a credential that
+            admits guests.
+          </p>
+        </div>
+      ) : screens.initial && !screens.data ? (
+        <Loading label="Reading the door screens…" />
+      ) : screens.error ? (
+        <ErrorNote error={screens.error} onRetry={screens.reload} />
+      ) : (
+        <div className="mt-5 space-y-4">
+          <form onSubmit={issue} className="flex flex-wrap items-end gap-3">
+            <div className="min-w-52 flex-1">
+              <TextField
+                label="What to call it"
+                placeholder="Front door"
+                value={label}
+                autoComplete="off"
+                maxLength={60}
+                onChange={(e) => {
+                  setLabel(e.target.value);
+                  setIssued(null);
+                }}
+                hint="Only you see this name. Two screens may share one."
+              />
+            </div>
+            <Button type="submit" disabled={issuing || label.trim().length === 0}>
+              {issuing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <MonitorSmartphone className="size-4" />
+              )}
+              {issuing ? "Issuing…" : "Issue a screen"}
+            </Button>
+          </form>
+
+          {issueError && (
+            <p className="rounded-lg border border-clay/25 bg-clay/[0.04] px-3 py-2 text-[12px] text-clay">
+              {issueError}
+            </p>
+          )}
+
+          {issued && (
+            <div className="rounded-xl border border-champagne-400/50 bg-sand-50 p-4">
+              <p className="text-[12.5px] font-semibold">
+                Link for “{issued.label}”
+              </p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                Open it on the tablet, once. It is shown only now — the server keeps a hash of it,
+                so it cannot be displayed again. If it is lost, switch the screen off and issue
+                another.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <input
+                  readOnly
+                  value={issued.link}
+                  aria-label="Door link"
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 font-mono text-[11.5px] text-foreground outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                />
+                <Button type="button" variant="outline" onClick={() => copy(issued.link)}>
+                  <Copy className="size-4" />
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {devices.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border/80 px-4 py-6 text-center text-[12.5px] text-muted-foreground">
+              No screen has been issued yet. The door still works from the Arrivals page.
+            </p>
+          ) : (
+            <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70">
+              {devices.map((device) => (
+                <div
+                  key={device.id}
+                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="flex flex-wrap items-center gap-2 text-[13px] font-medium">
+                      <span className="truncate">{device.label}</span>
+                      <Badge variant={device.revokedAt ? "secondary" : "success"}>
+                        {device.revokedAt ? "Switched off" : "Live"}
+                      </Badge>
+                    </p>
+                    <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                      Issued {shortDate(device.createdAt)} ·{" "}
+                      {device.lastSeenAt
+                        ? `last seen ${relativeToNow(device.lastSeenAt)}`
+                        : "never connected"}
+                    </p>
+                  </div>
+
+                  {!device.revokedAt &&
+                    (confirming === device.id ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11.5px] text-muted-foreground">
+                          It stops admitting guests immediately.
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => revoke(device)}
+                          disabled={revoking === device.id}
+                        >
+                          {revoking === device.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Power className="size-3.5" />
+                          )}
+                          {revoking === device.id ? "Switching off…" : "Switch off"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setConfirming(null)}
+                          disabled={revoking === device.id}
+                        >
+                          Keep it
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setConfirming(device.id)}
+                      >
+                        <Power className="size-3.5" />
+                        Switch off
+                      </Button>
+                    ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {revokeError && (
+            <p className="rounded-lg border border-clay/25 bg-clay/[0.04] px-3 py-2 text-[12px] text-clay">
+              {revokeError}
+            </p>
+          )}
+
+          <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+            {liveCount === 0
+              ? "No screen is live."
+              : `${liveCount} ${liveCount === 1 ? "screen is" : "screens are"} live.`}{" "}
+            A switched-off screen keeps its row so past admissions stay attributable to it.
+          </p>
+        </div>
+      )}
+    </Panel>
   );
 }

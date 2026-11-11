@@ -114,6 +114,7 @@ site.
 | `/` | public home | booking only; no console entry |
 | `/login` | client sign-in | also the staff sign-in *on the console origin* |
 | `/app/*` | console | forwarded to `VITE_CONSOLE_URL` when set; else `RequireAuth` → `RequireArea` |
+| `/kiosk` | door tablet | no session; its credential is a device link issued in Settings |
 | `/api/v1/*` | JSON API | role-gated server-side |
 | `/health` · `/health/live` | health | readiness vs liveness |
 
@@ -255,6 +256,14 @@ drift to be "fixed" by widening `SCOPE`:
 - **Deposits** — the owner's policy records an obligation on every booking; the
   desk settles it from the booking row, and a DUE deposit refuses check-in.
 - **Bookings, clients, promos, employees, Insights, reports.**
+
+### The door
+- **Door screen** — `/kiosk`, the tablet by the entrance. It scans a pass, shows
+  the guest, their stylist and what they booked, and admits them only after a
+  stylist types their door PIN. No session and no staff account: its credential
+  is a device link, issued once from **Settings → Door screens** and shown only
+  at that moment. Switching the screen off stops it on its next request, and the
+  row survives so past admissions stay attributable to it.
 
 ---
 

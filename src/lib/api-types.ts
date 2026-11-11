@@ -430,6 +430,87 @@ export interface BranchQr {
 }
 
 /* ------------------------------------------------------------------ *
+ * The door tablet
+ * ------------------------------------------------------------------ */
+
+/** What a device may know about itself. No list, no branch, no token. */
+export interface KioskIdentity {
+  id: string;
+  label: string;
+}
+
+/** Where the arrival sits relative to the admission window. */
+export type KioskArrivalWindow = "EARLY" | "OPEN" | "LATE";
+
+/**
+ * Why the door would refuse this guest.
+ *
+ * The server predicts; it re-checks all of these on admission, so this is the
+ * screen's chance to say the sentence before the button fails. The order the
+ * API applies them in is deliberate: a cancelled booking whose pass also
+ * expired reads "cancelled".
+ */
+export type KioskBlocker =
+  | "ALREADY_CHECKED_IN"
+  | "BOOKING_CLOSED"
+  | "PASS_REVOKED"
+  | "DEPOSIT_DUE"
+  | "PASS_EXPIRED"
+  | "TOO_EARLY"
+  | "TOO_LATE";
+
+/**
+ * What the door screen is allowed to know about one pass.
+ *
+ * Narrow on purpose: no phone number, no client id, no money, no notes. It is
+ * read in a public lobby.
+ */
+export interface KioskArrival {
+  reference: string;
+  guestName: string | null;
+  staffName: string | null;
+  services: string[];
+  startTime: string;
+  endTime: string;
+  window: KioskArrivalWindow;
+  /** Null when the guest can be admitted now. */
+  blocked: KioskBlocker | null;
+  arrivalWindowMinutes: number;
+}
+
+/** The admission, plus the name of the person whose PIN released it. */
+export interface KioskAdmission extends CheckInResult {
+  staffName: string;
+}
+
+/**
+ * A screen by a door, as the owner sees it.
+ *
+ * There is no token here and no way to ask for one: the database holds a
+ * digest, so a lost link is replaced rather than recovered.
+ */
+export interface KioskDevice {
+  id: string;
+  label: string;
+  createdAt: string;
+  /** Null until the tablet has called the API at least once. */
+  lastSeenAt: string | null;
+  /** Set when the screen was switched off. The row is kept on purpose. */
+  revokedAt: string | null;
+}
+
+/**
+ * A newly issued screen.
+ *
+ * `token` is the only copy that will ever exist in readable form. It is
+ * returned by the one call that creates it, and no endpoint can show it again.
+ */
+export interface KioskDeviceIssued {
+  device: KioskDevice;
+  token: string;
+}
+
+/* ------------------------------------------------------------------ *
  * Promos
  * ------------------------------------------------------------------ */
 

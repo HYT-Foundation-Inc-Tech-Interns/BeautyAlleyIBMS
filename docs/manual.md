@@ -62,6 +62,9 @@ The pass is the guest's ticket. At the salon:
   changes nothing, deliberately: the desk gets to look first.
 - **A pass can be used once.** A second scan is refused as already used.
 - **The stylist** can also record arrival from **Check-in**, on their own chair.
+- **At the door**, the tablet scans the same pass and then waits for a stylist to
+  confirm with their PIN. It only admits inside the arrival window; an early or
+  late guest is told to see the front desk, which can always override.
 
 If a guest lost the link, the desk finds the booking in **Bookings** and can
 reissue or check in from there.
@@ -129,6 +132,13 @@ the tablet by the door to admit a guest. One PIN per person and no two people
 share one, because the PIN is what tells the screen who is admitting. It cannot
 be read back after saving — set a new one instead — and removing it stops that
 person admitting anyone until it is set again.
+
+**Settings → Door screens** is where the tablet itself is set up. **Issue a
+screen** names it, and shows a link **once**: open that link on the tablet, and
+it remembers. The link cannot be shown again, so if it is lost, switch the
+screen off and issue another. **Switch off** takes effect on the screen's next
+request — the tablet stays on the list, because the admissions it made have to
+stay attributable to it.
 
 **Promos** (`Promos`) — proposals from the desk arrive as pending. Approve to make
 a code live, or reject with a reason. Retiring a code stops new redemptions and

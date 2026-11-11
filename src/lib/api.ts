@@ -51,6 +51,11 @@ import type {
   InsightsPayload,
   Employee,
   Health,
+  KioskAdmission,
+  KioskArrival,
+  KioskDevice,
+  KioskDeviceIssued,
+  KioskIdentity,
   LeaveBoard,
   LeaveRequest,
   LoginResult,
@@ -215,6 +220,15 @@ interface RequestOptions {
   body?: unknown;
   /** Attach the bearer token. On by default; harmless when there is none. */
   auth?: boolean;
+  /**
+   * A credential that is not a staff session.
+   *
+   * The door tablet holds a device token and nothing else, so it cannot go
+   * through `tokens.get()`. Passing it here also suppresses the refresh-and-
+   * retry below: a 401 from a device means the device is gone or switched off,
+   * and there is no session to renew.
+   */
+  bearer?: string;
 }
 
 async function send(
@@ -232,8 +246,9 @@ async function send(
   }
 
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (opts.auth !== false && session?.accessToken) {
-    headers.Authorization = `Bearer ${session.accessToken}`;
+  const bearer = opts.bearer ?? (opts.auth === false ? undefined : session?.accessToken);
+  if (bearer) {
+    headers.Authorization = `Bearer ${bearer}`;
   }
 
   let body: string | undefined;
@@ -314,7 +329,7 @@ async function request<T>(
 ): Promise<T> {
   const res = await send(method, path, opts, tokens.get());
 
-  if (res.status === 401 && allowRefresh && opts.auth !== false) {
+  if (res.status === 401 && allowRefresh && opts.auth !== false && !opts.bearer) {
     const refreshed = await refreshOnce();
     if (refreshed) return request<T>(method, path, opts, false);
   }
@@ -629,6 +644,48 @@ export const api = {
      */
     checkIn: (pass: string, force = false) =>
       request<CheckInResult>("POST", "/api/v1/qr/check-in", { body: { pass, force } }),
+  },
+
+  /**
+   * The door tablet.
+   *
+   * Every call here carries the device token instead of a session. The API
+   * refuses a staff session on these routes and a device token everywhere else,
+   * so the two credentials cannot be swapped - and because the token is passed
+   * explicitly rather than through `tokens.get()`, a tablet that happens to
+   * have a staff session in storage still cannot act as that person.
+   *
+   * `lookup` needs no PIN: the pass is signed and already belongs to the guest
+   * holding it. Only `checkIn` asks a human to confirm.
+   */
+  kiosk: {
+    me: (token: string) => request<KioskIdentity>("GET", "/api/v1/kiosk/me", { bearer: token }),
+
+    lookup: (token: string, pass: string) =>
+      request<KioskArrival>("POST", "/api/v1/kiosk/lookup", { bearer: token, body: { pass } }),
+
+    checkIn: (token: string, pass: string, pin: string) =>
+      request<KioskAdmission>("POST", "/api/v1/kiosk/check-in", {
+        bearer: token,
+        body: { pass, pin },
+      }),
+  },
+
+  /**
+   * The screens by the doors, as the owner administers them.
+   *
+   * The one part of the kiosk that carries a *session* rather than a device
+   * token: a device must not be able to mint another device. `issue` is the
+   * only call that ever returns a token, and it returns it once.
+   */
+  doorScreens: {
+    list: () => request<KioskDevice[]>("GET", "/api/v1/kiosk/devices"),
+
+    issue: (label: string) =>
+      request<KioskDeviceIssued>("POST", "/api/v1/kiosk/devices", { body: { label } }),
+
+    /** A timestamp, not a delete: past admissions stay attributable. */
+    revoke: (id: string) => request<KioskDevice>("POST", `/api/v1/kiosk/devices/${id}/revoke`),
   },
 
   attendance: {
