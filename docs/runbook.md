@@ -259,6 +259,80 @@ behind the client's sign-in.
 
 ---
 
+## Daily brief
+
+One email at **07:00** to the owner: yesterday's takings, chair-hours booked,
+who rebooked, and the single thing that looks wrong. It is a script, not a
+screen — `docs/plan/2026-11-04-system-integration.md` asked for it that way.
+
+```bash
+cd backend
+npm run brief:dry                          # print it, send nothing, claim nothing
+npm run brief                              # send yesterday's
+node scripts/daily-brief.js --date=2026-11-10
+node scripts/daily-brief.js --to=owner@example.com
+node scripts/daily-brief.js --force        # re-send a day that already went out
+```
+
+`.github/workflows/daily-brief.yml` runs it at `0 23 * * *` UTC, which is 07:00
+in `BRANCH_TIMEZONE`. "Yesterday" is the day that just ended in the branch's
+timezone, not in the runner's.
+
+### What it reports, and where the numbers come from
+
+| Line | Source |
+|---|---|
+| Revenue, bookings, completed, cancelled, no-show | `get_dashboard_summary()` — the same function Insights reads |
+| Rebooked | `get_retention_summary()` — the same "who has not booked again" logic as Insights |
+| Chair-hours | booked minutes ÷ staffed minutes from `working_hours`, less approved `time_off` |
+| Watch | one rule, in a fixed order — see `scripts/brief-format.js` |
+
+Utilisation is **null**, not 0% or 100%, on a day nobody was on the rota.
+
+The brief is allowed to be wrong about nothing: it never compares against a
+baseline it does not have. With fewer than one earlier same-weekday day, the
+"Watch" line uses absolute counts and says there is nothing to compare with.
+
+### Settings
+
+| Variable | Effect |
+|---|---|
+| `BRIEF_RECIPIENTS` | Comma separated. Defaults to the address in `SMTP_FROM`. |
+| `DAILY_REVENUE_TARGET_CENTS` | Yesterday's takings against this figure. Unset: no percentage. |
+| `SALON_NAME` | The name in the subject and the heading. Default `The Beauty Alley`. |
+
+`SMTP_*` is shared with reminders. Without it the script exits 0 and sends
+nothing — the same rule the reminder sender follows.
+
+### Sending exactly once
+
+`daily_briefs` holds one row per day and is the send lock:
+
+1. `claim_daily_brief(date)` — insert, or take over a claim older than 15
+   minutes that was never finished.
+2. send.
+3. `finish_daily_brief(date, recipient, payload)` — stamps `sent_at` and keeps
+   the facts as they stood.
+4. on failure, `release_daily_brief(date)` — drops the *unsent* claim so the
+   next run can try again.
+
+A re-run after a successful send is refused. `--force` bypasses the lock; it is
+for a person who has decided to send a second copy, not for a schedule.
+
+### If a morning is missed
+
+```sql
+select brief_date, claimed_at, sent_at, recipient
+  from public.daily_briefs
+ order by brief_date desc limit 10;
+```
+
+A row with `sent_at is null` and a `claimed_at` older than 15 minutes means a
+run died mid-send; the next run will take it over by itself. To send a day by
+hand, use `--date=` with `--force`.
+
+---
+
 ## HitPay (deposit test)
 
 Settings → **Deposits (test)** opens a HitPay hosted checkout for an amount you

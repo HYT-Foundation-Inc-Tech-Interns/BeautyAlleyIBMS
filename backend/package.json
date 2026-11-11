@@ -29,6 +29,8 @@
     "smoke:cors": "node scripts/smoke-cors.js",
     "smoke:settings": "node scripts/smoke-settings.js",
     "smoke:kiosk": "node scripts/smoke-kiosk.js",
+    "brief": "node scripts/daily-brief.js",
+    "brief:dry": "node scripts/daily-brief.js --dry-run",
     "verify:arrival": "node scripts/verify-arrival-pass.js",
     "verify:booking": "node scripts/verify-booking-correctness.js",
     "verify:atomicity": "node scripts/verify-atomicity.js",

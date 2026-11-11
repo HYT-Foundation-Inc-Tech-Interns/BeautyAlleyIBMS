@@ -10,6 +10,8 @@ Also shipped the same day, ahead of Phase 2: a Settings page (own-password chang
 
 **Status, 8 November 2026:** Phase 3 has not started. Three Phase 5 items shipped first because they were the ones blocking daily use: booking deposits (recorded and settled by hand, no gateway), reminder emails from a queued outbox, and leave with an approval, a clash list and a coverage board. The working-hours editor landed on 8 November — the weekly grid no longer caps capacity with no screen to change it. Next is the door kiosk.
 
+**Status, 11 November 2026:** the door kiosk shipped in three slices — a device link, a door PIN, and the screen at `/kiosk` with the owner's provisioning panel in Settings. The owner's daily brief landed the same week as a script and a 07:00 workflow, with no new screen. Phase 5 is complete except deposits, which stay blocked on the provider decision, and one acceptance check still open: the brief has to arrive at 07:00 for five consecutive days before that item can be called done.
+
 ---
 
 ## 1. The design rule

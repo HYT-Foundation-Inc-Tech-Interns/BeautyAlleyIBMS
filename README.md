@@ -265,6 +265,12 @@ drift to be "fixed" by widening `SCOPE`:
   at that moment. Switching the screen off stops it on its next request, and the
   row survives so past admissions stay attributable to it.
 
+### Every morning
+- **Daily brief** — one email at 07:00: yesterday's takings, chair-hours booked,
+  who rebooked, and the single thing that looks wrong. It reads the same
+  functions as Insights, so the email and the console cannot disagree about the
+  same day. No screen: the whole point is that nobody has to go and look.
+
 ---
 
 ## The treatment catalogue
